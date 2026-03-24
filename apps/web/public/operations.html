@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Operations Studio</title>
+    <meta
+      name="description"
+      content="Faith Counseling operations studio for reporting, platform operations, and language configuration."
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/assets/app.js"></script>
+    <script defer src="/signon-fallback.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#mainContent">Skip to main content</a>
+
+    <section class="auth-gate" id="authGate" aria-live="polite">
+      <div class="auth-card">
+        <h2 data-i18n="auth.title">Sign in to workspace</h2>
+        <p data-i18n="auth.subtitle">Select a role to preview role-aware navigation and permissions.</p>
+        <label class="auth-label" for="roleSelect" data-i18n="auth.roleLabel">Role</label>
+        <select id="roleSelect" class="auth-select"></select>
+        <button type="button" class="action-btn primary" id="continueButton" data-i18n="auth.continue">Continue</button>
+      </div>
+    </section>
+
+    <section class="command-palette" id="commandPalette" aria-hidden="true">
+      <div class="palette-backdrop" id="paletteBackdrop"></div>
+      <div class="palette-panel" role="dialog" aria-modal="true" aria-label="Quick actions">
+        <input id="paletteInput" type="search" placeholder="Type a command..." />
+        <ul id="paletteList" aria-live="polite"></ul>
+      </div>
+    </section>
+
+    <div class="app-shell">
+      <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+      <aside class="sidebar" id="sidebar">
+        <button type="button" class="sidebar-close" id="sidebarClose" aria-label="Close menu">✕</button>
+        <div class="logo-row">
+          <div class="logo-mark" aria-hidden="true"></div>
+          <div>
+            <p class="logo-title" data-i18n="brand.title">Faith Counseling</p>
+            <p class="logo-subtitle" data-i18n="brand.subtitle">Practice Workspace</p>
+          </div>
+        </div>
+        <p id="userBadge" class="user-badge sidebar-user-badge" aria-live="polite">Not signed in</p>
+
+        <nav class="nav-list" aria-label="Primary">
+          <a class="nav-item nav-link" href="/">Dashboard</a>
+          <a class="nav-item nav-link active" href="/operations.html" aria-current="page">Operations Studio</a>
+          <a class="nav-item nav-link" href="/about.html">About</a>
+          <a class="nav-item nav-link" href="/monitor.html">Monitoring</a>
+        </nav>
+        <div class="sidebar-actions">
+          <button type="button" class="action-btn" id="logoutButton" data-i18n="header.signOut">Sign out</button>
+        </div>
+      </aside>
+
+      <main class="main-content" id="mainContent">
+        <header class="topbar">
+          <button type="button" class="hamburger-menu" id="hamburgerMenu" aria-label="Open menu">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+          <div>
+            <h1>Operations Studio</h1>
+            <p>Reporting, platform operations, and language configuration in one dedicated workspace.</p>
+            <p id="dataConnection" class="connection-status" role="status" aria-live="polite" aria-atomic="true" data-state="loading" data-i18n="header.connectionLoading">Loading live API status...</p>
+          </div>
+          <div class="topbar-actions">
+            <label class="search-wrap" aria-label="Search">
+              <input id="globalSearch" type="search" data-i18n-placeholder="header.searchPlaceholder" placeholder="Search clients, notes, documents..." />
+            </label>
+            <label class="language-switcher">
+              <span data-i18n="header.language">Language</span>
+              <select id="languageSelect"></select>
+            </label>
+            <button type="button" class="action-btn" id="launchSignInButton">Open Sign-In Panel</button>
+          </div>
+        </header>
+
+        <section class="workspace-grid">
+          <article class="panel span-2">
+            <div class="panel-head">
+              <h2>Reporting &amp; Ops</h2>
+            </div>
+
+            <div class="manage-grid">
+              <p class="manage-section-title">Practice Reporting</p>
+              <div class="manage-spacer" aria-hidden="true"></div>
+              <label>
+                <span>Reporting Window (days)</span>
+                <input id="reportingWindowDays" type="number" min="7" max="365" value="30" />
+              </label>
+              <button type="button" class="action-btn" id="refreshReportingOverviewButton">Refresh Reporting</button>
+              <label>
+                <span>Reporting Summary</span>
+                <textarea id="reportingSummary" rows="9" readonly aria-label="Reporting summary"></textarea>
+              </label>
+            </div>
+
+            <div class="manage-grid section-top-gap">
+              <p class="manage-section-title">Platform Operations Summary</p>
+              <div class="manage-spacer" aria-hidden="true"></div>
+              <button type="button" class="action-btn" id="refreshPlatformOverviewButton">Refresh Platform Summary</button>
+              <label>
+                <span>Platform Summary</span>
+                <textarea id="platformSummary" rows="10" readonly aria-label="Platform operations summary"></textarea>
+              </label>
+            </div>
+
+            <div class="manage-grid section-top-gap">
+              <p class="manage-section-title">Tenant Provisioning &amp; Support Impersonation</p>
+              <div class="manage-spacer" aria-hidden="true"></div>
+              <label>
+                <span>Requested Tenant ID</span>
+                <input id="platformRequestedTenantId" type="text" placeholder="newpractice" />
+              </label>
+              <label>
+                <span>Practice Name</span>
+                <input id="platformRequestedPracticeName" type="text" placeholder="New Practice Counseling" />
+              </label>
+              <label>
+                <span>Owner Email</span>
+                <input id="platformOwnerEmail" type="email" placeholder="owner@example.com" />
+              </label>
+              <button type="button" class="action-btn" id="createTenantProvisioningButton">Create Provisioning Request</button>
+              <label>
+                <span>Impersonation Tenant</span>
+                <input id="impersonationTargetTenantId" type="text" placeholder="system" />
+              </label>
+              <label>
+                <span>Impersonation Role</span>
+                <select id="impersonationTargetRole">
+                  <option value="practice_owner">Practice Owner</option>
+                  <option value="practice_admin" selected>Practice Admin</option>
+                  <option value="counselor">Counselor</option>
+                  <option value="scheduler_biller">Scheduler/Biller</option>
+                </select>
+              </label>
+              <label>
+                <span>Reason (required)</span>
+                <textarea id="impersonationReason" rows="3" placeholder="Describe the support scenario requiring access."></textarea>
+              </label>
+              <button type="button" class="action-btn" id="startImpersonationButton">Start Impersonation Session</button>
+              <label>
+                <span>End Session ID</span>
+                <input id="endImpersonationSessionId" type="text" placeholder="sis-001" />
+              </label>
+              <button type="button" class="action-btn" id="endImpersonationButton">End Impersonation Session</button>
+            </div>
+
+            <div class="manage-grid section-top-gap">
+              <p class="manage-section-title">Data Export &amp; Retention Management</p>
+              <div class="manage-spacer" aria-hidden="true"></div>
+              <label>
+                <span>Export Type</span>
+                <select id="exportType">
+                  <option value="clinical_records">Clinical Records</option>
+                  <option value="billing">Billing</option>
+                  <option value="documents">Documents</option>
+                  <option value="audit_log">Audit Log</option>
+                </select>
+              </label>
+              <label>
+                <span>Export Format</span>
+                <select id="exportFormat">
+                  <option value="json">JSON</option>
+                  <option value="csv">CSV</option>
+                </select>
+              </label>
+              <button type="button" class="action-btn" id="requestDataExportButton">Request Data Export</button>
+              <label>
+                <span>Clinical Records Retention</span>
+                <select id="retentionClinicalRecordsSchedule">
+                  <option value="7_years">7 Years</option>
+                  <option value="10_years" selected>10 Years</option>
+                  <option value="indefinite">Indefinite</option>
+                </select>
+              </label>
+              <label>
+                <span>Billing Retention</span>
+                <select id="retentionBillingSchedule">
+                  <option value="7_years" selected>7 Years</option>
+                  <option value="10_years">10 Years</option>
+                  <option value="indefinite">Indefinite</option>
+                </select>
+              </label>
+              <label>
+                <span>Audit Retention</span>
+                <select id="retentionAuditLogSchedule">
+                  <option value="7_years">7 Years</option>
+                  <option value="10_years">10 Years</option>
+                  <option value="indefinite" selected>Indefinite</option>
+                </select>
+              </label>
+              <label class="checkbox-row">
+                <input id="retentionIncludeDocumentVersions" type="checkbox" checked />
+                <span>Include document versions in retention policy</span>
+              </label>
+              <label class="checkbox-row">
+                <input id="retentionLegalHoldEnabled" type="checkbox" />
+                <span>Enable legal hold override</span>
+              </label>
+              <button type="button" class="action-btn" id="saveRetentionPolicyButton">Save Retention Policy</button>
+            </div>
+
+            <p id="manageStatus" class="manage-status" role="status" aria-live="polite" aria-atomic="true" data-tone="info"></p>
+          </article>
+
+          <article class="panel span-2">
+            <div class="language-studio-header">
+              <div>
+                <p class="manage-section-title" data-i18n="manage.section.language">Language Studio</p>
+                <p class="helper-text" data-i18n="language.help">Create a locale, auto-generate draft translations, then edit any phrase to match your preferred wording.</p>
+              </div>
+              <button type="button" class="action-btn" id="autoTranslateButton" data-i18n="actions.autoTranslate">Auto Translate</button>
+            </div>
+
+            <div class="manage-grid">
+              <label>
+                <span data-i18n="form.localeCode">Locale Code</span>
+                <input id="newLocaleCode" type="text" data-i18n-placeholder="form.localeCodePlaceholder" placeholder="es" />
+                <p class="field-error" id="newLocaleCodeError"></p>
+              </label>
+              <label>
+                <span data-i18n="form.localeLabel">Locale Label</span>
+                <input id="newLocaleLabel" type="text" data-i18n-placeholder="form.localeLabelPlaceholder" placeholder="Spanish" />
+              </label>
+              <button type="button" class="action-btn" id="createLocaleButton" data-i18n="actions.createLocale">Create Locale</button>
+              <label>
+                <span data-i18n="language.locale">Locale</span>
+                <select id="translationLocaleSelect"></select>
+              </label>
+            </div>
+
+            <div class="translation-toolbar">
+              <label>
+                <span data-i18n="form.translationFilter">Filter Keys</span>
+                <input id="translationFilter" type="search" data-i18n-placeholder="form.translationFilterPlaceholder" placeholder="Search translation keys..." />
+              </label>
+              <button type="button" class="action-btn primary" id="saveTranslationsButton" data-i18n="actions.saveTranslations">Save Translations</button>
+            </div>
+
+            <div class="translation-config">
+              <p class="manage-section-title" data-i18n="manage.section.translationConfig">Translation Configuration</p>
+              <p class="helper-text" data-i18n="language.configHelp">Configure source language, fallback behavior, and glossary overrides for this locale.</p>
+              <div class="manage-grid">
+                <label>
+                  <span data-i18n="form.translationSourceLocale">Source Locale</span>
+                  <input id="translationSourceLocale" type="text" value="en" />
+                </label>
+                <label>
+                  <span data-i18n="form.translationTone">Tone</span>
+                  <select id="translationTone">
+                    <option value="neutral" data-i18n="language.tone.neutral">Neutral</option>
+                    <option value="pastoral" data-i18n="language.tone.pastoral">Pastoral</option>
+                    <option value="clinical" data-i18n="language.tone.clinical">Clinical</option>
+                  </select>
+                </label>
+                <label>
+                  <span data-i18n="form.translationFallbackMode">Fallback Mode</span>
+                  <select id="translationFallbackMode">
+                    <option value="prefixed" data-i18n="language.fallback.prefixed">Prefixed fallback ([locale] text)</option>
+                    <option value="copy" data-i18n="language.fallback.copy">Copy source text</option>
+                  </select>
+                </label>
+                <label class="checkbox-row">
+                  <input id="translationUseGlossary" type="checkbox" checked />
+                  <span data-i18n="form.translationUseGlossary">Apply glossary replacements</span>
+                </label>
+              </div>
+              <label class="translation-glossary-label">
+                <span data-i18n="form.translationGlossary">Glossary (one pair per line: source=target)</span>
+                <textarea id="translationGlossary" rows="4" data-i18n-placeholder="form.translationGlossaryPlaceholder" placeholder="Faith Counseling=Consejería de Fe"></textarea>
+                <p class="field-error" id="translationGlossaryError"></p>
+              </label>
+              <button type="button" class="action-btn" id="saveTranslationConfigButton" data-i18n="actions.saveTranslationConfig">Save Translation Config</button>
+            </div>
+
+            <div id="translationEditor" class="translation-editor" aria-live="polite"></div>
+            <p id="languageStatus" class="manage-status" role="status" aria-live="polite" aria-atomic="true" data-tone="info"></p>
+          </article>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

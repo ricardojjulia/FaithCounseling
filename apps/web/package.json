@@ -5,13 +5,17 @@
   "type": "module",
   "dependencies": {
     "@faith/i18n": "workspace:*",
-    "@faith/telemetry": "workspace:*"
+    "@faith/telemetry": "workspace:*",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "esbuild": "^0.25.1"
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
   },
   "scripts": {
-    "build": "node build.js",
+    "build": "vite build",
+    "dev": "vite --host",
     "start": "pnpm run build && node server.js",
     "lint": "node -e \"console.log('No lint rules configured for @faith/web yet')\"",
     "test": "node -e \"console.log('No tests configured for @faith/web yet')\""

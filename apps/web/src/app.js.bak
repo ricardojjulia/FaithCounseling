@@ -115,9 +115,14 @@ const state = {
 };
 
 const elements = {
+  hamburgerMenu: document.getElementById('hamburgerMenu'),
+  sidebar: document.getElementById('sidebar'),
+  sidebarBackdrop: document.getElementById('sidebarBackdrop'),
+  sidebarClose: document.getElementById('sidebarClose'),
   authGate: document.getElementById('authGate'),
   roleSelect: document.getElementById('roleSelect'),
   continueButton: document.getElementById('continueButton'),
+  launchSignInButton: document.getElementById('launchSignInButton'),
   logoutButton: document.getElementById('logoutButton'),
   userBadge: document.getElementById('userBadge'),
   globalSearch: document.getElementById('globalSearch'),
@@ -397,6 +402,36 @@ async function initialize() {
 }
 
 function bindEvents() {
+  // Hamburger menu toggle
+  function toggleSidebar() {
+    const isOpen = elements.sidebar.classList.toggle('open');
+    elements.hamburgerMenu.classList.toggle('open', isOpen);
+  }
+
+  elements.hamburgerMenu?.addEventListener('click', toggleSidebar);
+  elements.sidebarClose?.addEventListener('click', () => {
+    elements.sidebar.classList.remove('open');
+    elements.hamburgerMenu.classList.remove('open');
+  });
+  elements.sidebarBackdrop?.addEventListener('click', () => {
+    elements.sidebar.classList.remove('open');
+    elements.hamburgerMenu.classList.remove('open');
+  });
+
+  // Close sidebar when nav item is clicked
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      elements.sidebar.classList.remove('open');
+      elements.hamburgerMenu.classList.remove('open');
+    });
+  });
+
+  document.addEventListener('click', (event) => {
+    const launcher = event.target?.closest?.('#launchSignInButton');
+    if (!launcher) return;
+    event.preventDefault();
+    showSignOnDialog();
+  });
   elements.globalSearch?.addEventListener('input', debounce(renderSchedule, 120));
   elements.continueButton?.addEventListener('click', () => {
     const role = elements.roleSelect.value;
@@ -404,6 +439,7 @@ function bindEvents() {
     localStorage.setItem(sessionStorageKey, JSON.stringify({ role }));
     applySession(role);
   });
+  elements.launchSignInButton?.addEventListener('click', showSignOnDialog);
   elements.logoutButton?.addEventListener('click', signOut);
   elements.openPaletteButton?.addEventListener('click', openPalette);
   elements.paletteBackdrop?.addEventListener('click', closePalette);
@@ -690,14 +726,14 @@ async function refreshDashboardData() {
   applyPlatformOverview(platformOverviewPayload);
   state.operationsSummary = operationsSummaryPayload.summary ?? null;
   setConnectionStatus(`Live API connected · ${health.service} · ${formatTime(health.timestamp)}`, 'connected');
-  elements.metricSessionsValue.textContent = `${state.appointments.length}`;
-  elements.metricSessionsMeta.textContent = `${countByStatus(state.appointments, 'scheduled')} ${t('status.scheduled').toLowerCase()} today`;
-  elements.metricRolesValue.textContent = `${metadata.roles.length}`;
-  elements.metricRolesMeta.textContent = 'Loaded from live bootstrap metadata';
-  elements.metricApptValue.textContent = `${(metadata.appointmentTypes ?? []).length}`;
-  elements.metricApptMeta.textContent = 'Appointment type model is in sync';
-  elements.metricAuditValue.textContent = 'Synced';
-  elements.metricAuditMeta.textContent = `Last event · ${formatTime(metadata.bootstrapEvent.occurredAt)}`;
+  setMetricValue(elements.metricSessionsValue, `${state.appointments.length}`);
+  setMetricValue(elements.metricSessionsMeta, `${countByStatus(state.appointments, 'scheduled')} ${t('status.scheduled').toLowerCase()} today`);
+  setMetricValue(elements.metricRolesValue, `${metadata.roles.length}`);
+  setMetricValue(elements.metricRolesMeta, 'Loaded from live bootstrap metadata');
+  setMetricValue(elements.metricApptValue, `${(metadata.appointmentTypes ?? []).length}`);
+  setMetricValue(elements.metricApptMeta, 'Appointment type model is in sync');
+  setMetricValue(elements.metricAuditValue, 'Synced');
+  setMetricValue(elements.metricAuditMeta, `Last event · ${formatTime(metadata.bootstrapEvent.occurredAt)}`);
 
   buildRoleSelect(metadata.roles);
   populateStatusSelect(elements.newClientStatusSelect, ['active', 'waitlist', 'inactive', 'discharged']);
@@ -728,7 +764,6 @@ async function refreshDashboardData() {
 
   renderAll();
 }
-      elements.metricApptValue.textContent = `${state.appointmentTypes.length || (metadata.appointmentTypes ?? []).length}`;
 function renderAll() {
   renderSchedule();
   renderPriority();
@@ -2591,15 +2626,25 @@ function applyAccessControl(role) {
 
 function setSignedInState(isSignedIn, role) {
   elements.authGate.classList.toggle('visible', !isSignedIn);
+  elements.authGate.style.display = isSignedIn ? 'none' : 'flex';
   if (isSignedIn) {
-    elements.authGate.setAttribute('hidden', 'hidden');
     state.activeRole = role;
   } else {
-    elements.authGate.removeAttribute('hidden');
     state.activeRole = '';
   }
+  if (elements.launchSignInButton) elements.launchSignInButton.hidden = isSignedIn;
+  if (elements.logoutButton) elements.logoutButton.hidden = !isSignedIn;
   updateUserBadge();
 }
+
+function showSignOnDialog() {
+  if (!elements.authGate) return;
+  elements.authGate.classList.add('visible');
+  elements.authGate.style.display = 'flex';
+  elements.roleSelect?.focus();
+}
+
+window.showSignOnDialog = showSignOnDialog;
 
 function signOut() {
   localStorage.removeItem(sessionStorageKey);
@@ -2984,6 +3029,11 @@ function setStatusMessage(element, message, tone = 'info') {
   if (!element) return;
   element.textContent = message;
   element.dataset.tone = tone;
+}
+
+function setMetricValue(element, value) {
+  if (!element) return;
+  element.textContent = value;
 }
 
 function debounce(callback, waitMs) {
