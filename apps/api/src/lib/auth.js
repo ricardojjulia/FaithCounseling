@@ -44,6 +44,7 @@ const MAX_FAILED_ATTEMPTS = 10;
 
 // Password minimum per session-policy.md
 const MIN_PASSWORD_LENGTH = 14;
+const DEACTIVATED_LOCK_DATE = '2099-12-31 23:59:59';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,13 @@ function buildSessionCookie(rawToken, role) {
     parts.push('Secure');
   }
   return parts.join('; ');
+}
+
+function normalizeEmail(email) {
+  if (typeof email !== 'string') return null;
+  const normalized = email.trim().toLowerCase();
+  if (!normalized || !normalized.includes('@') || normalized.length > 320) return null;
+  return normalized;
 }
 
 // ─── Password validation ──────────────────────────────────────────────────────
@@ -201,6 +209,7 @@ export async function login(email, password, response) {
     staffId:  account.staff_member_id,
     tenantId: account.tenant_id,
     role:     account.role,
+    email:    account.email,
     name:     `${decrypt(account.first_name_enc)} ${decrypt(account.last_name_enc)}`,
   };
 }
@@ -306,4 +315,96 @@ export async function changePassword(staffAccountId, currentPassword, newPasswor
     'UPDATE sessions SET revoked = 1 WHERE staff_account_id = ?',
     [staffAccountId],
   );
+}
+
+export async function createStaffAccount({ staffMemberId, tenantId, email, password }) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) throw { statusCode: 400, error: 'A valid email is required' };
+
+  const strengthError = validatePasswordStrength(password);
+  if (strengthError) throw { statusCode: 400, error: strengthError };
+
+  const breached = await isPasswordBreached(password);
+  if (breached) {
+    throw {
+      statusCode: 400,
+      error: 'This password has appeared in a known data breach. Please choose a different password.',
+    };
+  }
+
+  const [existingRows] = await pool.query('SELECT id FROM staff_accounts WHERE email = ?', [normalizedEmail]);
+  if (existingRows.length > 0) {
+    throw { statusCode: 409, error: 'An account with this email already exists' };
+  }
+
+  const accountId = `acct-${crypto.randomUUID()}`;
+  const passwordHash = await argon2.hash(password, ARGON2_OPTIONS);
+
+  await pool.query(
+    `INSERT INTO staff_accounts
+      (id, staff_member_id, tenant_id, email, password_hash)
+     VALUES (?, ?, ?, ?, ?)`,
+    [accountId, staffMemberId, tenantId, normalizedEmail, passwordHash],
+  );
+
+  return { accountId, email: normalizedEmail };
+}
+
+export async function adminResetStaffPassword({ tenantId, staffMemberId, newPassword }) {
+  const strengthError = validatePasswordStrength(newPassword);
+  if (strengthError) throw { statusCode: 400, error: strengthError };
+
+  const breached = await isPasswordBreached(newPassword);
+  if (breached) {
+    throw {
+      statusCode: 400,
+      error: 'This password has appeared in a known data breach. Please choose a different password.',
+    };
+  }
+
+  const [rows] = await pool.query(
+    'SELECT id FROM staff_accounts WHERE staff_member_id = ? AND tenant_id = ?',
+    [staffMemberId, tenantId],
+  );
+
+  const account = rows[0];
+  if (!account) throw { statusCode: 404, error: 'Staff account not found' };
+
+  const hash = await argon2.hash(newPassword, ARGON2_OPTIONS);
+  await pool.query(
+    'UPDATE staff_accounts SET password_hash = ?, failed_attempts = 0, locked_until = NULL WHERE id = ?',
+    [hash, account.id],
+  );
+  await pool.query('UPDATE sessions SET revoked = 1 WHERE staff_account_id = ?', [account.id]);
+}
+
+export async function adminUnlockStaffAccount({ tenantId, staffMemberId }) {
+  const [rows] = await pool.query(
+    'SELECT id FROM staff_accounts WHERE staff_member_id = ? AND tenant_id = ?',
+    [staffMemberId, tenantId],
+  );
+
+  const account = rows[0];
+  if (!account) throw { statusCode: 404, error: 'Staff account not found' };
+
+  await pool.query(
+    'UPDATE staff_accounts SET failed_attempts = 0, locked_until = NULL WHERE id = ?',
+    [account.id],
+  );
+}
+
+export async function adminDeactivateStaffAccount({ tenantId, staffMemberId }) {
+  const [rows] = await pool.query(
+    'SELECT id FROM staff_accounts WHERE staff_member_id = ? AND tenant_id = ?',
+    [staffMemberId, tenantId],
+  );
+
+  const account = rows[0];
+  if (!account) throw { statusCode: 404, error: 'Staff account not found' };
+
+  await pool.query(
+    'UPDATE staff_accounts SET failed_attempts = 0, locked_until = ? WHERE id = ?',
+    [DEACTIVATED_LOCK_DATE, account.id],
+  );
+  await pool.query('UPDATE sessions SET revoked = 1 WHERE staff_account_id = ?', [account.id]);
 }

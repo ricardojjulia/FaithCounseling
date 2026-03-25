@@ -7,7 +7,7 @@ const LANGUAGES = [
   { code: 'pt', name: 'Português' },
 ];
 
-export default function TopBar({ onMenuToggle, connectionStatus }) {
+export default function TopBar({ onMenuToggle, connectionStatus, currentUser }) {
   const [language, setLanguage] = useState('en');
 
   const statusConfig = {
@@ -53,9 +53,16 @@ export default function TopBar({ onMenuToggle, connectionStatus }) {
           </select>
         </label>
 
-        <button type="button" className="action-btn">
-          Open Sign-In Panel
-        </button>
+        <div className="topbar-session">
+          <span className="user-badge">
+            {typeof currentUser?.name === 'string' && currentUser.name.trim()
+              ? currentUser.name.trim()
+              : typeof currentUser?.email === 'string' && currentUser.email.trim()
+                ? currentUser.email.trim()
+                : 'Secure session'}
+          </span>
+          <span className="topbar-session-note">Server-managed session</span>
+        </div>
       </div>
     </header>
   );

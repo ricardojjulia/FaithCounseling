@@ -110,14 +110,35 @@ CREATE TABLE IF NOT EXISTS sessions (
 -- ─── Clients ─────────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS clients (
-  id               VARCHAR(64)  NOT NULL,
-  tenant_id        VARCHAR(64)  NOT NULL,
-  first_name_enc   TEXT         NOT NULL,   -- encrypted PHI
-  last_name_enc    TEXT         NOT NULL,   -- encrypted PHI
-  status           VARCHAR(64)  NOT NULL DEFAULT 'active',
-  faith_background VARCHAR(255),            -- non-PHI label, kept plaintext
-  created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  id                      VARCHAR(64)  NOT NULL,
+  tenant_id               VARCHAR(64)  NOT NULL,
+  -- Core identity (PHI encrypted)
+  first_name_enc          TEXT         NOT NULL,   -- encrypted PHI
+  last_name_enc           TEXT         NOT NULL,   -- encrypted PHI
+  middle_name_enc         TEXT         NULL,        -- encrypted PHI
+  preferred_name_enc      TEXT         NULL,        -- encrypted PHI
+  -- Demographics (plaintext category labels — not unique identifiers)
+  pronouns                VARCHAR(64)  NULL,
+  date_of_birth_enc       TEXT         NULL,        -- encrypted PHI (ISO 8601)
+  ssn_last4_enc           TEXT         NULL,        -- encrypted PHI
+  gender_identity         VARCHAR(128) NULL,
+  biological_sex          VARCHAR(32)  NULL,        -- male|female|intersex|unknown
+  race_ethnicity          VARCHAR(128) NULL,
+  marital_status          VARCHAR(64)  NULL,
+  language_preference     VARCHAR(64)  NULL DEFAULT 'en',
+  -- Employment (employer name is PHI)
+  employment_status       VARCHAR(64)  NULL,
+  employer_name_enc       TEXT         NULL,        -- encrypted PHI
+  -- Contact (PHI encrypted)
+  email_enc               TEXT         NULL,        -- encrypted PHI
+  -- Administrative flags (non-PHI)
+  status                  VARCHAR(64)  NOT NULL DEFAULT 'active',
+  faith_background        VARCHAR(255) NULL,        -- non-PHI label, kept plaintext
+  is_minor                TINYINT(1)   NOT NULL DEFAULT 0,
+  court_ordered           TINYINT(1)   NOT NULL DEFAULT 0,
+  referral_source_detail  VARCHAR(255) NULL,        -- non-PHI label
+  created_at              TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at              TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   INDEX idx_clients_tenant        (tenant_id),
   INDEX idx_clients_tenant_status (tenant_id, status)
@@ -541,6 +562,271 @@ CREATE TABLE IF NOT EXISTS portal_messages (
   created_at  TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   INDEX idx_portal_message_thread (thread_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Client addresses ─────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS client_addresses (
+  id           VARCHAR(64)  NOT NULL,
+  tenant_id    VARCHAR(64)  NOT NULL,
+  client_id    VARCHAR(64)  NOT NULL,
+  addr_type    VARCHAR(32)  NOT NULL DEFAULT 'primary',  -- primary | mailing | other
+  line1_enc    TEXT         NOT NULL,   -- encrypted PHI
+  line2_enc    TEXT         NULL,       -- encrypted PHI
+  city_enc     TEXT         NOT NULL,   -- encrypted PHI
+  state        VARCHAR(64)  NOT NULL,   -- NOT PHI; state/province code
+  postal_enc   TEXT         NOT NULL,   -- encrypted PHI
+  country      VARCHAR(64)  NOT NULL DEFAULT 'US',
+  is_preferred TINYINT(1)   NOT NULL DEFAULT 0,
+  created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_caddr_tenant_client (tenant_id, client_id),
+  CONSTRAINT fk_caddr_client FOREIGN KEY (client_id) REFERENCES clients (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Client phones ────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS client_phones (
+  id              VARCHAR(64)  NOT NULL,
+  tenant_id       VARCHAR(64)  NOT NULL,
+  client_id       VARCHAR(64)  NOT NULL,
+  phone_type      VARCHAR(32)  NOT NULL DEFAULT 'cell',  -- cell | home | work | fax
+  number_enc      TEXT         NOT NULL,   -- encrypted PHI
+  extension       VARCHAR(16)  NULL,       -- NOT PHI
+  is_preferred    TINYINT(1)   NOT NULL DEFAULT 0,
+  ok_to_text      TINYINT(1)   NOT NULL DEFAULT 0,
+  ok_to_leave_msg TINYINT(1)   NOT NULL DEFAULT 1,
+  created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_cphone_tenant_client (tenant_id, client_id),
+  CONSTRAINT fk_cphone_client FOREIGN KEY (client_id) REFERENCES clients (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Client contacts (emergency / guardian) ───────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS client_contacts (
+  id             VARCHAR(64)  NOT NULL,
+  tenant_id      VARCHAR(64)  NOT NULL,
+  client_id      VARCHAR(64)  NOT NULL,
+  contact_type   VARCHAR(32)  NOT NULL DEFAULT 'emergency',  -- emergency | guardian | other
+  name_enc       TEXT         NOT NULL,   -- encrypted PHI
+  relationship   VARCHAR(64)  NOT NULL,   -- NOT PHI enum label
+  phone_enc      TEXT         NOT NULL,   -- encrypted PHI
+  email_enc      TEXT         NULL,       -- encrypted PHI
+  is_primary     TINYINT(1)   NOT NULL DEFAULT 0,
+  has_legal_auth TINYINT(1)   NOT NULL DEFAULT 0,  -- authorized to receive PHI
+  notes_enc      TEXT         NULL,       -- encrypted PHI
+  created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_ccontact_tenant_client (tenant_id, client_id),
+  CONSTRAINT fk_ccontact_client FOREIGN KEY (client_id) REFERENCES clients (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Client insurance ─────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS client_insurance (
+  id                   VARCHAR(64)  NOT NULL,
+  tenant_id            VARCHAR(64)  NOT NULL,
+  client_id            VARCHAR(64)  NOT NULL,
+  coverage_order       VARCHAR(16)  NOT NULL DEFAULT 'primary',  -- primary | secondary | tertiary
+  carrier_name_enc     TEXT         NOT NULL,   -- encrypted PHI
+  plan_name            VARCHAR(255) NULL,        -- NOT PHI
+  member_id_enc        TEXT         NOT NULL,   -- encrypted PHI
+  group_number_enc     TEXT         NULL,       -- encrypted PHI
+  subscriber_name_enc  TEXT         NULL,       -- encrypted PHI
+  subscriber_dob_enc   TEXT         NULL,       -- encrypted PHI (ISO 8601)
+  subscriber_rel       VARCHAR(64)  NULL,       -- NOT PHI: self|spouse|child|other
+  auth_number_enc      TEXT         NULL,       -- encrypted PHI
+  auth_visits_approved INT          NULL,
+  auth_expires_on      DATE         NULL,
+  referral_number_enc  TEXT         NULL,       -- encrypted PHI
+  copay_cents          INT          NULL,        -- NOT PHI; stored as integer cents
+  effective_from       DATE         NULL,
+  effective_to         DATE         NULL,
+  is_active            TINYINT(1)   NOT NULL DEFAULT 1,
+  verified_on          DATE         NULL,
+  verified_by          VARCHAR(64)  NULL,
+  created_at           TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at           TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_cins_tenant_client (tenant_id, client_id),
+  CONSTRAINT fk_cins_client FOREIGN KEY (client_id) REFERENCES clients (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Client referring providers ───────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS client_referring_providers (
+  id                 VARCHAR(64)  NOT NULL,
+  tenant_id          VARCHAR(64)  NOT NULL,
+  client_id          VARCHAR(64)  NOT NULL,
+  provider_name_enc  TEXT         NOT NULL,   -- encrypted PHI
+  practice_name      VARCHAR(255) NULL,        -- NOT PHI
+  npi                VARCHAR(16)  NULL,        -- NOT PHI (public identifier)
+  phone_enc          TEXT         NULL,       -- encrypted PHI
+  fax_enc            TEXT         NULL,       -- encrypted PHI
+  address_enc        TEXT         NULL,       -- encrypted PHI (full address JSON)
+  referral_date      DATE         NULL,        -- NOT PHI
+  referral_notes_enc TEXT         NULL,       -- encrypted PHI
+  created_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_crp_tenant_client (tenant_id, client_id),
+  CONSTRAINT fk_crp_client FOREIGN KEY (client_id) REFERENCES clients (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Client diagnoses ─────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS client_diagnoses (
+  id              VARCHAR(64)  NOT NULL,
+  tenant_id       VARCHAR(64)  NOT NULL,
+  client_id       VARCHAR(64)  NOT NULL,
+  code_system     VARCHAR(16)  NOT NULL DEFAULT 'DSM-5',  -- DSM-5 | ICD-10
+  code            VARCHAR(32)  NOT NULL,
+  description_enc TEXT         NOT NULL,   -- encrypted PHI
+  onset_date      DATE         NULL,
+  status          VARCHAR(32)  NOT NULL DEFAULT 'active',  -- active | resolved | rule-out
+  is_primary      TINYINT(1)   NOT NULL DEFAULT 0,
+  notes_enc       TEXT         NULL,       -- encrypted PHI
+  diagnosed_by    VARCHAR(64)  NULL,
+  created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_cdiag_tenant_client (tenant_id, client_id),
+  CONSTRAINT fk_cdiag_client FOREIGN KEY (client_id) REFERENCES clients (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Client medications ───────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS client_medications (
+  id             VARCHAR(64)  NOT NULL,
+  tenant_id      VARCHAR(64)  NOT NULL,
+  client_id      VARCHAR(64)  NOT NULL,
+  med_name_enc   TEXT         NOT NULL,   -- encrypted PHI
+  dose_enc       TEXT         NULL,       -- encrypted PHI
+  frequency_enc  TEXT         NULL,       -- encrypted PHI
+  route          VARCHAR(64)  NULL,
+  prescriber_enc TEXT         NULL,       -- encrypted PHI
+  start_date     DATE         NULL,
+  end_date       DATE         NULL,
+  is_active      TINYINT(1)   NOT NULL DEFAULT 1,
+  reason_enc     TEXT         NULL,       -- encrypted PHI
+  notes_enc      TEXT         NULL,       -- encrypted PHI
+  created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_cmed_tenant_client (tenant_id, client_id),
+  CONSTRAINT fk_cmed_client FOREIGN KEY (client_id) REFERENCES clients (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Client allergies ─────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS client_allergies (
+  id             VARCHAR(64)  NOT NULL,
+  tenant_id      VARCHAR(64)  NOT NULL,
+  client_id      VARCHAR(64)  NOT NULL,
+  substance_enc  TEXT         NOT NULL,   -- encrypted PHI
+  reaction_enc   TEXT         NULL,       -- encrypted PHI
+  severity       VARCHAR(32)  NOT NULL DEFAULT 'unknown',  -- mild | moderate | severe | unknown
+  allergy_type   VARCHAR(32)  NOT NULL DEFAULT 'drug',     -- drug | food | environmental | other
+  onset_date     DATE         NULL,
+  is_active      TINYINT(1)   NOT NULL DEFAULT 1,
+  created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_callergy_tenant_client (tenant_id, client_id),
+  CONSTRAINT fk_callergy_client FOREIGN KEY (client_id) REFERENCES clients (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Client clinical history (singleton per client) ───────────────────────────
+
+CREATE TABLE IF NOT EXISTS client_clinical_history (
+  id                        VARCHAR(64)  NOT NULL,
+  tenant_id                 VARCHAR(64)  NOT NULL,
+  client_id                 VARCHAR(64)  NOT NULL,
+  -- Medical history
+  past_hospitalizations     TINYINT(1)   NOT NULL DEFAULT 0,
+  hospitalizations_enc      TEXT         NULL,       -- encrypted PHI
+  past_surgeries            TINYINT(1)   NOT NULL DEFAULT 0,
+  surgeries_enc             TEXT         NULL,       -- encrypted PHI
+  chronic_conditions_enc    TEXT         NULL,       -- encrypted PHI (JSON array)
+  pcp_name_enc              TEXT         NULL,       -- encrypted PHI
+  pcp_practice_enc          TEXT         NULL,       -- encrypted PHI
+  pcp_phone_enc             TEXT         NULL,       -- encrypted PHI
+  preferred_pharmacy_enc    TEXT         NULL,       -- encrypted PHI (JSON)
+  substance_use_screen_enc  TEXT         NULL,       -- encrypted PHI (JSON)
+  -- Mental health history
+  mh_prior_treatment        TINYINT(1)   NOT NULL DEFAULT 0,
+  mh_prior_treatment_enc    TEXT         NULL,       -- encrypted PHI
+  mh_prior_hospitalizations TINYINT(1)   NOT NULL DEFAULT 0,
+  mh_hospitalizations_enc   TEXT         NULL,       -- encrypted PHI
+  mh_prior_diagnoses_enc    TEXT         NULL,       -- encrypted PHI
+  -- Risk assessment
+  si_current                TINYINT(1)   NOT NULL DEFAULT 0,
+  si_history                TINYINT(1)   NOT NULL DEFAULT 0,
+  si_plan                   TINYINT(1)   NOT NULL DEFAULT 0,
+  si_means_access           TINYINT(1)   NOT NULL DEFAULT 0,
+  si_intent                 TINYINT(1)   NOT NULL DEFAULT 0,
+  hi_current                TINYINT(1)   NOT NULL DEFAULT 0,
+  hi_history                TINYINT(1)   NOT NULL DEFAULT 0,
+  self_harm_history         TINYINT(1)   NOT NULL DEFAULT 0,
+  risk_notes_enc            TEXT         NULL,       -- encrypted PHI
+  last_risk_assessment_at   TIMESTAMP    NULL,
+  risk_assessed_by          VARCHAR(64)  NULL,
+  created_at                TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at                TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_cclinical_client (client_id),
+  INDEX idx_cclinical_tenant_client (tenant_id, client_id),
+  CONSTRAINT fk_cclinical_client FOREIGN KEY (client_id) REFERENCES clients (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Client faith profiles (singleton per client) ─────────────────────────────
+
+CREATE TABLE IF NOT EXISTS client_faith_profiles (
+  id                        VARCHAR(64)  NOT NULL,
+  tenant_id                 VARCHAR(64)  NOT NULL,
+  client_id                 VARCHAR(64)  NOT NULL,
+  denomination              VARCHAR(128) NULL,
+  church_name_enc           TEXT         NULL,       -- encrypted PHI
+  pastor_name_enc           TEXT         NULL,       -- encrypted PHI
+  spiritual_director_enc    TEXT         NULL,       -- encrypted PHI
+  faith_integration_level   VARCHAR(32)  NOT NULL DEFAULT 'open',  -- open | some | minimal | none
+  spiritual_concerns_enc    TEXT         NULL,       -- encrypted PHI
+  religious_restrictions_enc TEXT        NULL,       -- encrypted PHI
+  faith_strengths_enc       TEXT         NULL,       -- encrypted PHI
+  created_at                TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at                TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_cfaith_client (client_id),
+  INDEX idx_cfaith_tenant_client (tenant_id, client_id),
+  CONSTRAINT fk_cfaith_client FOREIGN KEY (client_id) REFERENCES clients (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Client legal / guardianship (singleton per client) ───────────────────────
+
+CREATE TABLE IF NOT EXISTS client_legal (
+  id                     VARCHAR(64)  NOT NULL,
+  tenant_id              VARCHAR(64)  NOT NULL,
+  client_id              VARCHAR(64)  NOT NULL,
+  guardian_name_enc      TEXT         NULL,       -- encrypted PHI
+  guardian_relationship  VARCHAR(64)  NULL,
+  guardian_phone_enc     TEXT         NULL,       -- encrypted PHI
+  guardian_email_enc     TEXT         NULL,       -- encrypted PHI
+  guardian_address_enc   TEXT         NULL,       -- encrypted PHI (JSON)
+  court_ordered          TINYINT(1)   NOT NULL DEFAULT 0,
+  court_case_number_enc  TEXT         NULL,       -- encrypted PHI
+  court_contact_enc      TEXT         NULL,       -- encrypted PHI (JSON)
+  court_order_expires    DATE         NULL,
+  custody_notes_enc      TEXT         NULL,       -- encrypted PHI
+  created_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_clegal_client (client_id),
+  INDEX idx_clegal_tenant_client (tenant_id, client_id),
+  CONSTRAINT fk_clegal_client FOREIGN KEY (client_id) REFERENCES clients (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─── Portal appointment requests ─────────────────────────────────────────────

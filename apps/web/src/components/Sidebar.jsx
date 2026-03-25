@@ -1,5 +1,6 @@
 const NAV_ITEMS = [
-  { key: 'dashboard', label: 'Dashboard', active: true },
+  { key: 'dashboard', label: 'Dashboard' },
+  { key: 'users', label: 'User Maintenance' },
   { key: 'clients', label: 'Clients' },
   { key: 'scheduling', label: 'Scheduling' },
   { key: 'clinical', label: 'Clinical Chart' },
@@ -12,7 +13,27 @@ const NAV_ITEMS = [
   { key: 'monitor', label: 'Monitoring', href: '/monitor.html' },
 ];
 
-export default function Sidebar({ isOpen, onClose, userRole, onSignOut }) {
+function canViewNavItem(item, role) {
+  if (item.key === 'users') {
+    return ['platform_admin', 'practice_owner', 'practice_admin'].includes(role || '');
+  }
+  return true;
+}
+
+function resolveUserLabel(user, role) {
+  if (typeof user?.name === 'string' && user.name.trim()) {
+    return role ? `${user.name.trim()} \u2022 ${role}` : user.name.trim();
+  }
+  if (typeof user?.email === 'string' && user.email.trim()) {
+    return role ? `${user.email.trim()} \u2022 ${role}` : user.email.trim();
+  }
+  return role ? `Signed in as ${role}` : 'Not signed in';
+}
+
+export default function Sidebar({ isOpen, onClose, currentUser, currentView, onNavigate, onSignOut }) {
+  const userRole = currentUser?.role ?? null;
+  const visibleNavItems = NAV_ITEMS.filter((item) => canViewNavItem(item, userRole));
+
   return (
     <>
       <aside className={`sidebar ${isOpen ? 'open' : ''}`} id="sidebar">
@@ -34,11 +55,11 @@ export default function Sidebar({ isOpen, onClose, userRole, onSignOut }) {
         </div>
 
         <p className="user-badge sidebar-user-badge">
-          {userRole ? `Signed in as ${userRole}` : 'Not signed in'}
+          {resolveUserLabel(currentUser, userRole)}
         </p>
 
         <nav className="nav-list" aria-label="Primary">
-          {NAV_ITEMS.map(item =>
+          {visibleNavItems.map(item =>
             item.href ? (
               <a key={item.key} href={item.href} className="nav-item nav-link">
                 {item.label}
@@ -47,8 +68,11 @@ export default function Sidebar({ isOpen, onClose, userRole, onSignOut }) {
               <button
                 key={item.key}
                 type="button"
-                className={`nav-item ${item.active ? 'active' : ''}`}
-                onClick={onClose}
+                className={`nav-item ${currentView === item.key ? 'active' : ''}`}
+                onClick={() => {
+                  onNavigate?.(item.key);
+                  onClose();
+                }}
               >
                 {item.label}
               </button>

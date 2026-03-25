@@ -1,4 +1,5 @@
 import http from 'node:http';
+import crypto from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,7 +43,16 @@ import { translateMessages } from './lib/translate.js';
 import { handleCors, checkRateLimit, enforceRbac, enforceTenantScope, callerIdentity } from './lib/security.js';
 import pool, { verifyConnection } from './db/pool.js';
 import { encrypt, decrypt, encryptJson, decryptJson } from './lib/encrypt.js';
-import { login, logout, resolveSession, changePassword } from './lib/auth.js';
+import {
+  login,
+  logout,
+  resolveSession,
+  changePassword,
+  createStaffAccount,
+  adminResetStaffPassword,
+  adminUnlockStaffAccount,
+  adminDeactivateStaffAccount,
+} from './lib/auth.js';
 import {
   listStaff, getStaffById, createStaff, updateStaff,
   listPractices, getPracticeById, createPractice, updatePractice,
@@ -99,6 +109,17 @@ import {
   listDataExportJobs, createDataExportJob, updateDataExportJob,
   getRetentionPolicy, upsertRetentionPolicy,
 } from './db/queries/platform.js';
+import { listClientAddresses, getClientAddress, createClientAddress, updateClientAddress, deleteClientAddress } from './db/queries/clientAddresses.js';
+import { listClientPhones, getClientPhone, createClientPhone, updateClientPhone, deleteClientPhone } from './db/queries/clientPhones.js';
+import { listClientContacts, getClientContact, createClientContact, updateClientContact, deleteClientContact } from './db/queries/clientContacts.js';
+import { listClientInsurance, getClientInsurance, createClientInsurance, updateClientInsurance, deleteClientInsurance } from './db/queries/clientInsurance.js';
+import { listReferringProviders, getReferringProvider, createReferringProvider, updateReferringProvider, deleteReferringProvider } from './db/queries/clientReferringProviders.js';
+import { listClientDiagnoses, getClientDiagnosis, createClientDiagnosis, updateClientDiagnosis, deleteClientDiagnosis } from './db/queries/clientDiagnoses.js';
+import { listClientMedications, getClientMedication, createClientMedication, updateClientMedication, deleteClientMedication } from './db/queries/clientMedications.js';
+import { listClientAllergies, getClientAllergy, createClientAllergy, updateClientAllergy, deleteClientAllergy } from './db/queries/clientAllergies.js';
+import { getClientClinicalHistory, upsertClientClinicalHistory } from './db/queries/clientClinicalHistory.js';
+import { getClientFaithProfile, upsertClientFaithProfile } from './db/queries/clientFaithProfiles.js';
+import { getClientLegal, upsertClientLegal } from './db/queries/clientLegal.js';
 
 const port = Number(process.env.PORT || 3001);
 const currentFilePath = fileURLToPath(import.meta.url);
@@ -914,6 +935,20 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname.startsWith('/v1/clients/')) {
+      const sub = parseClientSubresource(requestUrl.pathname);
+      if (sub) {
+        if (sub.subresource === 'addresses')           { await handleClientAddressesRoute(request, response, sub, session); return; }
+        if (sub.subresource === 'phones')              { await handleClientPhonesRoute(request, response, sub, session); return; }
+        if (sub.subresource === 'contacts')            { await handleClientContactsRoute(request, response, sub, session); return; }
+        if (sub.subresource === 'insurance')           { await handleClientInsuranceRoute(request, response, sub, session); return; }
+        if (sub.subresource === 'referring-providers') { await handleClientReferringProvidersRoute(request, response, sub, session); return; }
+        if (sub.subresource === 'diagnoses')           { await handleClientDiagnosesRoute(request, response, sub, session); return; }
+        if (sub.subresource === 'medications')         { await handleClientMedicationsRoute(request, response, sub, session); return; }
+        if (sub.subresource === 'allergies')           { await handleClientAllergiesRoute(request, response, sub, session); return; }
+        if (sub.subresource === 'clinical-history')    { await handleClientClinicalHistoryRoute(request, response, sub, session); return; }
+        if (sub.subresource === 'faith-profile')       { await handleClientFaithProfileRoute(request, response, sub, session); return; }
+        if (sub.subresource === 'legal')               { await handleClientLegalRoute(request, response, sub, session); return; }
+      }
       await handleClientById(request, response, requestUrl, session);
       return;
     }
@@ -1153,6 +1188,11 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname.endsWith('/account-actions') && requestUrl.pathname.startsWith('/v1/staff/')) {
+      await handleStaffAccountActions(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname.startsWith('/v1/staff/')) {
       await handleStaffById(request, response, requestUrl, session);
       return;
@@ -1359,12 +1399,30 @@ async function handleClientsCollection(request, response, requestUrl, session) {
 /** Map a clients DB row to the API shape (decrypt PHI fields). */
 function dbRowToClient(row) {
   return {
-    id:              row.id,
-    tenantId:        row.tenant_id,
-    firstName:       decrypt(row.first_name_enc),
-    lastName:        decrypt(row.last_name_enc),
-    status:          row.status,
-    faithBackground: row.faith_background ?? '',
+    id:                   row.id,
+    tenantId:             row.tenant_id,
+    firstName:            decrypt(row.first_name_enc),
+    lastName:             decrypt(row.last_name_enc),
+    middleName:           row.middle_name_enc    ? decrypt(row.middle_name_enc)    : null,
+    preferredName:        row.preferred_name_enc ? decrypt(row.preferred_name_enc) : null,
+    pronouns:             row.pronouns            ?? null,
+    dateOfBirth:          row.date_of_birth_enc  ? decrypt(row.date_of_birth_enc)  : null,
+    ssnLast4:             row.ssn_last4_enc       ? decrypt(row.ssn_last4_enc)      : null,
+    genderIdentity:       row.gender_identity     ?? null,
+    biologicalSex:        row.biological_sex      ?? null,
+    raceEthnicity:        row.race_ethnicity      ?? null,
+    maritalStatus:        row.marital_status      ?? null,
+    languagePreference:   row.language_preference ?? 'en',
+    employmentStatus:     row.employment_status   ?? null,
+    employerName:         row.employer_name_enc   ? decrypt(row.employer_name_enc)  : null,
+    email:                row.email_enc           ? decrypt(row.email_enc)          : null,
+    isMinor:              Boolean(row.is_minor),
+    courtOrdered:         Boolean(row.court_ordered),
+    referralSourceDetail: row.referral_source_detail ?? null,
+    status:               row.status,
+    faithBackground:      row.faith_background ?? '',
+    createdAt:            row.created_at,
+    updatedAt:            row.updated_at,
   };
 }
 
@@ -1389,6 +1447,38 @@ async function handleClientById(request, response, requestUrl, session) {
 
   if (request.method === 'GET') {
     await emitAudit(request, 'client.read', 'client', client.id, session);
+    // Support ?expand= for sub-resources
+    const expandParam = requestUrl.searchParams?.get('expand') ?? '';
+    if (process.env.DB_NAME && expandParam) {
+      const wants = new Set(expandParam.split(',').map((s) => s.trim()));
+      const [addresses, phones, contacts, insurance, referring, diagnoses, medications, allergies, clinical, faith, legal] = await Promise.all([
+        wants.has('addresses')  ? listClientAddresses(client.id, client.tenantId)  : Promise.resolve(null),
+        wants.has('phones')     ? listClientPhones(client.id, client.tenantId)     : Promise.resolve(null),
+        wants.has('contacts')   ? listClientContacts(client.id, client.tenantId)   : Promise.resolve(null),
+        wants.has('insurance')  ? listClientInsurance(client.id, client.tenantId)  : Promise.resolve(null),
+        wants.has('referring')  ? listReferringProviders(client.id, client.tenantId) : Promise.resolve(null),
+        wants.has('diagnoses')  ? listClientDiagnoses(client.id, client.tenantId)  : Promise.resolve(null),
+        wants.has('medications')? listClientMedications(client.id, client.tenantId): Promise.resolve(null),
+        wants.has('allergies')  ? listClientAllergies(client.id, client.tenantId)  : Promise.resolve(null),
+        wants.has('clinical')   ? getClientClinicalHistory(client.id, client.tenantId) : Promise.resolve(null),
+        wants.has('faith')      ? getClientFaithProfile(client.id, client.tenantId)    : Promise.resolve(null),
+        wants.has('legal')      ? getClientLegal(client.id, client.tenantId)           : Promise.resolve(null),
+      ]);
+      const expanded = { ...client };
+      if (addresses   !== null) expanded.addresses   = addresses;
+      if (phones      !== null) expanded.phones       = phones;
+      if (contacts    !== null) expanded.contacts     = contacts;
+      if (insurance   !== null) expanded.insurance    = insurance;
+      if (referring   !== null) expanded.referringProviders = referring;
+      if (diagnoses   !== null) expanded.diagnoses    = diagnoses;
+      if (medications !== null) expanded.medications  = medications;
+      if (allergies   !== null) expanded.allergies    = allergies;
+      if (clinical    !== null) expanded.clinicalHistory = clinical;
+      if (faith       !== null) expanded.faithProfile = faith;
+      if (legal       !== null) expanded.legal        = legal;
+      writeJson(response, 200, { item: expanded });
+      return;
+    }
     writeJson(response, 200, { item: client });
     return;
   }
@@ -1435,10 +1525,29 @@ async function handleClientById(request, response, requestUrl, session) {
     : client.faithBackground;
 
   if (process.env.DB_NAME) {
-    await pool.query(
-      'UPDATE clients SET first_name_enc = ?, last_name_enc = ?, faith_background = ?, status = ? WHERE id = ?',
-      [encrypt(newFirst), encrypt(newLast), newFaith, status, clientId],
-    );
+    const setClauses = [
+      'first_name_enc = ?', 'last_name_enc = ?', 'faith_background = ?', 'status = ?',
+    ];
+    const setValues = [encrypt(newFirst), encrypt(newLast), newFaith, status];
+    const p = payload;
+    if (p.middleName    !== undefined) { setClauses.push('middle_name_enc = ?');      setValues.push(p.middleName    ? encrypt(sanitizeStr(p.middleName, 120))    : null); }
+    if (p.preferredName !== undefined) { setClauses.push('preferred_name_enc = ?');   setValues.push(p.preferredName ? encrypt(sanitizeStr(p.preferredName, 120)) : null); }
+    if (p.pronouns      !== undefined) { setClauses.push('pronouns = ?');             setValues.push(sanitizeStr(p.pronouns, 64) ?? null); }
+    if (p.dateOfBirth   !== undefined) { setClauses.push('date_of_birth_enc = ?');    setValues.push(p.dateOfBirth   ? encrypt(sanitizeStr(p.dateOfBirth, 32))    : null); }
+    if (p.ssnLast4      !== undefined) { setClauses.push('ssn_last4_enc = ?');        setValues.push(p.ssnLast4      ? encrypt(sanitizeStr(p.ssnLast4, 4))        : null); }
+    if (p.genderIdentity!== undefined) { setClauses.push('gender_identity = ?');      setValues.push(sanitizeStr(p.genderIdentity, 128) ?? null); }
+    if (p.biologicalSex !== undefined) { setClauses.push('biological_sex = ?');       setValues.push(sanitizeStr(p.biologicalSex, 32) ?? null); }
+    if (p.raceEthnicity !== undefined) { setClauses.push('race_ethnicity = ?');       setValues.push(sanitizeStr(p.raceEthnicity, 128) ?? null); }
+    if (p.maritalStatus !== undefined) { setClauses.push('marital_status = ?');       setValues.push(sanitizeStr(p.maritalStatus, 64) ?? null); }
+    if (p.languagePreference !== undefined) { setClauses.push('language_preference = ?'); setValues.push(sanitizeStr(p.languagePreference, 64) ?? 'en'); }
+    if (p.employmentStatus   !== undefined) { setClauses.push('employment_status = ?');   setValues.push(sanitizeStr(p.employmentStatus, 64) ?? null); }
+    if (p.employerName  !== undefined) { setClauses.push('employer_name_enc = ?');    setValues.push(p.employerName  ? encrypt(sanitizeStr(p.employerName, 255))  : null); }
+    if (p.email         !== undefined) { setClauses.push('email_enc = ?');            setValues.push(p.email         ? encrypt(sanitizeStr(p.email, 320))         : null); }
+    if (p.isMinor       !== undefined) { setClauses.push('is_minor = ?');             setValues.push(Boolean(p.isMinor) ? 1 : 0); }
+    if (p.courtOrdered  !== undefined) { setClauses.push('court_ordered = ?');        setValues.push(Boolean(p.courtOrdered) ? 1 : 0); }
+    if (p.referralSourceDetail !== undefined) { setClauses.push('referral_source_detail = ?'); setValues.push(sanitizeStr(p.referralSourceDetail, 255) ?? null); }
+    setValues.push(clientId);
+    await pool.query(`UPDATE clients SET ${setClauses.join(', ')} WHERE id = ?`, setValues);
     // Also update encrypted names in appointments table
     const fullName = `${newFirst} ${newLast}`;
     await pool.query(
@@ -1462,6 +1571,379 @@ async function handleClientById(request, response, requestUrl, session) {
   await emitAudit(request, 'client.update', 'client', client.id, session);
   writeJson(response, 200, { item: updated });
 }
+
+// ─── Client sub-resource routing helper ──────────────────────────────────────
+
+/**
+ * Parse a path like /v1/clients/c-123/addresses or /v1/clients/c-123/addresses/addr-456
+ * Returns { clientId, subresource, subId } or null if no subresource segment.
+ */
+function parseClientSubresource(pathname) {
+  const prefix = '/v1/clients/';
+  if (!pathname.startsWith(prefix)) return null;
+  const rest = pathname.slice(prefix.length); // e.g. "c-123/addresses/addr-456"
+  const parts = rest.split('/');
+  if (parts.length < 2) return null; // just the client ID, no subresource
+  return { clientId: parts[0], subresource: parts[1], subId: parts[2] ?? null };
+}
+
+/** Fetch client row and enforce tenant scope; returns client or writes 404/403 and returns null. */
+async function resolveClientForSubresource(request, response, clientId, session) {
+  const [rows] = await pool.query('SELECT * FROM clients WHERE id = ?', [clientId]);
+  const client = rows[0] ? dbRowToClient(rows[0]) : null;
+  if (!client) { writeJson(response, 404, { error: 'Client not found' }); return null; }
+  if (enforceTenantScope(request, response, client.tenantId, session)) return null;
+  return client;
+}
+
+// ─── Sub-resource handlers ────────────────────────────────────────────────────
+
+async function handleClientAddressesRoute(request, response, { clientId, subId }, session) {
+  if (!process.env.DB_NAME) { writeJson(response, 503, { error: 'Database not configured' }); return; }
+  const client = await resolveClientForSubresource(request, response, clientId, session);
+  if (!client) return;
+  const tenantId = client.tenantId;
+
+  if (!subId) {
+    if (request.method === 'GET') {
+      const items = await listClientAddresses(clientId, tenantId);
+      await emitAudit(request, 'client.addresses.read', 'client_address', clientId, session);
+      writeJson(response, 200, { items }); return;
+    }
+    if (request.method === 'POST') {
+      const p = await readJsonBody(request);
+      if (!p.line1) { writeJson(response, 400, { error: 'line1 is required' }); return; }
+      const item = await createClientAddress({ id: genId('addr'), tenantId, clientId, addrType: sanitizeStr(p.addrType, 32) ?? 'primary', line1: sanitizeStr(p.line1, 255), line2: sanitizeStr(p.line2, 255) ?? null, city: sanitizeStr(p.city, 120), state: sanitizeStr(p.state, 64) ?? '', postal: sanitizeStr(p.postal, 20), country: sanitizeStr(p.country, 64) ?? 'US', isPreferred: Boolean(p.isPreferred) });
+      await emitAudit(request, 'client.address.create', 'client_address', item.id, session);
+      writeJson(response, 201, { item }); return;
+    }
+    writeJson(response, 405, { error: 'Method not allowed' }); return;
+  }
+  if (request.method === 'PATCH') {
+    const p = await readJsonBody(request);
+    const item = await updateClientAddress(subId, clientId, tenantId, p);
+    if (!item) { writeJson(response, 404, { error: 'Address not found' }); return; }
+    await emitAudit(request, 'client.address.update', 'client_address', subId, session);
+    writeJson(response, 200, { item }); return;
+  }
+  if (request.method === 'DELETE') {
+    await deleteClientAddress(subId, clientId, tenantId);
+    await emitAudit(request, 'client.address.delete', 'client_address', subId, session);
+    writeJson(response, 204, {}); return;
+  }
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleClientPhonesRoute(request, response, { clientId, subId }, session) {
+  if (!process.env.DB_NAME) { writeJson(response, 503, { error: 'Database not configured' }); return; }
+  const client = await resolveClientForSubresource(request, response, clientId, session);
+  if (!client) return;
+  const tenantId = client.tenantId;
+
+  if (!subId) {
+    if (request.method === 'GET') {
+      const items = await listClientPhones(clientId, tenantId);
+      await emitAudit(request, 'client.phones.read', 'client_phone', clientId, session);
+      writeJson(response, 200, { items }); return;
+    }
+    if (request.method === 'POST') {
+      const p = await readJsonBody(request);
+      if (!p.number) { writeJson(response, 400, { error: 'number is required' }); return; }
+      const item = await createClientPhone({ id: genId('ph'), tenantId, clientId, phoneType: sanitizeStr(p.phoneType, 32) ?? 'cell', number: sanitizeStr(p.number, 30), extension: sanitizeStr(p.extension, 16) ?? null, isPreferred: Boolean(p.isPreferred), okToText: Boolean(p.okToText), okToLeaveMsg: p.okToLeaveMsg !== false });
+      await emitAudit(request, 'client.phone.create', 'client_phone', item.id, session);
+      writeJson(response, 201, { item }); return;
+    }
+    writeJson(response, 405, { error: 'Method not allowed' }); return;
+  }
+  if (request.method === 'PATCH') {
+    const p = await readJsonBody(request);
+    const item = await updateClientPhone(subId, clientId, tenantId, p);
+    if (!item) { writeJson(response, 404, { error: 'Phone not found' }); return; }
+    await emitAudit(request, 'client.phone.update', 'client_phone', subId, session);
+    writeJson(response, 200, { item }); return;
+  }
+  if (request.method === 'DELETE') {
+    await deleteClientPhone(subId, clientId, tenantId);
+    await emitAudit(request, 'client.phone.delete', 'client_phone', subId, session);
+    writeJson(response, 204, {}); return;
+  }
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleClientContactsRoute(request, response, { clientId, subId }, session) {
+  if (!process.env.DB_NAME) { writeJson(response, 503, { error: 'Database not configured' }); return; }
+  const client = await resolveClientForSubresource(request, response, clientId, session);
+  if (!client) return;
+  const tenantId = client.tenantId;
+
+  if (!subId) {
+    if (request.method === 'GET') {
+      const items = await listClientContacts(clientId, tenantId);
+      await emitAudit(request, 'client.contacts.read', 'client_contact', clientId, session);
+      writeJson(response, 200, { items }); return;
+    }
+    if (request.method === 'POST') {
+      const p = await readJsonBody(request);
+      if (!p.name || !p.phone || !p.relationship) { writeJson(response, 400, { error: 'name, phone, and relationship are required' }); return; }
+      const item = await createClientContact({ id: genId('cc'), tenantId, clientId, contactType: sanitizeStr(p.contactType, 32) ?? 'emergency', name: sanitizeStr(p.name, 200), relationship: sanitizeStr(p.relationship, 64), phone: sanitizeStr(p.phone, 30), email: sanitizeStr(p.email, 320) ?? null, isPrimary: Boolean(p.isPrimary), hasLegalAuth: Boolean(p.hasLegalAuth), notes: sanitizeStr(p.notes, 1000) ?? null });
+      await emitAudit(request, 'client.contact.create', 'client_contact', item.id, session);
+      writeJson(response, 201, { item }); return;
+    }
+    writeJson(response, 405, { error: 'Method not allowed' }); return;
+  }
+  if (request.method === 'PATCH') {
+    const p = await readJsonBody(request);
+    const item = await updateClientContact(subId, clientId, tenantId, p);
+    if (!item) { writeJson(response, 404, { error: 'Contact not found' }); return; }
+    await emitAudit(request, 'client.contact.update', 'client_contact', subId, session);
+    writeJson(response, 200, { item }); return;
+  }
+  if (request.method === 'DELETE') {
+    await deleteClientContact(subId, clientId, tenantId);
+    await emitAudit(request, 'client.contact.delete', 'client_contact', subId, session);
+    writeJson(response, 204, {}); return;
+  }
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleClientInsuranceRoute(request, response, { clientId, subId }, session) {
+  if (!process.env.DB_NAME) { writeJson(response, 503, { error: 'Database not configured' }); return; }
+  const client = await resolveClientForSubresource(request, response, clientId, session);
+  if (!client) return;
+  const tenantId = client.tenantId;
+
+  if (!subId) {
+    if (request.method === 'GET') {
+      const items = await listClientInsurance(clientId, tenantId);
+      await emitAudit(request, 'client.insurance.read', 'client_insurance', clientId, session);
+      writeJson(response, 200, { items }); return;
+    }
+    if (request.method === 'POST') {
+      const p = await readJsonBody(request);
+      if (!p.carrierName || !p.memberId) { writeJson(response, 400, { error: 'carrierName and memberId are required' }); return; }
+      const item = await createClientInsurance({ id: genId('ins'), tenantId, clientId, coverageOrder: sanitizeStr(p.coverageOrder, 16) ?? 'primary', carrierName: sanitizeStr(p.carrierName, 255), planName: sanitizeStr(p.planName, 255) ?? null, memberId: sanitizeStr(p.memberId, 64), groupNumber: sanitizeStr(p.groupNumber, 64) ?? null, subscriberName: sanitizeStr(p.subscriberName, 200) ?? null, subscriberDob: sanitizeStr(p.subscriberDob, 32) ?? null, subscriberRel: sanitizeStr(p.subscriberRel, 64) ?? null, authNumber: sanitizeStr(p.authNumber, 64) ?? null, authVisitsApproved: p.authVisitsApproved ? Number(p.authVisitsApproved) : null, authExpiresOn: p.authExpiresOn ?? null, referralNumber: sanitizeStr(p.referralNumber, 64) ?? null, copayCents: p.copayCents ? Number(p.copayCents) : null, effectiveFrom: p.effectiveFrom ?? null, effectiveTo: p.effectiveTo ?? null, isActive: p.isActive !== false, verifiedOn: p.verifiedOn ?? null, verifiedBy: sanitizeStr(p.verifiedBy, 64) ?? null });
+      await emitAudit(request, 'client.insurance.create', 'client_insurance', item.id, session);
+      writeJson(response, 201, { item }); return;
+    }
+    writeJson(response, 405, { error: 'Method not allowed' }); return;
+  }
+  if (request.method === 'PATCH') {
+    const p = await readJsonBody(request);
+    const item = await updateClientInsurance(subId, clientId, tenantId, p);
+    if (!item) { writeJson(response, 404, { error: 'Insurance record not found' }); return; }
+    await emitAudit(request, 'client.insurance.update', 'client_insurance', subId, session);
+    writeJson(response, 200, { item }); return;
+  }
+  if (request.method === 'DELETE') {
+    await deleteClientInsurance(subId, clientId, tenantId);
+    await emitAudit(request, 'client.insurance.delete', 'client_insurance', subId, session);
+    writeJson(response, 204, {}); return;
+  }
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleClientReferringProvidersRoute(request, response, { clientId, subId }, session) {
+  if (!process.env.DB_NAME) { writeJson(response, 503, { error: 'Database not configured' }); return; }
+  const client = await resolveClientForSubresource(request, response, clientId, session);
+  if (!client) return;
+  const tenantId = client.tenantId;
+
+  if (!subId) {
+    if (request.method === 'GET') {
+      const items = await listReferringProviders(clientId, tenantId);
+      await emitAudit(request, 'client.referring.read', 'client_referring_provider', clientId, session);
+      writeJson(response, 200, { items }); return;
+    }
+    if (request.method === 'POST') {
+      const p = await readJsonBody(request);
+      if (!p.providerName) { writeJson(response, 400, { error: 'providerName is required' }); return; }
+      const item = await createReferringProvider({ id: genId('rp'), tenantId, clientId, providerName: sanitizeStr(p.providerName, 200), practiceName: sanitizeStr(p.practiceName, 255) ?? null, npi: sanitizeStr(p.npi, 16) ?? null, phone: sanitizeStr(p.phone, 30) ?? null, fax: sanitizeStr(p.fax, 30) ?? null, address: p.address ?? null, referralDate: p.referralDate ?? null, referralNotes: sanitizeStr(p.referralNotes, 1000) ?? null });
+      await emitAudit(request, 'client.referring.create', 'client_referring_provider', item.id, session);
+      writeJson(response, 201, { item }); return;
+    }
+    writeJson(response, 405, { error: 'Method not allowed' }); return;
+  }
+  if (request.method === 'PATCH') {
+    const p = await readJsonBody(request);
+    const item = await updateReferringProvider(subId, clientId, tenantId, p);
+    if (!item) { writeJson(response, 404, { error: 'Referring provider not found' }); return; }
+    await emitAudit(request, 'client.referring.update', 'client_referring_provider', subId, session);
+    writeJson(response, 200, { item }); return;
+  }
+  if (request.method === 'DELETE') {
+    await deleteReferringProvider(subId, clientId, tenantId);
+    await emitAudit(request, 'client.referring.delete', 'client_referring_provider', subId, session);
+    writeJson(response, 204, {}); return;
+  }
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleClientDiagnosesRoute(request, response, { clientId, subId }, session) {
+  if (!process.env.DB_NAME) { writeJson(response, 503, { error: 'Database not configured' }); return; }
+  const client = await resolveClientForSubresource(request, response, clientId, session);
+  if (!client) return;
+  const tenantId = client.tenantId;
+
+  if (!subId) {
+    if (request.method === 'GET') {
+      const items = await listClientDiagnoses(clientId, tenantId);
+      await emitAudit(request, 'client.diagnoses.read', 'client_diagnosis', clientId, session);
+      writeJson(response, 200, { items }); return;
+    }
+    if (request.method === 'POST') {
+      const p = await readJsonBody(request);
+      if (!p.code || !p.description) { writeJson(response, 400, { error: 'code and description are required' }); return; }
+      const item = await createClientDiagnosis({ id: genId('dx'), tenantId, clientId, codeSystem: sanitizeStr(p.codeSystem, 16) ?? 'DSM-5', code: sanitizeStr(p.code, 32), description: sanitizeStr(p.description, 500), onsetDate: p.onsetDate ?? null, status: sanitizeStr(p.status, 32) ?? 'active', isPrimary: Boolean(p.isPrimary), notes: sanitizeStr(p.notes, 1000) ?? null, diagnosedBy: sanitizeStr(p.diagnosedBy, 64) ?? null });
+      await emitAudit(request, 'client.diagnosis.create', 'client_diagnosis', item.id, session);
+      writeJson(response, 201, { item }); return;
+    }
+    writeJson(response, 405, { error: 'Method not allowed' }); return;
+  }
+  if (request.method === 'PATCH') {
+    const p = await readJsonBody(request);
+    const item = await updateClientDiagnosis(subId, clientId, tenantId, p);
+    if (!item) { writeJson(response, 404, { error: 'Diagnosis not found' }); return; }
+    await emitAudit(request, 'client.diagnosis.update', 'client_diagnosis', subId, session);
+    writeJson(response, 200, { item }); return;
+  }
+  if (request.method === 'DELETE') {
+    await deleteClientDiagnosis(subId, clientId, tenantId);
+    await emitAudit(request, 'client.diagnosis.delete', 'client_diagnosis', subId, session);
+    writeJson(response, 204, {}); return;
+  }
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleClientMedicationsRoute(request, response, { clientId, subId }, session) {
+  if (!process.env.DB_NAME) { writeJson(response, 503, { error: 'Database not configured' }); return; }
+  const client = await resolveClientForSubresource(request, response, clientId, session);
+  if (!client) return;
+  const tenantId = client.tenantId;
+
+  if (!subId) {
+    if (request.method === 'GET') {
+      const items = await listClientMedications(clientId, tenantId);
+      await emitAudit(request, 'client.medications.read', 'client_medication', clientId, session);
+      writeJson(response, 200, { items }); return;
+    }
+    if (request.method === 'POST') {
+      const p = await readJsonBody(request);
+      if (!p.medName) { writeJson(response, 400, { error: 'medName is required' }); return; }
+      const item = await createClientMedication({ id: genId('med'), tenantId, clientId, medName: sanitizeStr(p.medName, 255), dose: sanitizeStr(p.dose, 100) ?? null, frequency: sanitizeStr(p.frequency, 200) ?? null, route: sanitizeStr(p.route, 64) ?? null, prescriber: sanitizeStr(p.prescriber, 200) ?? null, startDate: p.startDate ?? null, endDate: p.endDate ?? null, isActive: p.isActive !== false, reason: sanitizeStr(p.reason, 500) ?? null, notes: sanitizeStr(p.notes, 1000) ?? null });
+      await emitAudit(request, 'client.medication.create', 'client_medication', item.id, session);
+      writeJson(response, 201, { item }); return;
+    }
+    writeJson(response, 405, { error: 'Method not allowed' }); return;
+  }
+  if (request.method === 'PATCH') {
+    const p = await readJsonBody(request);
+    const item = await updateClientMedication(subId, clientId, tenantId, p);
+    if (!item) { writeJson(response, 404, { error: 'Medication not found' }); return; }
+    await emitAudit(request, 'client.medication.update', 'client_medication', subId, session);
+    writeJson(response, 200, { item }); return;
+  }
+  if (request.method === 'DELETE') {
+    await deleteClientMedication(subId, clientId, tenantId);
+    await emitAudit(request, 'client.medication.delete', 'client_medication', subId, session);
+    writeJson(response, 204, {}); return;
+  }
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleClientAllergiesRoute(request, response, { clientId, subId }, session) {
+  if (!process.env.DB_NAME) { writeJson(response, 503, { error: 'Database not configured' }); return; }
+  const client = await resolveClientForSubresource(request, response, clientId, session);
+  if (!client) return;
+  const tenantId = client.tenantId;
+
+  if (!subId) {
+    if (request.method === 'GET') {
+      const items = await listClientAllergies(clientId, tenantId);
+      await emitAudit(request, 'client.allergies.read', 'client_allergy', clientId, session);
+      writeJson(response, 200, { items }); return;
+    }
+    if (request.method === 'POST') {
+      const p = await readJsonBody(request);
+      if (!p.substance) { writeJson(response, 400, { error: 'substance is required' }); return; }
+      const item = await createClientAllergy({ id: genId('alg'), tenantId, clientId, substance: sanitizeStr(p.substance, 255), reaction: sanitizeStr(p.reaction, 500) ?? null, severity: sanitizeStr(p.severity, 32) ?? 'unknown', allergyType: sanitizeStr(p.allergyType, 32) ?? 'drug', onsetDate: p.onsetDate ?? null, isActive: p.isActive !== false });
+      await emitAudit(request, 'client.allergy.create', 'client_allergy', item.id, session);
+      writeJson(response, 201, { item }); return;
+    }
+    writeJson(response, 405, { error: 'Method not allowed' }); return;
+  }
+  if (request.method === 'PATCH') {
+    const p = await readJsonBody(request);
+    const item = await updateClientAllergy(subId, clientId, tenantId, p);
+    if (!item) { writeJson(response, 404, { error: 'Allergy not found' }); return; }
+    await emitAudit(request, 'client.allergy.update', 'client_allergy', subId, session);
+    writeJson(response, 200, { item }); return;
+  }
+  if (request.method === 'DELETE') {
+    await deleteClientAllergy(subId, clientId, tenantId);
+    await emitAudit(request, 'client.allergy.delete', 'client_allergy', subId, session);
+    writeJson(response, 204, {}); return;
+  }
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleClientClinicalHistoryRoute(request, response, { clientId }, session) {
+  if (!process.env.DB_NAME) { writeJson(response, 503, { error: 'Database not configured' }); return; }
+  const client = await resolveClientForSubresource(request, response, clientId, session);
+  if (!client) return;
+
+  if (request.method === 'GET') {
+    const item = await getClientClinicalHistory(clientId, client.tenantId);
+    await emitAudit(request, 'client.clinical_history.read', 'client_clinical_history', clientId, session);
+    writeJson(response, 200, { item: item ?? null }); return;
+  }
+  if (request.method === 'PUT') {
+    const p = await readJsonBody(request);
+    const item = await upsertClientClinicalHistory({ ...p, id: genId('cch'), tenantId: client.tenantId, clientId });
+    await emitAudit(request, 'client.clinical_history.upsert', 'client_clinical_history', clientId, session);
+    writeJson(response, 200, { item }); return;
+  }
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleClientFaithProfileRoute(request, response, { clientId }, session) {
+  if (!process.env.DB_NAME) { writeJson(response, 503, { error: 'Database not configured' }); return; }
+  const client = await resolveClientForSubresource(request, response, clientId, session);
+  if (!client) return;
+
+  if (request.method === 'GET') {
+    const item = await getClientFaithProfile(clientId, client.tenantId);
+    await emitAudit(request, 'client.faith_profile.read', 'client_faith_profile', clientId, session);
+    writeJson(response, 200, { item: item ?? null }); return;
+  }
+  if (request.method === 'PUT') {
+    const p = await readJsonBody(request);
+    const item = await upsertClientFaithProfile({ ...p, id: genId('cfp'), tenantId: client.tenantId, clientId });
+    await emitAudit(request, 'client.faith_profile.upsert', 'client_faith_profile', clientId, session);
+    writeJson(response, 200, { item }); return;
+  }
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleClientLegalRoute(request, response, { clientId }, session) {
+  if (!process.env.DB_NAME) { writeJson(response, 503, { error: 'Database not configured' }); return; }
+  const client = await resolveClientForSubresource(request, response, clientId, session);
+  if (!client) return;
+
+  if (request.method === 'GET') {
+    const item = await getClientLegal(clientId, client.tenantId);
+    await emitAudit(request, 'client.legal.read', 'client_legal', clientId, session);
+    writeJson(response, 200, { item: item ?? null }); return;
+  }
+  if (request.method === 'PUT') {
+    const p = await readJsonBody(request);
+    const item = await upsertClientLegal({ ...p, id: genId('clg'), tenantId: client.tenantId, clientId });
+    await emitAudit(request, 'client.legal.upsert', 'client_legal', clientId, session);
+    writeJson(response, 200, { item }); return;
+  }
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function handleClientLifecycle(request, response, requestUrl, session) {
   const clientId = extractClientIdForSegment(requestUrl.pathname, 'lifecycle');
@@ -5437,8 +5919,30 @@ async function handleLocationById(request, response, requestUrl, session) {
 async function handleStaffCollection(request, response, session) {
   if (request.method === 'GET') {
     if (process.env.DB_NAME) {
-      const items = await listStaff(callerTenant(request, session));
-      writeJson(response, 200, { items });
+      const tenantId = callerTenant(request, session);
+      const items = await listStaff(tenantId);
+      const [accountRows] = await pool.query(
+        `SELECT staff_member_id, email, failed_attempts, locked_until, mfa_enabled, last_login_at
+         FROM staff_accounts
+         WHERE tenant_id = ?`,
+        [tenantId],
+      );
+      const accountsByStaffId = new Map(accountRows.map((row) => [row.staff_member_id, row]));
+
+      const enrichedItems = items.map((item) => {
+        const account = accountsByStaffId.get(item.id);
+        const lockedUntil = account?.locked_until ? new Date(account.locked_until) : null;
+        return {
+          ...item,
+          email: account?.email ?? null,
+          hasAccount: Boolean(account),
+          accountLocked: Boolean(lockedUntil && lockedUntil.getTime() > Date.now()),
+          mfaEnabled: Boolean(account?.mfa_enabled),
+          lastLoginAt: account?.last_login_at ?? null,
+        };
+      });
+
+      writeJson(response, 200, { items: enrichedItems });
       return;
     }
     writeJson(response, 200, { items: filterByTenant(staffMembers, request) });
@@ -5480,9 +5984,10 @@ async function handleStaffCollection(request, response, session) {
     : [];
 
   if (process.env.DB_NAME) {
+    const tenantId = callerTenant(request, session);
     const item = await createStaff({
       id: genId('s'),
-      tenantId: callerTenant(request, session),
+      tenantId,
       firstName,
       lastName,
       role,
@@ -5493,9 +5998,31 @@ async function handleStaffCollection(request, response, session) {
       locationIds,
       bio: sanitizeStr(payload.bio, 500) ?? '',
     });
+
+    const email = sanitizeStr(payload.email, 320)?.toLowerCase();
+    const initialPassword = sanitizeStr(payload.initialPassword, 128);
+    let accountProvisioning = null;
+
+    if (email) {
+      const temporaryPassword = initialPassword || generateTemporaryPassword();
+      const account = await createStaffAccount({
+        staffMemberId: item.id,
+        tenantId,
+        email,
+        password: temporaryPassword,
+      });
+      accountProvisioning = {
+        email: account.email,
+        temporaryPassword: initialPassword ? null : temporaryPassword,
+      };
+    }
+
     telemetry.recordMutation('staff.create');
     emitAudit(request, 'staff.create', 'staff', item.id, session);
-    writeJson(response, 201, { item });
+    if (accountProvisioning) {
+      await emitAudit(request, 'staff.account.create', 'staff_account', item.id, session);
+    }
+    writeJson(response, 201, { item, accountProvisioning });
     return;
   }
 
@@ -5688,6 +6215,61 @@ async function handleStaffAvailability(request, response, requestUrl, session) {
   telemetry.recordMutation('staff.availability.save');
   emitAudit(request, 'staff.availability.update', 'staff', staffId);
   writeJson(response, 200, { staffId, template: normalizedTemplate });
+}
+
+async function handleStaffAccountActions(request, response, requestUrl, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response, session)) return;
+  if (!process.env.DB_NAME) {
+    writeJson(response, 501, { error: 'Account actions require DB mode' });
+    return;
+  }
+
+  const staffId = requestUrl.pathname.replace('/v1/staff/', '').replace('/account-actions', '');
+  const tenantId = callerTenant(request, session);
+  const staff = await getStaffById(staffId, tenantId);
+  if (!staff) {
+    writeJson(response, 404, { error: 'Staff not found' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const action = sanitizeStr(payload.action, 64)?.toLowerCase();
+
+  if (action === 'reset_password') {
+    const providedPassword = sanitizeStr(payload.newPassword, 128);
+    const generatedPassword = providedPassword || generateTemporaryPassword();
+    await adminResetStaffPassword({ tenantId, staffMemberId: staffId, newPassword: generatedPassword });
+    telemetry.recordMutation('staff.account.reset_password');
+    await emitAudit(request, 'staff.password_reset', 'staff_account', staffId, session);
+    writeJson(response, 200, {
+      ok: true,
+      generatedTemporaryPassword: providedPassword ? null : generatedPassword,
+    });
+    return;
+  }
+
+  if (action === 'unlock') {
+    await adminUnlockStaffAccount({ tenantId, staffMemberId: staffId });
+    telemetry.recordMutation('staff.account.unlock');
+    await emitAudit(request, 'staff.account_unlock', 'staff_account', staffId, session);
+    writeJson(response, 200, { ok: true });
+    return;
+  }
+
+  if (action === 'deactivate') {
+    await adminDeactivateStaffAccount({ tenantId, staffMemberId: staffId });
+    telemetry.recordMutation('staff.account.deactivate');
+    await emitAudit(request, 'staff.account_deactivate', 'staff_account', staffId, session);
+    writeJson(response, 200, { ok: true });
+    return;
+  }
+
+  writeJson(response, 400, { error: 'action must be one of reset_password, unlock, deactivate' });
 }
 
 async function handleLocales(request, response) {
@@ -6385,6 +6967,10 @@ function callerRole(request, session) {
 
 function callerClientId(request) {
   return sanitizeStr(request.headers['x-client-id'] || '', 50);
+}
+
+function generateTemporaryPassword() {
+  return `Temp#${crypto.randomBytes(10).toString('base64url')}Aa1`;
 }
 
 function requirePracticeAdmin(request, response, session) {

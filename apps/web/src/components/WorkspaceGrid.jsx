@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { csrfHeaders } from '../lib/csrf.js';
 import ClientModal from './ClientModal';
 
-export default function WorkspaceGrid({ clientsData, onClientsUpdated }) {
+export default function WorkspaceGrid({ clientsData, onClientsUpdated, onViewClient }) {
   const [activeTab, setActiveTab] = useState('clients');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
@@ -19,6 +19,12 @@ export default function WorkspaceGrid({ clientsData, onClientsUpdated }) {
   const handleEditClient = (client) => {
     setEditingClient(client);
     setModalOpen(true);
+  };
+
+  const handleViewClient = (client) => {
+    if (onViewClient) {
+      onViewClient(client.id);
+    }
   };
 
   const handleDeleteClient = async (client) => {
@@ -165,7 +171,7 @@ export default function WorkspaceGrid({ clientsData, onClientsUpdated }) {
                   borderBottom: '1px solid #e1e8ed',
                 }}
               >
-                <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => handleEditClient(client)}>
+                <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => handleViewClient(client)}>
                   <h3 style={{ margin: 0 }}>{client.firstName} {client.lastName}</h3>
                   <p style={{ margin: '4px 0 0', color: '#62708b', fontSize: '0.9rem' }}>
                     Status: {client.status} • Faith: {client.faithBackground || 'Undeclared'}
@@ -175,7 +181,7 @@ export default function WorkspaceGrid({ clientsData, onClientsUpdated }) {
                   <button
                     type="button"
                     className="action-btn"
-                    onClick={() => handleEditClient(client)}
+                    onClick={() => handleViewClient(client)}
                   >
                     Edit
                   </button>
