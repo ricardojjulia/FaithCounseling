@@ -1135,17 +1135,17 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === '/v1/reporting/overview') {
-      await handleReportingOverview(request, response, requestUrl);
+      await handleReportingOverview(request, response, requestUrl, session);
       return;
     }
 
     if (requestUrl.pathname === '/v1/platform/overview') {
-      await handlePlatformOverview(request, response);
+      await handlePlatformOverview(request, response, session);
       return;
     }
 
     if (requestUrl.pathname === '/v1/platform/tenant-provisioning') {
-      await handleTenantProvisioning(request, response);
+      await handleTenantProvisioning(request, response, session);
       return;
     }
 
@@ -5344,13 +5344,13 @@ async function handleFaithLanguagePreferences(request, response, requestUrl, ses
   writeJson(response, 200, { item });
 }
 
-async function handleReportingOverview(request, response, requestUrl) {
+async function handleReportingOverview(request, response, requestUrl, session) {
   if (request.method !== 'GET') {
     writeJson(response, 405, { error: 'Method not allowed' });
     return;
   }
 
-  if (callerRole(request) === 'client') {
+  if (callerRole(request, session) === 'client') {
     writeJson(response, 403, { error: 'Insufficient permissions' });
     return;
   }
@@ -5363,13 +5363,13 @@ async function handleReportingOverview(request, response, requestUrl) {
   writeJson(response, 200, { summary });
 }
 
-async function handlePlatformOverview(request, response) {
+async function handlePlatformOverview(request, response, session) {
   if (request.method !== 'GET') {
     writeJson(response, 405, { error: 'Method not allowed' });
     return;
   }
 
-  if (requirePracticeAdmin(request, response)) return;
+  if (requirePracticeAdmin(request, response, session)) return;
 
   const summary = buildPlatformOverview(request);
   emitAudit(request, 'platform.overview.read', 'platform_overview', callerTenant(request));

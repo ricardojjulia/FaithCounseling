@@ -3,288 +3,555 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Operations Studio</title>
-    <meta
-      name="description"
-      content="Faith Counseling operations studio for reporting, platform operations, and language configuration."
-    />
-    <link rel="stylesheet" href="/styles.css" />
-    <script type="module" src="/assets/app.js"></script>
-    <script defer src="/signon-fallback.js"></script>
+    <title>Operations Studio — Faith Counseling</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: #f1f5f9;
+        color: #1e293b;
+        min-height: 100vh;
+        font-size: 14px;
+      }
+
+      /* ── Top bar ─────────────────────────────────────────── */
+      .topbar {
+        background: #1e1b4b;
+        color: #fff;
+        height: 56px;
+        display: flex;
+        align-items: center;
+        padding: 0 20px;
+        gap: 16px;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        box-shadow: 0 1px 4px rgba(0,0,0,.3);
+      }
+      .topbar-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex: 1;
+      }
+      .logo-mark {
+        width: 32px; height: 32px;
+        background: linear-gradient(150deg, #6366f1, #8b5cf6);
+        border-radius: 8px;
+        flex-shrink: 0;
+      }
+      .brand-name { font-weight: 700; font-size: 15px; color: #fff; }
+      .page-sep  { color: #6366f1; margin: 0 6px; }
+      .page-name { color: #c7d2fe; font-size: 14px; font-weight: 500; }
+
+      .topbar-right { display: flex; align-items: center; gap: 12px; }
+
+      .status-pill {
+        font-size: 12px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,.2);
+        color: #c7d2fe;
+        white-space: nowrap;
+      }
+      .status-pill.connected { color: #6ee7b7; border-color: #6ee7b7; }
+      .status-pill.error     { color: #fca5a5; border-color: #fca5a5; }
+
+      .btn-ghost {
+        background: transparent;
+        color: #c7d2fe;
+        border: 1px solid rgba(255,255,255,.2);
+        padding: 5px 14px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        transition: background .15s;
+      }
+      .btn-ghost:hover { background: rgba(255,255,255,.08); }
+
+      /* ── Tab nav ─────────────────────────────────────────── */
+      .tab-nav {
+        background: #fff;
+        border-bottom: 1px solid #e2e8f0;
+        display: flex;
+        padding: 0 20px;
+        gap: 2px;
+        overflow-x: auto;
+      }
+      .tab-btn {
+        padding: 13px 18px;
+        background: none;
+        border: none;
+        border-bottom: 3px solid transparent;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        color: #64748b;
+        white-space: nowrap;
+        transition: color .15s, border-color .15s;
+        margin-bottom: -1px;
+      }
+      .tab-btn:hover  { color: #4f46e5; }
+      .tab-btn.active { color: #4f46e5; border-bottom-color: #4f46e5; }
+
+      /* ── Content ─────────────────────────────────────────── */
+      .tab-panel { display: none; padding: 24px 20px; max-width: 900px; }
+      .tab-panel.active { display: block; }
+
+      /* ── Cards ───────────────────────────────────────────── */
+      .card {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 20px 24px;
+        margin-bottom: 20px;
+      }
+      .card-title {
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: #64748b;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #f1f5f9;
+      }
+      .card-desc {
+        font-size: 13px;
+        color: #64748b;
+        margin-bottom: 16px;
+        line-height: 1.5;
+      }
+
+      /* ── Form controls ───────────────────────────────────── */
+      .form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
+      .form-row:last-child { margin-bottom: 0; }
+
+      .field { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 180px; }
+      .field-full { flex: 1 1 100%; min-width: 0; }
+      .field-sm { flex: 0 0 120px; min-width: 0; }
+
+      label { font-size: 13px; font-weight: 500; color: #374151; }
+
+      input[type="text"],
+      input[type="email"],
+      input[type="number"],
+      input[type="search"],
+      select,
+      textarea {
+        padding: 7px 10px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 14px;
+        color: #1e293b;
+        background: #fff;
+        transition: border-color .15s, box-shadow .15s;
+        width: 100%;
+        font-family: inherit;
+      }
+      input:focus, select:focus, textarea:focus {
+        outline: none;
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99,102,241,.15);
+      }
+      textarea { resize: vertical; font-family: 'Menlo', 'Monaco', monospace; font-size: 12.5px; }
+      textarea.result {
+        background: #f8fafc;
+        color: #334155;
+        min-height: 160px;
+      }
+
+      .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #374151; cursor: pointer; }
+      .checkbox-row input[type="checkbox"] { width: 15px; height: 15px; accent-color: #4f46e5; cursor: pointer; }
+
+      /* ── Buttons ─────────────────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 16px;
+        border-radius: 6px;
+        border: none;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background .15s, opacity .15s;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .btn:disabled { opacity: .5; cursor: not-allowed; }
+      .btn-primary  { background: #4f46e5; color: #fff; }
+      .btn-primary:hover:not(:disabled)  { background: #4338ca; }
+      .btn-default  { background: #fff; color: #374151; border: 1px solid #d1d5db; }
+      .btn-default:hover:not(:disabled)  { background: #f9fafb; }
+      .btn-danger   { background: #dc2626; color: #fff; }
+      .btn-danger:hover:not(:disabled)   { background: #b91c1c; }
+      .btn-success  { background: #059669; color: #fff; }
+      .btn-success:hover:not(:disabled)  { background: #047857; }
+
+      /* ── Status inline ───────────────────────────────────── */
+      .status-bar {
+        margin-top: 12px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        display: none;
+      }
+      .status-bar.visible { display: block; }
+      .status-bar.info    { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+      .status-bar.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+      .status-bar.error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+      /* ── Translation editor ──────────────────────────────── */
+      .translation-row {
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        gap: 8px;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid #f1f5f9;
+        font-size: 13px;
+      }
+      .translation-key { color: #6366f1; font-family: monospace; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .translation-row input { padding: 4px 8px; font-size: 13px; }
+      .translation-editor-wrap { max-height: 360px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; }
+
+      /* ── Toast ───────────────────────────────────────────── */
+      #toast {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        background: #1e293b;
+        color: #fff;
+        padding: 12px 18px;
+        border-radius: 8px;
+        font-size: 13px;
+        max-width: 380px;
+        box-shadow: 0 4px 16px rgba(0,0,0,.25);
+        opacity: 0;
+        transform: translateY(8px);
+        transition: opacity .25s, transform .25s;
+        pointer-events: none;
+        z-index: 9999;
+      }
+      #toast.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+      #toast.success { background: #064e3b; }
+      #toast.error   { background: #7f1d1d; }
+
+      /* ── Auth gate (legacy, hidden by default) ───────────── */
+      .auth-gate { display: none; }
+    </style>
   </head>
   <body>
-    <a class="skip-link" href="#mainContent">Skip to main content</a>
 
-    <section class="auth-gate" id="authGate" aria-live="polite">
-      <div class="auth-card">
-        <h2 data-i18n="auth.title">Sign in to workspace</h2>
-        <p data-i18n="auth.subtitle">Select a role to preview role-aware navigation and permissions.</p>
-        <label class="auth-label" for="roleSelect" data-i18n="auth.roleLabel">Role</label>
-        <select id="roleSelect" class="auth-select"></select>
-        <button type="button" class="action-btn primary" id="continueButton" data-i18n="auth.continue">Continue</button>
-      </div>
+    <!-- ── Legacy auth gate (signon-fallback.js expects these IDs) ── -->
+    <section class="auth-gate" id="authGate" aria-hidden="true">
+      <select id="roleSelect"></select>
+      <button type="button" id="continueButton">Continue</button>
     </section>
 
-    <section class="command-palette" id="commandPalette" aria-hidden="true">
-      <div class="palette-backdrop" id="paletteBackdrop"></div>
-      <div class="palette-panel" role="dialog" aria-modal="true" aria-label="Quick actions">
-        <input id="paletteInput" type="search" placeholder="Type a command..." />
-        <ul id="paletteList" aria-live="polite"></ul>
+    <!-- ── Top bar ─────────────────────────────────────────────────── -->
+    <header class="topbar">
+      <div class="topbar-brand">
+        <div class="logo-mark" aria-hidden="true"></div>
+        <span class="brand-name">Faith Counseling</span>
+        <span class="page-sep">›</span>
+        <span class="page-name">Operations Studio</span>
       </div>
-    </section>
+      <div class="topbar-right">
+        <span id="connectionStatus" class="status-pill">Connecting…</span>
+        <a href="/" class="btn-ghost" style="text-decoration:none">← Main App</a>
+        <button type="button" id="launchSignInButton" class="btn-ghost">Sign In Panel</button>
+      </div>
+    </header>
 
-    <div class="app-shell">
-      <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
-      <aside class="sidebar" id="sidebar">
-        <button type="button" class="sidebar-close" id="sidebarClose" aria-label="Close menu">✕</button>
-        <div class="logo-row">
-          <div class="logo-mark" aria-hidden="true"></div>
-          <div>
-            <p class="logo-title" data-i18n="brand.title">Faith Counseling</p>
-            <p class="logo-subtitle" data-i18n="brand.subtitle">Practice Workspace</p>
+    <!-- ── Tab navigation ──────────────────────────────────────────── -->
+    <nav class="tab-nav" role="tablist" aria-label="Operations sections">
+      <button class="tab-btn active" role="tab" aria-selected="true"  data-tab="reporting">Reporting</button>
+      <button class="tab-btn"        role="tab" aria-selected="false" data-tab="platform">Platform Ops</button>
+      <button class="tab-btn"        role="tab" aria-selected="false" data-tab="data">Data &amp; Retention</button>
+      <button class="tab-btn"        role="tab" aria-selected="false" data-tab="language">Language Studio</button>
+    </nav>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- TAB: Reporting                                                 -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="tab-panel active" id="tab-reporting" role="tabpanel">
+
+      <div class="card">
+        <div class="card-title">Practice Reporting</div>
+        <div class="form-row">
+          <div class="field field-sm">
+            <label for="reportingWindowDays">Window (days)</label>
+            <input id="reportingWindowDays" type="number" min="7" max="365" value="30" />
           </div>
+          <button type="button" class="btn btn-primary" id="refreshReportingBtn">Refresh Report</button>
         </div>
-        <p id="userBadge" class="user-badge sidebar-user-badge" aria-live="polite">Not signed in</p>
-
-        <nav class="nav-list" aria-label="Primary">
-          <a class="nav-item nav-link" href="/">Dashboard</a>
-          <a class="nav-item nav-link active" href="/operations.html" aria-current="page">Operations Studio</a>
-          <a class="nav-item nav-link" href="/about.html">About</a>
-          <a class="nav-item nav-link" href="/monitor.html">Monitoring</a>
-        </nav>
-        <div class="sidebar-actions">
-          <button type="button" class="action-btn" id="logoutButton" data-i18n="header.signOut">Sign out</button>
+        <div class="field field-full" style="margin-top:4px">
+          <label for="reportingSummary">Summary</label>
+          <textarea id="reportingSummary" class="result" rows="10" readonly aria-label="Reporting summary"></textarea>
         </div>
-      </aside>
+        <div id="reportingStatus" class="status-bar"></div>
+      </div>
 
-      <main class="main-content" id="mainContent">
-        <header class="topbar">
-          <button type="button" class="hamburger-menu" id="hamburgerMenu" aria-label="Open menu">
-            <span></span>
-            <span></span>
-            <span></span>
-          </button>
-          <div>
-            <h1>Operations Studio</h1>
-            <p>Reporting, platform operations, and language configuration in one dedicated workspace.</p>
-            <p id="dataConnection" class="connection-status" role="status" aria-live="polite" aria-atomic="true" data-state="loading" data-i18n="header.connectionLoading">Loading live API status...</p>
-          </div>
-          <div class="topbar-actions">
-            <label class="search-wrap" aria-label="Search">
-              <input id="globalSearch" type="search" data-i18n-placeholder="header.searchPlaceholder" placeholder="Search clients, notes, documents..." />
-            </label>
-            <label class="language-switcher">
-              <span data-i18n="header.language">Language</span>
-              <select id="languageSelect"></select>
-            </label>
-            <button type="button" class="action-btn" id="launchSignInButton">Open Sign-In Panel</button>
-          </div>
-        </header>
+      <div class="card">
+        <div class="card-title">Platform Operations Summary</div>
+        <div class="form-row">
+          <button type="button" class="btn btn-primary" id="refreshPlatformBtn">Refresh Summary</button>
+        </div>
+        <div class="field field-full" style="margin-top:4px">
+          <label for="platformSummary">Summary</label>
+          <textarea id="platformSummary" class="result" rows="10" readonly aria-label="Platform operations summary"></textarea>
+        </div>
+        <div id="platformStatus" class="status-bar"></div>
+      </div>
 
-        <section class="workspace-grid">
-          <article class="panel span-2">
-            <div class="panel-head">
-              <h2>Reporting &amp; Ops</h2>
-            </div>
-
-            <div class="manage-grid">
-              <p class="manage-section-title">Practice Reporting</p>
-              <div class="manage-spacer" aria-hidden="true"></div>
-              <label>
-                <span>Reporting Window (days)</span>
-                <input id="reportingWindowDays" type="number" min="7" max="365" value="30" />
-              </label>
-              <button type="button" class="action-btn" id="refreshReportingOverviewButton">Refresh Reporting</button>
-              <label>
-                <span>Reporting Summary</span>
-                <textarea id="reportingSummary" rows="9" readonly aria-label="Reporting summary"></textarea>
-              </label>
-            </div>
-
-            <div class="manage-grid section-top-gap">
-              <p class="manage-section-title">Platform Operations Summary</p>
-              <div class="manage-spacer" aria-hidden="true"></div>
-              <button type="button" class="action-btn" id="refreshPlatformOverviewButton">Refresh Platform Summary</button>
-              <label>
-                <span>Platform Summary</span>
-                <textarea id="platformSummary" rows="10" readonly aria-label="Platform operations summary"></textarea>
-              </label>
-            </div>
-
-            <div class="manage-grid section-top-gap">
-              <p class="manage-section-title">Tenant Provisioning &amp; Support Impersonation</p>
-              <div class="manage-spacer" aria-hidden="true"></div>
-              <label>
-                <span>Requested Tenant ID</span>
-                <input id="platformRequestedTenantId" type="text" placeholder="newpractice" />
-              </label>
-              <label>
-                <span>Practice Name</span>
-                <input id="platformRequestedPracticeName" type="text" placeholder="New Practice Counseling" />
-              </label>
-              <label>
-                <span>Owner Email</span>
-                <input id="platformOwnerEmail" type="email" placeholder="owner@example.com" />
-              </label>
-              <button type="button" class="action-btn" id="createTenantProvisioningButton">Create Provisioning Request</button>
-              <label>
-                <span>Impersonation Tenant</span>
-                <input id="impersonationTargetTenantId" type="text" placeholder="system" />
-              </label>
-              <label>
-                <span>Impersonation Role</span>
-                <select id="impersonationTargetRole">
-                  <option value="practice_owner">Practice Owner</option>
-                  <option value="practice_admin" selected>Practice Admin</option>
-                  <option value="counselor">Counselor</option>
-                  <option value="scheduler_biller">Scheduler/Biller</option>
-                </select>
-              </label>
-              <label>
-                <span>Reason (required)</span>
-                <textarea id="impersonationReason" rows="3" placeholder="Describe the support scenario requiring access."></textarea>
-              </label>
-              <button type="button" class="action-btn" id="startImpersonationButton">Start Impersonation Session</button>
-              <label>
-                <span>End Session ID</span>
-                <input id="endImpersonationSessionId" type="text" placeholder="sis-001" />
-              </label>
-              <button type="button" class="action-btn" id="endImpersonationButton">End Impersonation Session</button>
-            </div>
-
-            <div class="manage-grid section-top-gap">
-              <p class="manage-section-title">Data Export &amp; Retention Management</p>
-              <div class="manage-spacer" aria-hidden="true"></div>
-              <label>
-                <span>Export Type</span>
-                <select id="exportType">
-                  <option value="clinical_records">Clinical Records</option>
-                  <option value="billing">Billing</option>
-                  <option value="documents">Documents</option>
-                  <option value="audit_log">Audit Log</option>
-                </select>
-              </label>
-              <label>
-                <span>Export Format</span>
-                <select id="exportFormat">
-                  <option value="json">JSON</option>
-                  <option value="csv">CSV</option>
-                </select>
-              </label>
-              <button type="button" class="action-btn" id="requestDataExportButton">Request Data Export</button>
-              <label>
-                <span>Clinical Records Retention</span>
-                <select id="retentionClinicalRecordsSchedule">
-                  <option value="7_years">7 Years</option>
-                  <option value="10_years" selected>10 Years</option>
-                  <option value="indefinite">Indefinite</option>
-                </select>
-              </label>
-              <label>
-                <span>Billing Retention</span>
-                <select id="retentionBillingSchedule">
-                  <option value="7_years" selected>7 Years</option>
-                  <option value="10_years">10 Years</option>
-                  <option value="indefinite">Indefinite</option>
-                </select>
-              </label>
-              <label>
-                <span>Audit Retention</span>
-                <select id="retentionAuditLogSchedule">
-                  <option value="7_years">7 Years</option>
-                  <option value="10_years">10 Years</option>
-                  <option value="indefinite" selected>Indefinite</option>
-                </select>
-              </label>
-              <label class="checkbox-row">
-                <input id="retentionIncludeDocumentVersions" type="checkbox" checked />
-                <span>Include document versions in retention policy</span>
-              </label>
-              <label class="checkbox-row">
-                <input id="retentionLegalHoldEnabled" type="checkbox" />
-                <span>Enable legal hold override</span>
-              </label>
-              <button type="button" class="action-btn" id="saveRetentionPolicyButton">Save Retention Policy</button>
-            </div>
-
-            <p id="manageStatus" class="manage-status" role="status" aria-live="polite" aria-atomic="true" data-tone="info"></p>
-          </article>
-
-          <article class="panel span-2">
-            <div class="language-studio-header">
-              <div>
-                <p class="manage-section-title" data-i18n="manage.section.language">Language Studio</p>
-                <p class="helper-text" data-i18n="language.help">Create a locale, auto-generate draft translations, then edit any phrase to match your preferred wording.</p>
-              </div>
-              <button type="button" class="action-btn" id="autoTranslateButton" data-i18n="actions.autoTranslate">Auto Translate</button>
-            </div>
-
-            <div class="manage-grid">
-              <label>
-                <span data-i18n="form.localeCode">Locale Code</span>
-                <input id="newLocaleCode" type="text" data-i18n-placeholder="form.localeCodePlaceholder" placeholder="es" />
-                <p class="field-error" id="newLocaleCodeError"></p>
-              </label>
-              <label>
-                <span data-i18n="form.localeLabel">Locale Label</span>
-                <input id="newLocaleLabel" type="text" data-i18n-placeholder="form.localeLabelPlaceholder" placeholder="Spanish" />
-              </label>
-              <button type="button" class="action-btn" id="createLocaleButton" data-i18n="actions.createLocale">Create Locale</button>
-              <label>
-                <span data-i18n="language.locale">Locale</span>
-                <select id="translationLocaleSelect"></select>
-              </label>
-            </div>
-
-            <div class="translation-toolbar">
-              <label>
-                <span data-i18n="form.translationFilter">Filter Keys</span>
-                <input id="translationFilter" type="search" data-i18n-placeholder="form.translationFilterPlaceholder" placeholder="Search translation keys..." />
-              </label>
-              <button type="button" class="action-btn primary" id="saveTranslationsButton" data-i18n="actions.saveTranslations">Save Translations</button>
-            </div>
-
-            <div class="translation-config">
-              <p class="manage-section-title" data-i18n="manage.section.translationConfig">Translation Configuration</p>
-              <p class="helper-text" data-i18n="language.configHelp">Configure source language, fallback behavior, and glossary overrides for this locale.</p>
-              <div class="manage-grid">
-                <label>
-                  <span data-i18n="form.translationSourceLocale">Source Locale</span>
-                  <input id="translationSourceLocale" type="text" value="en" />
-                </label>
-                <label>
-                  <span data-i18n="form.translationTone">Tone</span>
-                  <select id="translationTone">
-                    <option value="neutral" data-i18n="language.tone.neutral">Neutral</option>
-                    <option value="pastoral" data-i18n="language.tone.pastoral">Pastoral</option>
-                    <option value="clinical" data-i18n="language.tone.clinical">Clinical</option>
-                  </select>
-                </label>
-                <label>
-                  <span data-i18n="form.translationFallbackMode">Fallback Mode</span>
-                  <select id="translationFallbackMode">
-                    <option value="prefixed" data-i18n="language.fallback.prefixed">Prefixed fallback ([locale] text)</option>
-                    <option value="copy" data-i18n="language.fallback.copy">Copy source text</option>
-                  </select>
-                </label>
-                <label class="checkbox-row">
-                  <input id="translationUseGlossary" type="checkbox" checked />
-                  <span data-i18n="form.translationUseGlossary">Apply glossary replacements</span>
-                </label>
-              </div>
-              <label class="translation-glossary-label">
-                <span data-i18n="form.translationGlossary">Glossary (one pair per line: source=target)</span>
-                <textarea id="translationGlossary" rows="4" data-i18n-placeholder="form.translationGlossaryPlaceholder" placeholder="Faith Counseling=Consejería de Fe"></textarea>
-                <p class="field-error" id="translationGlossaryError"></p>
-              </label>
-              <button type="button" class="action-btn" id="saveTranslationConfigButton" data-i18n="actions.saveTranslationConfig">Save Translation Config</button>
-            </div>
-
-            <div id="translationEditor" class="translation-editor" aria-live="polite"></div>
-            <p id="languageStatus" class="manage-status" role="status" aria-live="polite" aria-atomic="true" data-tone="info"></p>
-          </article>
-        </section>
-      </main>
     </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- TAB: Platform Ops                                              -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-platform" role="tabpanel">
+
+      <div class="card">
+        <div class="card-title">Tenant Provisioning</div>
+        <div class="card-desc">Create a new practice tenant. The tenant ID must be lowercase with no spaces.</div>
+        <div class="form-row">
+          <div class="field">
+            <label for="tenantId">Tenant ID</label>
+            <input id="tenantId" type="text" placeholder="newpractice" />
+          </div>
+          <div class="field">
+            <label for="practiceName">Practice Name</label>
+            <input id="practiceName" type="text" placeholder="New Practice Counseling" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="ownerEmail">Owner Email</label>
+            <input id="ownerEmail" type="email" placeholder="owner@example.com" />
+          </div>
+          <button type="button" class="btn btn-primary" id="createTenantBtn">Create Tenant</button>
+        </div>
+        <div id="tenantStatus" class="status-bar"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Support Impersonation</div>
+        <div class="card-desc">Start a supervised session to assist a tenant. A reason is required and logged to the audit trail.</div>
+        <div class="form-row">
+          <div class="field">
+            <label for="impersonationTenantId">Target Tenant ID</label>
+            <input id="impersonationTenantId" type="text" placeholder="tenant-id" />
+          </div>
+          <div class="field field-sm">
+            <label for="impersonationRole">Role</label>
+            <select id="impersonationRole">
+              <option value="practice_owner">Practice Owner</option>
+              <option value="practice_admin" selected>Practice Admin</option>
+              <option value="counselor">Counselor</option>
+              <option value="scheduler_biller">Scheduler / Biller</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field field-full">
+            <label for="impersonationReason">Reason (required — logged to audit)</label>
+            <textarea id="impersonationReason" rows="3" placeholder="Describe the support scenario requiring access."></textarea>
+          </div>
+        </div>
+        <div class="form-row">
+          <button type="button" class="btn btn-primary" id="startImpersonationBtn">Start Session</button>
+        </div>
+
+        <hr style="border:none;border-top:1px solid #f1f5f9;margin:20px 0" />
+
+        <div class="card-title" style="margin-bottom:12px;border-bottom:none;padding-bottom:0">End Impersonation Session</div>
+        <div class="form-row">
+          <div class="field">
+            <label for="endSessionId">Session ID</label>
+            <input id="endSessionId" type="text" placeholder="sis-001" />
+          </div>
+          <button type="button" class="btn btn-danger" id="endImpersonationBtn">End Session</button>
+        </div>
+        <div id="impersonationStatus" class="status-bar"></div>
+      </div>
+
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- TAB: Data & Retention                                          -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-data" role="tabpanel">
+
+      <div class="card">
+        <div class="card-title">Data Export</div>
+        <div class="card-desc">Queue a data export job. Completed exports will be available for download once processed.</div>
+        <div class="form-row">
+          <div class="field">
+            <label for="exportType">Export Type</label>
+            <select id="exportType">
+              <option value="clinical_records">Clinical Records</option>
+              <option value="billing">Billing</option>
+              <option value="documents">Documents</option>
+              <option value="audit_log">Audit Log</option>
+            </select>
+          </div>
+          <div class="field field-sm">
+            <label for="exportFormat">Format</label>
+            <select id="exportFormat">
+              <option value="json">JSON</option>
+              <option value="csv">CSV</option>
+            </select>
+          </div>
+          <button type="button" class="btn btn-primary" id="requestExportBtn">Queue Export</button>
+        </div>
+        <div id="exportStatus" class="status-bar"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Retention Policies</div>
+        <div class="card-desc">Set how long each data class is retained. Legal hold overrides all schedules and prevents automatic purging.</div>
+        <div class="form-row">
+          <div class="field">
+            <label for="retentionClinical">Clinical Records</label>
+            <select id="retentionClinical">
+              <option value="7_years">7 Years</option>
+              <option value="10_years" selected>10 Years</option>
+              <option value="indefinite">Indefinite</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="retentionBilling">Billing Records</label>
+            <select id="retentionBilling">
+              <option value="7_years" selected>7 Years</option>
+              <option value="10_years">10 Years</option>
+              <option value="indefinite">Indefinite</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="retentionAudit">Audit Log</label>
+            <select id="retentionAudit">
+              <option value="7_years">7 Years</option>
+              <option value="10_years">10 Years</option>
+              <option value="indefinite" selected>Indefinite</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row" style="flex-direction:column; gap:8px; align-items:flex-start">
+          <label class="checkbox-row">
+            <input id="retentionIncludeDocVersions" type="checkbox" checked />
+            Include document versions in retention policy
+          </label>
+          <label class="checkbox-row">
+            <input id="retentionLegalHold" type="checkbox" />
+            Enable legal hold override (prevents automatic purging)
+          </label>
+        </div>
+        <div class="form-row" style="margin-top:12px">
+          <button type="button" class="btn btn-primary" id="saveRetentionBtn">Save Retention Policy</button>
+        </div>
+        <div id="retentionStatus" class="status-bar"></div>
+      </div>
+
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- TAB: Language Studio                                           -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-language" role="tabpanel">
+
+      <div class="card">
+        <div class="card-title">Locales</div>
+        <div class="form-row">
+          <div class="field field-sm">
+            <label for="newLocaleCode">Code</label>
+            <input id="newLocaleCode" type="text" placeholder="es" maxlength="10" />
+          </div>
+          <div class="field">
+            <label for="newLocaleLabel">Label</label>
+            <input id="newLocaleLabel" type="text" placeholder="Spanish" />
+          </div>
+          <button type="button" class="btn btn-primary" id="createLocaleBtn">Create Locale</button>
+        </div>
+        <div class="form-row" style="margin-top:4px">
+          <div class="field">
+            <label for="translationLocaleSelect">Active Locale</label>
+            <select id="translationLocaleSelect"><option value="">Loading locales…</option></select>
+          </div>
+          <button type="button" class="btn btn-default" id="loadLocaleBtn">Load Catalog</button>
+        </div>
+        <div id="localeStatus" class="status-bar"></div>
+      </div>
+
+      <div class="card" id="translationConfigCard">
+        <div class="card-title">Translation Configuration</div>
+        <div class="form-row">
+          <div class="field field-sm">
+            <label for="translationSourceLocale">Source Locale</label>
+            <input id="translationSourceLocale" type="text" value="en" maxlength="10" />
+          </div>
+          <div class="field field-sm">
+            <label for="translationTone">Tone</label>
+            <select id="translationTone">
+              <option value="neutral">Neutral</option>
+              <option value="pastoral">Pastoral</option>
+              <option value="clinical">Clinical</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="translationFallbackMode">Fallback Mode</label>
+            <select id="translationFallbackMode">
+              <option value="prefixed">Prefixed fallback ([locale] text)</option>
+              <option value="copy">Copy source text</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row" style="flex-direction:column; gap:8px; align-items:flex-start">
+          <label class="checkbox-row">
+            <input id="translationUseGlossary" type="checkbox" checked />
+            Apply glossary replacements
+          </label>
+        </div>
+        <div class="field field-full" style="margin-top:12px">
+          <label for="translationGlossary">Glossary (one pair per line: source=target)</label>
+          <textarea id="translationGlossary" rows="3" placeholder="Faith Counseling=Consejería de Fe"></textarea>
+        </div>
+        <div class="form-row" style="margin-top:12px">
+          <button type="button" class="btn btn-default" id="saveTranslationConfigBtn">Save Config</button>
+        </div>
+        <div id="configStatus" class="status-bar"></div>
+      </div>
+
+      <div class="card" id="translationEditorCard">
+        <div class="card-title" style="display:flex; justify-content:space-between; align-items:center">
+          <span>Translations</span>
+          <div style="display:flex; gap:8px">
+            <button type="button" class="btn btn-default" id="autoTranslateBtn">Auto-Translate</button>
+            <button type="button" class="btn btn-primary" id="saveTranslationsBtn">Save Translations</button>
+          </div>
+        </div>
+        <div class="form-row" style="margin-bottom:12px">
+          <div class="field">
+            <label for="translationFilter" class="sr-only">Filter keys</label>
+            <input id="translationFilter" type="search" placeholder="Filter translation keys…" />
+          </div>
+        </div>
+        <div class="translation-editor-wrap">
+          <div id="translationEditor">
+            <p style="color:#94a3b8; padding:16px; text-align:center; font-size:13px">Select a locale and click Load Catalog to edit translations.</p>
+          </div>
+        </div>
+        <div id="translationsStatus" class="status-bar"></div>
+      </div>
+
+    </div>
+
+    <!-- ── Toast ──────────────────────────────────────────────────── -->
+    <div id="toast" role="status" aria-live="polite"></div>
+
+    <script defer src="/signon-fallback.js"></script>
+    <script defer src="/operations.js"></script>
   </body>
 </html>

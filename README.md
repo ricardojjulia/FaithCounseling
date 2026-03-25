@@ -4,8 +4,119 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `1.4.0`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI)
+- Current release: `1.5.0`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring)
+
+## v1.5.0 — Operations Studio Revamp, Monitoring Dashboard & API Auth Fix (March 2026)
+
+### v1.5.0 Overview
+
+Overhauls the two standalone operational pages (Operations Studio and Monitoring Dashboard) from broken placeholder UIs into polished, fully-functional tools. Fixes a session-propagation bug that blocked platform admin operations with spurious "Admin role required" errors.
+
+### v1.5.0 Changes
+
+#### Monitoring Dashboard — Full Rewrite (`apps/web/public/monitor.html`)
+
+The monitoring page has been completely rewritten as a self-contained dark-theme dashboard with live animated visualizations. No external chart library — all charts are pure SVG or CSS.
+
+##### Visual Design
+
+- Dark palette (`#080c18` background, `#141b2d` cards, glassmorphism sticky topbar)
+- Pulsing health status chip with live "healthy / degraded / error" classification
+- 15-second auto-refresh with countdown timer in the topbar
+- CSS `countUp` animation on all KPI values when data loads
+
+##### KPI Row (6 cards)
+
+- Total Requests, Error Count, Avg Latency (ms), Uptime, Active Requests, Mutations — each with color-coded top-border accent
+
+##### SVG Sparkline Chart
+
+- Gradient-filled area chart for request volume (rolling 20-point browser history)
+- Dashed overlay line for error rate
+- Scales dynamically with `buildPath` / `buildFillPath` helpers
+
+##### SVG Donut Chart
+
+- Animated `stroke-dasharray` showing error percentage in the centre
+- Colour shifts green → amber → red based on error rate threshold
+
+##### Latency Bar Chart
+
+- Horizontal bars for avg / p95 / max with CSS `transition: width 1s ease`
+- Separate proxy latency sub-section
+
+##### Memory Gauges
+
+- Gradient-filled bars for Heap Used, Heap Total, and RSS (from `process` block in telemetry summary)
+
+##### Status Code Drill-Down
+
+- Clickable status code pills (colour-coded by 2xx / 3xx / 4xx / 5xx)
+- Clicking a pill filters the HTTP Errors table below
+- HTTP Errors table shows time, method, route, and status — filterable by All / 4xx / 5xx / GET / POST
+- Powered by `recentErrors[]` from `GET /api/v1/telemetry/summary`
+
+##### Browser Vitals Grid
+
+- Renders `browserVitals` fields from the telemetry summary (LCP, FID, CLS, TTFB, etc.)
+
+##### OTEL Settings Panel (admin)
+
+- Active / Inactive status banner driven by `exportedViaOtel` from the API
+- Editable inputs for `OTEL_EXPORTER_OTLP_ENDPOINT`, traces endpoint, and metrics endpoint
+- Test Connection — sends a live OTLP probe (`POST { resourceSpans: [] }`) with a 5-second timeout; reports success or failure inline
+- Generate .env Snippet — outputs a ready-to-paste `.env` block with current endpoint values
+
+#### Operations Studio — Revamp (`apps/web/public/operations.html` + new `apps/web/public/operations.js`)
+
+The Operations Studio page has been rebuilt from scratch with a clean layout and every button wired to real API endpoints.
+
+##### Layout
+
+- Sticky dark header with logo, connection status pill, navigation back to main app, and Sign In Panel
+- Four tabs: Reporting, Platform Ops, Data & Retention, Language Studio
+- White cards with inline status bars per action group
+- Toast notifications (bottom-right) for success/error feedback
+
+##### Reporting Tab
+
+- Refresh Summary → `GET /api/v1/reporting/overview?days=N`
+
+##### Platform Ops Tab
+
+- Refresh Platform Summary → `GET /api/v1/platform/overview`
+- Create Tenant → `POST /api/v1/platform/tenant-provisioning` (tenantId, practiceName, ownerEmail)
+- Start Impersonation → `POST /api/v1/platform/impersonation-sessions` (auto-populates End Session ID)
+- End Impersonation → `PATCH /api/v1/platform/impersonation-sessions/:id`
+
+##### Data & Retention Tab
+
+- Queue Export → `POST /api/v1/platform/data-exports`
+- Save Retention Policy → `PUT /api/v1/platform/retention-policies`
+
+##### Language Studio Tab
+
+- Create Locale → `POST /api/v1/i18n/locales`
+- Load Catalog → `GET /api/v1/i18n/catalog?locale=`
+- Inline translation editor — key/value rows; tracks catalog state in memory
+- Save Translations → `PATCH /api/v1/i18n/catalog/:locale`
+- Auto-Translate → `POST /api/v1/i18n/translate`
+- Save Config → `PATCH /api/v1/i18n/settings/:locale`
+
+### v1.5.0 Bug Fixes
+
+#### Platform / Reporting Operations — "Admin role required" Error
+
+`handlePlatformOverview`, `handleReportingOverview`, and `handleTenantProvisioning` in `apps/api/src/index.js` were dispatched **without passing the resolved `session` object**. `callerRole()` then fell back to the `x-staff-role` request header, which the browser never sends, so every call was treated as unauthenticated and returned 403.
+
+**Fix:** All three dispatch sites now pass `session` as an argument; handler signatures were updated accordingly.
+
+### v1.5.0 Backward Compatibility
+
+No breaking changes. All API routes, database schema, and client-side React application are unchanged. The standalone monitoring and operations pages are served as static HTML from `apps/web/public/` and do not affect the React bundle.
+
+---
 
 ## v1.4.0 — Mantine UI Migration, Counselor Maintenance & Bug Fixes (March 2026)
 
