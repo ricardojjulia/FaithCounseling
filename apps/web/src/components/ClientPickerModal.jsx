@@ -1,5 +1,30 @@
 import { useState, useEffect, useRef } from 'react';
 
+function firstString(...values) {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed) return trimmed;
+    }
+  }
+  return '';
+}
+
+function resolveClientFullName(client) {
+  const firstName = firstString(client?.firstName, client?.first_name);
+  const lastName = firstString(client?.lastName, client?.last_name);
+  const combined = `${firstName} ${lastName}`.trim();
+
+  return firstString(
+    client?.fullName,
+    client?.full_name,
+    client?.name,
+    combined,
+    client?.preferredName,
+    client?.preferred_name,
+  );
+}
+
 export default function ClientPickerModal({ isOpen, clients, loading, onSelectClient, onClose }) {
   const [query, setQuery] = useState('');
   const inputRef = useRef(null);
@@ -15,10 +40,7 @@ export default function ClientPickerModal({ isOpen, clients, loading, onSelectCl
 
   const normalized = query.toLowerCase().trim();
   const filtered = (clients || []).filter((c) => {
-    const name = [c.first_name, c.last_name, c.preferred_name]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
+    const name = resolveClientFullName(c).toLowerCase();
     return !normalized || name.includes(normalized);
   });
 
@@ -46,7 +68,7 @@ export default function ClientPickerModal({ isOpen, clients, loading, onSelectCl
         ) : (
           <ul className="client-picker-list">
             {filtered.map((c) => {
-              const fullName = [c.first_name, c.last_name].filter(Boolean).join(' ') || `Client #${c.id}`;
+              const fullName = resolveClientFullName(c) || `Client #${c.id}`;
               return (
                 <li key={c.id}>
                   <button
