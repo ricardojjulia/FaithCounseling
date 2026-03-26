@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { notifications } from '@mantine/notifications';
 import {
   Stack, Title, SimpleGrid, TextInput, PasswordInput, Select, Button, Group,
@@ -8,6 +8,7 @@ import { DateInput } from '@mantine/dates';
 import {
   patchClient, createClientPhone, updateClientPhone, deleteClientPhone,
   createClientAddress, updateClientAddress, deleteClientAddress,
+  fetchStaff,
 } from '../../../lib/clientApi.js';
 
 const STATUS_OPTIONS    = [{ value: 'active', label: 'Active' }, { value: 'waitlist', label: 'Waitlist' }, { value: 'inactive', label: 'Inactive' }, { value: 'discharged', label: 'Discharged' }];
@@ -67,6 +68,32 @@ export default function DemographicsTab({ client, clientId }) {
   const initAddresses = (client.addresses ?? []).map((a) => ({ ...a, _key: Math.random(), _deleted: false, _dirty: false }));
   const [addresses, setAddresses] = useState(initAddresses);
   const [addrSaving, setAddrSaving] = useState(false);
+
+  // Counselor assignment
+  const [primaryCounselorId, setPrimaryCounselorId] = useState(client.primaryCounselorId ?? null);
+  const [counselorOptions,   setCounselorOptions]   = useState([]);
+  const [counselorSaving,    setCounselorSaving]    = useState(false);
+
+  useEffect(() => {
+    fetchStaff()
+      .then((data) => {
+        const counselors = (data?.items ?? [])
+          .filter((s) => s.role === 'counselor' || s.role === 'intern')
+          .map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}${s.role === 'intern' ? ' (Intern)' : ''}` }));
+        setCounselorOptions(counselors);
+      })
+      .catch(() => {});
+  }, []);
+
+  const saveCounselor = async () => {
+    setCounselorSaving(true);
+    try {
+      await patchClient(clientId, { primaryCounselorId: primaryCounselorId ?? null });
+      notifications.show({ title: 'Saved', message: 'Counselor assignment saved.', color: 'green' });
+    } catch (err) {
+      notifications.show({ title: 'Error', message: err.message, color: 'red' });
+    } finally { setCounselorSaving(false); }
+  };
 
   const age = calcAge(dateOfBirth);
 
@@ -160,6 +187,26 @@ export default function DemographicsTab({ client, clientId }) {
 
   return (
     <Stack gap="xl" maw={900}>
+      {/* Care Team */}
+      <Stack gap="sm">
+        <Title order={4} fz="sm" tt="uppercase" c="dimmed">Care Team</Title>
+        <Group align="flex-end" gap="sm" maw={420}>
+          <Select
+            label="Primary Counselor"
+            placeholder="Unassigned"
+            data={counselorOptions}
+            value={primaryCounselorId}
+            onChange={(v) => setPrimaryCounselorId(v ?? null)}
+            clearable
+            searchable
+            style={{ flex: 1 }}
+          />
+          <Button loading={counselorSaving} onClick={saveCounselor}>Save</Button>
+        </Group>
+      </Stack>
+
+      <Divider />
+
       {/* Identity */}
       <Stack gap="sm">
         <Title order={4} fz="sm" tt="uppercase" c="dimmed">Legal Identity</Title>

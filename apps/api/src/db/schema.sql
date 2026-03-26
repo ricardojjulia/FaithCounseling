@@ -137,11 +137,13 @@ CREATE TABLE IF NOT EXISTS clients (
   is_minor                TINYINT(1)   NOT NULL DEFAULT 0,
   court_ordered           TINYINT(1)   NOT NULL DEFAULT 0,
   referral_source_detail  VARCHAR(255) NULL,        -- non-PHI label
+  primary_counselor_id    VARCHAR(64)  NULL,        -- FK to staff_members
   created_at              TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at              TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   INDEX idx_clients_tenant        (tenant_id),
-  INDEX idx_clients_tenant_status (tenant_id, status)
+  INDEX idx_clients_tenant_status (tenant_id, status),
+  INDEX idx_clients_counselor     (primary_counselor_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─── Client lifecycles ───────────────────────────────────────────────────────
@@ -1120,3 +1122,8 @@ CREATE TABLE IF NOT EXISTS staff_faith_profiles (
 --   ALTER TABLE practices ADD COLUMN IF NOT EXISTS faith_tradition VARCHAR(128);
 --   ALTER TABLE practices ADD COLUMN IF NOT EXISTS contact_email VARCHAR(320);
 --   ALTER TABLE practices ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(64);
+
+-- ─── Clients (extended) ───────────────────────────────────────────────────────
+-- Add primary_counselor_id for existing installs (fresh installs get it via CREATE TABLE).
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS primary_counselor_id VARCHAR(64) NULL;
+ALTER TABLE clients ADD INDEX IF NOT EXISTS idx_clients_counselor (primary_counselor_id);

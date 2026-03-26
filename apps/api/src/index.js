@@ -1465,6 +1465,7 @@ function dbRowToClient(row) {
     isMinor:              Boolean(row.is_minor),
     courtOrdered:         Boolean(row.court_ordered),
     referralSourceDetail: row.referral_source_detail ?? null,
+    primaryCounselorId:   row.primary_counselor_id   ?? null,
     status:               row.status,
     faithBackground:      row.faith_background ?? '',
     createdAt:            row.created_at,
@@ -1592,6 +1593,7 @@ async function handleClientById(request, response, requestUrl, session) {
     if (p.isMinor       !== undefined) { setClauses.push('is_minor = ?');             setValues.push(Boolean(p.isMinor) ? 1 : 0); }
     if (p.courtOrdered  !== undefined) { setClauses.push('court_ordered = ?');        setValues.push(Boolean(p.courtOrdered) ? 1 : 0); }
     if (p.referralSourceDetail !== undefined) { setClauses.push('referral_source_detail = ?'); setValues.push(sanitizeStr(p.referralSourceDetail, 255) ?? null); }
+    if (p.primaryCounselorId  !== undefined) { setClauses.push('primary_counselor_id = ?');   setValues.push(p.primaryCounselorId ? sanitizeStr(p.primaryCounselorId, 64) : null); }
     setValues.push(clientId);
     await pool.query(`UPDATE clients SET ${setClauses.join(', ')} WHERE id = ?`, setValues);
     // Also update encrypted names in appointments table
