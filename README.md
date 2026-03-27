@@ -7,6 +7,40 @@ Christian counseling practice management SaaS for solo counselors, group practic
 - Current release: `1.8.0`
 - Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + major Scheduling feature)
 
+## Hotfixes (March 2026)
+
+### Appointments table — missing columns (`starts_at`, `ends_at`, `location_name`, `timezone`)
+
+**Problem:** The appointments DB table was created with a `scheduled_at` column, but the query layer (`apps/api/src/db/queries/appointments.js`) was written expecting `starts_at`, `ends_at`, `location_name`, and `timezone`. Any read or write to the scheduling feature threw `Unknown column 'starts_at' in 'order clause'`.
+
+**Fix:** Added the four missing columns via an idempotent `addColumnIfMissing` migration in `apps/api/src/db/migrate.js`. Re-run `node --env-file=.env apps/api/src/db/migrate.js` to apply on any environment that hasn't been updated yet. The old `scheduled_at` column is retained for backward compatibility.
+
+### Portal API — `resolvePortalClient` not DB-aware
+
+**Problem:** All portal endpoints (`/v1/portal/overview`, `/v1/portal/accounts`, etc.) validated the incoming `clientId` against the in-memory mock client array. When the app runs with a real MySQL database, clients have real UUIDs that don't exist in that array, causing every portal request to return `400 Valid clientId is required`.
+
+**Fix:** `resolvePortalClient` in `apps/api/src/index.js` is now `async` and queries the `clients` table directly when `DB_NAME` is set. All seven call sites were updated with `await`.
+
+### Appointment composer — counselor dropdown included non-counselor staff
+
+**Problem:** The counselor selector in the appointment composer was populated from a list that included admin and scheduler roles (`platform_admin`, `practice_owner`, `practice_admin`, `scheduler_biller`) in addition to actual counselors and interns.
+
+**Fix:** The `counselors` memo in `SchedulingPage.jsx` now filters exclusively on `COUNSELING_ROLES` (`counselor`, `intern`), so only staff classified as counselors appear in the dropdown.
+
+### `npm run start` — `.env` not loaded, DB credentials empty
+
+**Problem:** `ops/start-all.mjs` spawned child processes inheriting `process.env`, but the root `.env` file was never loaded into the parent process. DB credentials were undefined, causing MySQL to reject the connection with `Access denied for user ''`.
+
+**Fix:** The `start` and `start:all` scripts in `package.json` now use `node --env-file=.env`, which is natively supported in Node 20+. No additional dependencies required.
+
+### Web server — `app.js` served with 1-hour browser cache
+
+**Problem:** `apps/web/server.js` intended to serve `no-cache` for all files under `assets/`, but the path check (`requestedPath.startsWith('assets/')`) never matched because the resolved path starts with `/assets/`. The JS bundle was cached for up to an hour after a rebuild.
+
+**Fix:** Changed to `requestedPath.includes('assets/')` so all asset files are correctly served with `cache-control: no-cache`.
+
+---
+
 ## v1.8.0 — Major Feature Addition: Scheduling (March 2026)
 
 ### v1.8.0 Overview

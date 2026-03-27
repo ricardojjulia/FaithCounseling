@@ -615,7 +615,7 @@ export default function SchedulingPage({
   }, [selectedDay, view, selectedCounselorName]);
 
   const counselors = useMemo(() => (
-    staff.filter((item) => COUNSELING_ROLES.has(item.role) || GLOBAL_SCHEDULING_ROLES.has(item.role))
+    staff.filter((item) => COUNSELING_ROLES.has(item.role))
   ), [staff]);
 
   const counselorOptions = useMemo(() => (
