@@ -15,7 +15,7 @@ const { PeriodicExportingMetricReader } = sdkMetricsPkg;
 const { NodeSDK } = sdkNodePkg;
 const { ATTR_DEPLOYMENT_ENVIRONMENT_NAME, ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } = semanticConventions;
 
-export async function startNodeTelemetry({ serviceName, serviceVersion = '0.2.0' }) {
+export async function startNodeTelemetry({ serviceName, serviceVersion = '1.6.0' }) {
   if (process.env.OTEL_SDK_DISABLED === 'true') {
     return null;
   }

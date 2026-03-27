@@ -1306,7 +1306,11 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname === '/v1/telemetry/summary' && request.method === 'GET') {
       writeJson(response, 200, {
         service: 'api',
-        exportedViaOtel: Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT || process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT),
+        exportedViaOtel: Boolean(
+          process.env.OTEL_EXPORTER_OTLP_ENDPOINT
+          || process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          || process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+        ),
         summary: telemetry.getSummary(),
       });
       return;
