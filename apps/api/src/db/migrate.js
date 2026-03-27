@@ -92,6 +92,14 @@ async function applyColumnMigrations(conn) {
   console.log('Applying column migrations…');
   await addColumnIfMissing('clients', 'primary_counselor_id', 'VARCHAR(64) NULL');
   await addIndexIfMissing('clients', 'idx_clients_counselor', '(primary_counselor_id)');
+
+  // Appointments: rename scheduled_at → starts_at, add ends_at / location_name / timezone
+  await addColumnIfMissing('appointments', 'starts_at',     'TIMESTAMP NULL AFTER status');
+  await addColumnIfMissing('appointments', 'ends_at',       'TIMESTAMP NULL AFTER starts_at');
+  await addColumnIfMissing('appointments', 'location_name', 'VARCHAR(200) NULL AFTER ends_at');
+  await addColumnIfMissing('appointments', 'timezone',      'VARCHAR(64) NULL AFTER location_name');
+  await addIndexIfMissing('appointments', 'idx_appointments_starts_at', '(tenant_id, starts_at)');
+
   console.log('Column migrations done.');
 }
 
