@@ -154,7 +154,7 @@ const server = http.createServer(async (request, response) => {
 
     const file = await readFile(filePath);
     const extension = path.extname(filePath).toLowerCase();
-    const shouldDisableCache = extension === '.html' || requestedPath.startsWith('assets/');
+    const shouldDisableCache = extension === '.html' || requestedPath.includes('assets/');
     response.writeHead(200, {
       'content-type': contentTypes[extension] ?? 'application/octet-stream',
       'cache-control': shouldDisableCache ? 'no-cache' : 'public, max-age=3600',

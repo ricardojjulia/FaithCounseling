@@ -4408,7 +4408,7 @@ async function handlePortalOverview(request, response, requestUrl) {
     return;
   }
 
-  const client = resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
   if (!client) return;
 
   const account = portalAccounts.find((item) => item.clientId === client.id && item.tenantId === client.tenantId) ?? null;
@@ -4456,7 +4456,7 @@ async function handlePortalOverview(request, response, requestUrl) {
 
 async function handlePortalAccounts(request, response, requestUrl) {
   if (request.method === 'GET') {
-    const client = resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+    const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
     if (!client) return;
     const item = portalAccounts.find((account) => account.clientId === client.id && account.tenantId === client.tenantId) ?? null;
     emitAudit(request, 'portal.account.read', 'portal_account', client.id);
@@ -4535,7 +4535,7 @@ async function handlePortalAccounts(request, response, requestUrl) {
 }
 
 async function handlePortalIntakePackets(request, response, requestUrl) {
-  const client = resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
   if (!client) return;
 
   if (request.method === 'GET') {
@@ -4600,7 +4600,7 @@ async function handlePortalIntakePackets(request, response, requestUrl) {
 }
 
 async function handlePortalDocuments(request, response, requestUrl) {
-  const client = resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
   if (!client) return;
 
   if (request.method === 'GET') {
@@ -4659,7 +4659,7 @@ async function handlePortalDocuments(request, response, requestUrl) {
 }
 
 async function handlePortalAppointmentRequests(request, response, requestUrl) {
-  const client = resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
   if (!client) return;
 
   if (request.method === 'GET') {
@@ -4739,7 +4739,7 @@ async function handlePortalAppointmentRequests(request, response, requestUrl) {
 }
 
 async function handlePortalMessages(request, response, requestUrl) {
-  const client = resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
   if (!client) return;
 
   if (request.method === 'GET') {
@@ -4823,7 +4823,7 @@ async function handlePortalMessages(request, response, requestUrl) {
 }
 
 async function handlePortalResources(request, response, requestUrl) {
-  const client = resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
   if (!client) return;
 
   if (request.method === 'GET') {
@@ -7444,7 +7444,7 @@ function requirePlatformAdmin(request, response, session) {
   return true;
 }
 
-function resolvePortalClient(request, response, requestedClientId) {
+async function resolvePortalClient(request, response, requestedClientId) {
   const role = callerRole(request);
   const tenantId = callerTenant(request);
   const requested = sanitizeStr(requestedClientId, 50);
@@ -7456,7 +7456,14 @@ function resolvePortalClient(request, response, requestedClientId) {
       return null;
     }
 
-    const client = clients.find((item) => item.id === callerClient);
+    let client;
+    if (process.env.DB_NAME) {
+      const [rows] = await pool.query('SELECT id, tenant_id, first_name_enc, last_name_enc FROM clients WHERE id = ?', [callerClient]);
+      client = rows[0] ? { id: rows[0].id, tenantId: rows[0].tenant_id, firstName: decrypt(rows[0].first_name_enc), lastName: decrypt(rows[0].last_name_enc) } : null;
+    } else {
+      client = clients.find((item) => item.id === callerClient) ?? null;
+    }
+
     if (!client) {
       writeJson(response, 404, { error: 'Client not found' });
       return null;
@@ -7472,13 +7479,29 @@ function resolvePortalClient(request, response, requestedClientId) {
   }
 
   if (requested) {
-    const client = clients.find((item) => item.id === requested);
+    let client;
+    if (process.env.DB_NAME) {
+      const [rows] = await pool.query('SELECT id, tenant_id, first_name_enc, last_name_enc FROM clients WHERE id = ?', [requested]);
+      client = rows[0] ? { id: rows[0].id, tenantId: rows[0].tenant_id, firstName: decrypt(rows[0].first_name_enc), lastName: decrypt(rows[0].last_name_enc) } : null;
+    } else {
+      client = clients.find((item) => item.id === requested) ?? null;
+    }
+
     if (!client) {
       writeJson(response, 400, { error: 'Valid clientId is required' });
       return null;
     }
     if (enforceTenantScope(request, response, client.tenantId)) return null;
     return client;
+  }
+
+  if (process.env.DB_NAME) {
+    const [rows] = await pool.query('SELECT id, tenant_id, first_name_enc, last_name_enc FROM clients WHERE tenant_id = ? LIMIT 1', [tenantId]);
+    if (!rows[0]) {
+      writeJson(response, 404, { error: 'No client records found for tenant' });
+      return null;
+    }
+    return { id: rows[0].id, tenantId: rows[0].tenant_id, firstName: decrypt(rows[0].first_name_enc), lastName: decrypt(rows[0].last_name_enc) };
   }
 
   const fallbackClient = clients.find((item) => item.tenantId === tenantId);

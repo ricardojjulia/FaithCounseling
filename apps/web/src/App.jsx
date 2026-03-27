@@ -11,6 +11,7 @@ import CounselorDetailPage from './components/CounselorDetail/CounselorDetailPag
 import UserMaintenance from './components/UserMaintenance.jsx';
 import CounselorMaintenance from './components/CounselorMaintenance.jsx';
 import ClientPickerModal from './components/ClientPickerModal.jsx';
+import WorkspaceStudioPage from './components/WorkspaceStudio/WorkspaceStudioPage.jsx';
 import './App.css';
 
 function firstString(...values) {
@@ -133,10 +134,11 @@ export default function App() {
   const handleOpenCounselor  = (staffId)   => { setCurrentView('counselors'); setSelectedCounselorId(staffId); };
   const handleCounselorBack  = ()          => { setSelectedCounselorId(null); };
 
-  const showDashboard  = currentView === 'dashboard';
-  const showUsers      = currentView === 'users';
-  const showCounselors = currentView === 'counselors';
-  const showClientsWorkspace = currentView === 'clients' || (!showDashboard && !showUsers && !showCounselors);
+  const showDashboard        = currentView === 'dashboard';
+  const showUsers            = currentView === 'users';
+  const showCounselors       = currentView === 'counselors';
+  const showWorkspaceStudio  = currentView === 'workspace-studio';
+  const showClientsWorkspace = currentView === 'clients' || (!showDashboard && !showUsers && !showCounselors && !showWorkspaceStudio);
 
   if (authBootstrapping) {
     return (
@@ -200,6 +202,8 @@ export default function App() {
           <div style={{ padding: '20px' }}>
             <CounselorMaintenance userRole={userRole} onViewCounselor={handleOpenCounselor} />
           </div>
+        ) : showWorkspaceStudio ? (
+          <WorkspaceStudioPage />
         ) : (
           <>
             {showDashboard ? <Metrics data={metricsData} /> : null}

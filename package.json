@@ -11,8 +11,8 @@
     "packages/*"
   ],
   "scripts": {
-    "start": "node ops/start-all.mjs",
-    "start:all": "node ops/start-all.mjs",
+    "start": "node --env-file=.env ops/start-all.mjs",
+    "start:all": "node --env-file=.env ops/start-all.mjs",
     "start:web": "pnpm --filter @faith/web start",
     "start:api": "pnpm --filter @faith/api start",
     "start:worker": "pnpm --filter @faith/worker start",

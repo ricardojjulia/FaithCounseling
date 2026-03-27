@@ -1,22 +1,9 @@
 import { useState } from 'react';
-import { Paper, Group, Title, Button, Tabs, Text, Stack, Loader, Box,
+import { Paper, Group, Title, Button, Text, Stack, Loader, Box,
          UnstyledButton } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { csrfHeaders } from '../lib/csrf.js';
 import ClientModal from './ClientModal';
-
-const STUDIO_TABS = [
-  { id: 'practice',         label: 'Practice' },
-  { id: 'locations',        label: 'Locations' },
-  { id: 'staff',            label: 'Staff' },
-  { id: 'lifecycle',        label: 'Lifecycle' },
-  { id: 'chart',            label: 'Chart' },
-  { id: 'documentsStudio',  label: 'Documents & Inventories' },
-  { id: 'clients',          label: 'Clients' },
-  { id: 'appointments',     label: 'Appointments' },
-  { id: 'billing',          label: 'Billing' },
-  { id: 'portal',           label: 'Portal' },
-];
 
 export default function WorkspaceGrid({ clientsData, onClientsUpdated, onViewClient }) {
   const [modalOpen,     setModalOpen]     = useState(false);
@@ -69,23 +56,6 @@ export default function WorkspaceGrid({ clientsData, onClientsUpdated, onViewCli
           <Text c="dimmed" fz="sm">No issues detected</Text>
         </Paper>
       </Group>
-
-      {/* Workspace Studio */}
-      <Paper withBorder radius="md" p="md">
-        <Title order={3} fz="md" mb="sm">Workspace Studio</Title>
-        <Tabs defaultValue="clients">
-          <Tabs.List style={{ overflowX: 'auto', flexWrap: 'nowrap' }}>
-            {STUDIO_TABS.map((t) => (
-              <Tabs.Tab key={t.id} value={t.id} style={{ whiteSpace: 'nowrap' }}>{t.label}</Tabs.Tab>
-            ))}
-          </Tabs.List>
-          {STUDIO_TABS.map((t) => (
-            <Tabs.Panel key={t.id} value={t.id} pt="md">
-              <Text c="dimmed" fz="sm">Content for {t.label} tab</Text>
-            </Tabs.Panel>
-          ))}
-        </Tabs>
-      </Paper>
 
       {/* Clients */}
       <Paper withBorder radius="md" p="md" component="section" aria-labelledby="clientsPanelTitle">
