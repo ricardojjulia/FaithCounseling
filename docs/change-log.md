@@ -1,5 +1,31 @@
 # Change Log
 
+## v1.6.0 — Explicit Health Probes & OTEL Health Metrics
+
+**Date:** March 27, 2026  
+**Type:** Minor Release
+
+### Overview
+
+Adds explicit API liveness/readiness endpoints and dedicated OpenTelemetry health metrics so infrastructure can distinguish process-up from dependency-ready.
+
+### Changes
+
+- Added `GET /health/live`
+- Added `GET /health/ready`
+- Kept `GET /health` as the liveness-compatible endpoint
+- Added OTEL metrics:
+  - `faith.service.health_status`
+  - `faith.service.dependency.health_status`
+  - `faith.service.healthcheck.duration`
+  - `faith.service.healthcheck.total`
+- Added readiness health state into `/v1/telemetry/summary`
+- Exposed new health routes through the public-route allowlist for probes
+
+### Breaking Changes
+
+None.
+
 ## v1.0.0 — Production Release: Client Management Module
 
 **Date:** March 24, 2026  

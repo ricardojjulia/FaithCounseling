@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Faith Counseling API
-  version: 1.0.0
+  version: 1.1.0
   summary: Production-ready API for practice and client lifecycle management with full CRUD operations, audit logging, and HIPAA compliance.
 servers:
   - url: https://api.example.com

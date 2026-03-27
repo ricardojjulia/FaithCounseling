@@ -149,6 +149,23 @@ if (process.env.DB_NAME) {
   console.log('Database connection verified.');
 }
 
+telemetry.updateHealth({
+  serviceStatus: 2,
+  dependencies: {
+    db: {
+      status: process.env.DB_NAME ? 2 : 1,
+      observedAt: new Date().toISOString(),
+    },
+  },
+  checks: {
+    startup: {
+      status: 2,
+      observedAt: new Date().toISOString(),
+      detail: process.env.DB_NAME ? 'database connection verified at startup' : 'running without DB_NAME configured',
+    },
+  },
+});
+
 const clients = [
   { id: 'c-001', tenantId: 'system', firstName: 'Sarah', lastName: 'Kim', status: 'active', faithBackground: 'Evangelical' },
   { id: 'c-002', tenantId: 'system', firstName: 'David', lastName: 'Miller', status: 'active', faithBackground: 'Baptist' },
@@ -864,8 +881,15 @@ const server = http.createServer(async (request, response) => {
     // RBAC — uses session when available, falls back to headers in dev
     if (enforceRbac(request, response, route, session)) return;
 
-    if (requestUrl.pathname === '/health' && request.method === 'GET') {
-      writeJson(response, 200, { status: 'ok', service: 'api', timestamp: new Date().toISOString() });
+    if ((requestUrl.pathname === '/health' || requestUrl.pathname === '/health/live') && request.method === 'GET') {
+      const health = buildLiveHealthResponse();
+      writeJson(response, 200, health);
+      return;
+    }
+
+    if (requestUrl.pathname === '/health/ready' && request.method === 'GET') {
+      const health = await buildReadinessHealthResponse();
+      writeJson(response, health.httpStatus, health.body);
       return;
     }
 
@@ -7511,6 +7535,8 @@ function sanitizeStr(raw, maxLen = 200) {
 }
 
 function resolveRoute(pathname) {
+  if (pathname === '/health' || pathname === '/health/live') return '/health/live';
+  if (pathname === '/health/ready') return '/health/ready';
   if (pathname === '/openapi.yaml') return '/openapi.yaml';
   if (pathname === '/docs' || pathname === '/docs/') return '/docs';
   if (pathname === '/v1/auth/login') return '/v1/auth/login';
@@ -7570,6 +7596,164 @@ function resolveRoute(pathname) {
   if (pathname.startsWith('/v1/i18n/catalog/')) return '/v1/i18n/catalog/:locale';
   if (pathname.startsWith('/v1/i18n/settings/')) return '/v1/i18n/settings/:locale';
   return pathname;
+}
+
+function buildLiveHealthResponse() {
+  const timestamp = new Date().toISOString();
+  return {
+    status: 'ok',
+    service: 'api',
+    mode: 'live',
+    timestamp,
+  };
+}
+
+async function buildReadinessHealthResponse() {
+  const startedAt = performance.now();
+  const timestamp = new Date().toISOString();
+  const dependencies = {};
+  const checks = {};
+
+  if (!process.env.DB_NAME) {
+    const durationMs = performance.now() - startedAt;
+    dependencies.db = {
+      status: 'degraded',
+      configured: false,
+      observedAt: timestamp,
+    };
+    checks.db = {
+      status: 'degraded',
+      durationMs: roundMetric(durationMs),
+      observedAt: timestamp,
+      detail: 'DB_NAME is not configured; API is running in memory-only mode',
+    };
+
+    telemetry.recordHealthCheck('db', durationMs, 'degraded', { configured: 'false' });
+    telemetry.updateHealth({
+      serviceStatus: 1,
+      dependencies: {
+        db: {
+          status: 1,
+          observedAt: timestamp,
+        },
+      },
+      checks: {
+        db: {
+          status: 1,
+          observedAt: timestamp,
+          durationMs,
+          detail: checks.db.detail,
+        },
+      },
+    });
+
+    return {
+      httpStatus: 200,
+      body: {
+        status: 'degraded',
+        service: 'api',
+        mode: 'ready',
+        timestamp,
+        dependencies,
+        checks,
+      },
+    };
+  }
+
+  try {
+    await verifyConnection();
+    const durationMs = performance.now() - startedAt;
+    dependencies.db = {
+      status: 'ok',
+      configured: true,
+      observedAt: timestamp,
+    };
+    checks.db = {
+      status: 'ok',
+      durationMs: roundMetric(durationMs),
+      observedAt: timestamp,
+      detail: 'database ping succeeded',
+    };
+
+    telemetry.recordHealthCheck('db', durationMs, 'ok', { configured: 'true' });
+    telemetry.updateHealth({
+      serviceStatus: 2,
+      dependencies: {
+        db: {
+          status: 2,
+          observedAt: timestamp,
+        },
+      },
+      checks: {
+        db: {
+          status: 2,
+          observedAt: timestamp,
+          durationMs,
+          detail: checks.db.detail,
+        },
+      },
+    });
+
+    return {
+      httpStatus: 200,
+      body: {
+        status: 'ok',
+        service: 'api',
+        mode: 'ready',
+        timestamp,
+        dependencies,
+        checks,
+      },
+    };
+  } catch (error) {
+    const durationMs = performance.now() - startedAt;
+    dependencies.db = {
+      status: 'error',
+      configured: true,
+      observedAt: timestamp,
+    };
+    checks.db = {
+      status: 'error',
+      durationMs: roundMetric(durationMs),
+      observedAt: timestamp,
+      detail: error.message || 'database ping failed',
+    };
+
+    telemetry.recordHealthCheck('db', durationMs, 'error', { configured: 'true' });
+    telemetry.updateHealth({
+      serviceStatus: 0,
+      dependencies: {
+        db: {
+          status: 0,
+          observedAt: timestamp,
+        },
+      },
+      checks: {
+        db: {
+          status: 0,
+          observedAt: timestamp,
+          durationMs,
+          detail: checks.db.detail,
+        },
+      },
+    });
+
+    return {
+      httpStatus: 503,
+      body: {
+        status: 'error',
+        service: 'api',
+        mode: 'ready',
+        timestamp,
+        dependencies,
+        checks,
+      },
+    };
+  }
+}
+
+function roundMetric(value) {
+  return Math.round(value * 100) / 100;
 }
 
 /**

@@ -1,6 +1,8 @@
 
 # ClientData.md — FaithCounseling Enterprise Client Information System
 
+**Status:** Active planning document. Current repository release is `v1.6.0`; health/readiness telemetry work has shipped separately and does not change this client-data expansion plan.
+
 ## Implementation Plan — Medical Practice-Grade Client Records
 
 **Prepared:** 2026-03-24

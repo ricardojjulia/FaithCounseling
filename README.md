@@ -4,8 +4,34 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `1.5.0`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring)
+- Current release: `1.6.0`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export)
+
+## v1.6.0 — Explicit Health Probes & OTEL Health Metrics (March 2026)
+
+### v1.6.0 Overview
+
+Adds explicit liveness and readiness health endpoints to the API and exports dedicated service/dependency health metrics through OpenTelemetry. This closes the gap between generic request telemetry and actual machine-readable health status.
+
+### v1.6.0 Changes
+
+#### API Health Endpoints
+
+- `GET /health` and `GET /health/live` now provide liveness status
+- `GET /health/ready` now performs a DB readiness check and returns dependency/check detail
+- Health routes are publicly accessible for probes and load balancers
+
+#### OpenTelemetry Health Export
+
+- Added `faith.service.health_status` observable gauge
+- Added `faith.service.dependency.health_status` observable gauge
+- Added `faith.service.healthcheck.duration` histogram
+- Added `faith.service.healthcheck.total` counter
+- Readiness results now update the API telemetry summary health block for operator visibility
+
+### v1.6.0 Backward Compatibility
+
+No breaking API changes. Existing `/health` callers still receive a successful liveness response, while `/health/ready` is available for deeper readiness probes.
 
 ## v1.5.0 — Operations Studio Revamp, Monitoring Dashboard & API Auth Fix (March 2026)
 
@@ -492,12 +518,21 @@ The initial implementation follows a modular monolith approach with clear domain
 
 - Node services use OpenTelemetry initialization from `packages/telemetry/src/node.js`.
 - Browser experience metrics use OpenTelemetry + `web-vitals` from `packages/telemetry/src/browser.js`.
+- Health probe endpoints:
+  - `GET /health`
+  - `GET /health/live`
+  - `GET /health/ready`
 - API telemetry summary endpoint:
   - `GET /v1/telemetry/summary`
 - Web proxy telemetry summary endpoint:
   - `GET /telemetry/summary`
 - Browser vitals ingestion endpoint:
   - `POST /v1/telemetry/vitals`
+- Dedicated OTEL health metrics:
+  - `faith.service.health_status`
+  - `faith.service.dependency.health_status`
+  - `faith.service.healthcheck.duration`
+  - `faith.service.healthcheck.total`
 
 To export traces/metrics to an OTLP backend, set one or more environment variables before startup:
 

@@ -1,5 +1,7 @@
 # Mantine UI Migration
 
+**Status:** Delivered in the repository. Current repository release is `v1.6.0`; this document remains as the implementation record for the Mantine migration.
+
 ## Purpose
 
 Replace the hand-rolled CSS component system with Mantine v7, a production-grade React component library that uses native CSS (no runtime CSS-in-JS). The goal is a more polished, accessible, consistent UI with less custom CSS to maintain, while preserving the existing brand color palette and design language.

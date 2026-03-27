@@ -151,6 +151,8 @@ const VALID_ROLES = new Set([
 // Routes accessible without any role (public / health checks / static assets)
 const PUBLIC_ROUTES = new Set([
   '/health',
+  '/health/live',
+  '/health/ready',
   '/bootstrap-metadata',
   '/openapi.yaml',
   '/docs',

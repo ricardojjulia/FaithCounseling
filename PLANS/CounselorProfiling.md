@@ -1,5 +1,7 @@
 # Counselor Profiling System
 
+**Status:** Delivered in the repository. Current repository release is `v1.6.0`; this document remains as the implementation record for the counselor profiling feature set.
+
 ## Purpose
 
 This plan defines the implementation scope for a comprehensive counselor profiling system for FaithCounseling. Christian counseling practices require detailed records of their counseling personnel beyond basic account information — state licenses, certifications and continuing education, clinical specialties and therapeutic modalities, faith integration profiles, and employment and HR details.

@@ -1,5 +1,7 @@
 # USER and USER MAINTENANCE
 
+**Status:** Delivered in the repository without MFA. Current repository release is `v1.6.0`; this document remains as the implementation record for the user maintenance and login work.
+
 ## Purpose
 
 This plan defines the implementation scope for a professional login experience and a secure user maintenance module for FaithCounseling.

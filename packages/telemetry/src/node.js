@@ -15,7 +15,7 @@ const { PeriodicExportingMetricReader } = sdkMetricsPkg;
 const { NodeSDK } = sdkNodePkg;
 const { ATTR_DEPLOYMENT_ENVIRONMENT_NAME, ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } = semanticConventions;
 
-export async function startNodeTelemetry({ serviceName, serviceVersion = '0.1.0' }) {
+export async function startNodeTelemetry({ serviceName, serviceVersion = '0.2.0' }) {
   if (process.env.OTEL_SDK_DISABLED === 'true') {
     return null;
   }
@@ -57,6 +57,19 @@ export function createServiceTelemetry(serviceName) {
     description: 'Web proxy upstream duration in milliseconds',
     unit: 'ms',
   });
+  const healthCheckDuration = meter.createHistogram('faith.service.healthcheck.duration', {
+    description: 'Healthcheck execution duration in milliseconds',
+    unit: 'ms',
+  });
+  const healthCheckCounter = meter.createCounter('faith.service.healthcheck.total', {
+    description: 'Healthcheck executions by check name and result',
+  });
+  const serviceHealthGauge = meter.createObservableGauge('faith.service.health_status', {
+    description: 'Overall service health status where 0=unhealthy, 1=degraded, 2=healthy',
+  });
+  const dependencyHealthGauge = meter.createObservableGauge('faith.service.dependency.health_status', {
+    description: 'Dependency health status where 0=unhealthy, 1=degraded, 2=healthy',
+  });
 
   const state = {
     activeRequests: 0,
@@ -65,7 +78,20 @@ export function createServiceTelemetry(serviceName) {
     proxySamples: [],
     mutationCount: 0,
     lastMutationAt: null,
+    health: {
+      serviceStatus: 2,
+      dependencies: {},
+      checks: {},
+      lastUpdatedAt: null,
+    },
   };
+
+  meter.addBatchObservableCallback((observableResult) => {
+    observableResult.observe(serviceHealthGauge, state.health.serviceStatus);
+    for (const [dependency, dependencyState] of Object.entries(state.health.dependencies)) {
+      observableResult.observe(dependencyHealthGauge, dependencyState.status, { dependency });
+    }
+  }, [serviceHealthGauge, dependencyHealthGauge]);
 
   return {
     tracer,
@@ -120,6 +146,33 @@ export function createServiceTelemetry(serviceName) {
       state.proxySamples.push({ duration, route, at: Date.now() });
       trimSamples(state.proxySamples);
     },
+    recordHealthCheck(name, duration, status, attributes = {}) {
+      healthCheckDuration.record(duration, { name, ...attributes });
+      healthCheckCounter.add(1, { name, status, ...attributes });
+    },
+    updateHealth({ serviceStatus, dependencies = {}, checks = {} }) {
+      state.health.serviceStatus = normalizeHealthValue(serviceStatus);
+      state.health.lastUpdatedAt = new Date().toISOString();
+
+      for (const [dependency, value] of Object.entries(dependencies)) {
+        state.health.dependencies[dependency] = {
+          status: normalizeHealthValue(value?.status),
+          observedAt: value?.observedAt ?? state.health.lastUpdatedAt,
+        };
+      }
+
+      state.health.checks = Object.fromEntries(
+        Object.entries(checks).map(([name, value]) => [
+          name,
+          {
+            status: normalizeHealthValue(value?.status),
+            observedAt: value?.observedAt ?? state.health.lastUpdatedAt,
+            durationMs: typeof value?.durationMs === 'number' ? round(value.durationMs) : null,
+            detail: value?.detail ?? null,
+          },
+        ]),
+      );
+    },
     getSummary() {
       const requestLatencySummary = summarizeDurations(state.requestSamples);
       const proxyLatencySummary = summarizeDurations(state.proxySamples);
@@ -152,6 +205,12 @@ export function createServiceTelemetry(serviceName) {
         mutationCount: state.mutationCount,
         lastMutationAt: state.lastMutationAt,
         browserVitals: summarizeVitals(state.vitalSamples),
+        health: {
+          serviceStatus: state.health.serviceStatus,
+          dependencies: state.health.dependencies,
+          checks: state.health.checks,
+          lastUpdatedAt: state.health.lastUpdatedAt,
+        },
         process: {
           uptimeSeconds: Math.round(process.uptime()),
           rssMb: toMegabytes(process.memoryUsage().rss),
@@ -213,6 +272,14 @@ function summarizeVitals(samples) {
 
 function round(value) {
   return Math.round(value * 100) / 100;
+}
+
+function normalizeHealthValue(value) {
+  if (value === 0 || value === 1 || value === 2) {
+    return value;
+  }
+
+  return 0;
 }
 
 function toMegabytes(value) {
