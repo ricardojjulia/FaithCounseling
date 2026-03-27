@@ -3,7 +3,7 @@ import { fetchClient } from '../../lib/clientApi.js';
 import ClientDetailHeader from './ClientDetailHeader.jsx';
 import ClientDetailTabs from './ClientDetailTabs.jsx';
 
-export default function ClientDetailPage({ clientId, onBack }) {
+export default function ClientDetailPage({ clientId, onBack, onScheduleClient }) {
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -84,7 +84,7 @@ export default function ClientDetailPage({ clientId, onBack }) {
         overflow: 'hidden',
       }}
     >
-      <ClientDetailHeader client={client} onBack={onBack} />
+      <ClientDetailHeader client={client} onBack={onBack} onScheduleClient={onScheduleClient} />
       <ClientDetailTabs client={client} clientId={clientId} />
     </div>
   );

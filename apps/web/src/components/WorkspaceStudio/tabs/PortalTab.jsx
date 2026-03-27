@@ -312,7 +312,7 @@ function MessagesSection({ messageThreads, clientId }) {
   );
 }
 
-function AppointmentRequestsSection({ appointmentRequests, onRefresh }) {
+function AppointmentRequestsSection({ appointmentRequests, onRefresh, selectedClientId, onSchedulePortalRequest }) {
   const [updating, setUpdating] = useState(null);
 
   const updateStatus = async (reqId, status) => {
@@ -376,6 +376,26 @@ function AppointmentRequestsSection({ appointmentRequests, onRefresh }) {
                 >
                   Decline
                 </Button>
+                <Button
+                  size="xs"
+                  variant="default"
+                  loading={updating === req.id}
+                  onClick={() => onSchedulePortalRequest?.(selectedClientId, req)}
+                >
+                  Schedule
+                </Button>
+              </Group>
+            )}
+            {req.status === 'approved' && (
+              <Group gap="xs">
+                <Button
+                  size="xs"
+                  variant="default"
+                  loading={updating === req.id}
+                  onClick={() => onSchedulePortalRequest?.(selectedClientId, req)}
+                >
+                  Schedule
+                </Button>
               </Group>
             )}
           </Group>
@@ -420,7 +440,7 @@ function AccordionLabel({ title, count, countColor }) {
 
 // ── main component ────────────────────────────────────────────────────────────
 
-export default function PortalTab() {
+export default function PortalTab({ onSchedulePortalRequest }) {
   const [clients,        setClients]        = useState([]);
   const [clientId,       setClientId]       = useState(null);
   const [overview,       setOverview]       = useState(null);
@@ -544,6 +564,8 @@ export default function PortalTab() {
                 <AppointmentRequestsSection
                   appointmentRequests={overview.appointmentRequests}
                   onRefresh={() => loadOverview(clientId)}
+                  selectedClientId={clientId}
+                  onSchedulePortalRequest={onSchedulePortalRequest}
                 />
               </Accordion.Panel>
             </Accordion.Item>

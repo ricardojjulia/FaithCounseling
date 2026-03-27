@@ -5,7 +5,14 @@ import { notifications } from '@mantine/notifications';
 import { csrfHeaders } from '../lib/csrf.js';
 import ClientModal from './ClientModal';
 
-export default function WorkspaceGrid({ clientsData, onClientsUpdated, onViewClient }) {
+export default function WorkspaceGrid({
+  clientsData,
+  onClientsUpdated,
+  onViewClient,
+  onViewCalendar,
+  onNewAppointment,
+  onScheduleClient,
+}) {
   const [modalOpen,     setModalOpen]     = useState(false);
   const [editingClient, setEditingClient] = useState(null);
 
@@ -36,8 +43,8 @@ export default function WorkspaceGrid({ clientsData, onClientsUpdated, onViewCli
         <Group justify="space-between" mb="sm">
           <Title order={3} fz="md">Today's Schedule</Title>
           <Group gap="xs">
-            <Button variant="default" size="xs">View Calendar</Button>
-            <Button size="xs">New Appointment</Button>
+            <Button variant="default" size="xs" onClick={() => onViewCalendar?.()}>View Calendar</Button>
+            <Button size="xs" onClick={() => onNewAppointment?.()}>New Appointment</Button>
           </Group>
         </Group>
         <Text c="dimmed" fz="sm" py="sm">No appointments scheduled</Text>
@@ -85,6 +92,7 @@ export default function WorkspaceGrid({ clientsData, onClientsUpdated, onViewCli
                   </Text>
                 </UnstyledButton>
                 <Group gap="xs">
+                  <Button size="xs" color="blue" variant="light" onClick={() => onScheduleClient?.(client.id)}>Schedule</Button>
                   <Button size="xs" variant="default" onClick={() => handleViewClient(client)}>Edit</Button>
                   <Button size="xs" color="red" variant="light" onClick={() => handleDeleteClient(client)}>Delete</Button>
                 </Group>

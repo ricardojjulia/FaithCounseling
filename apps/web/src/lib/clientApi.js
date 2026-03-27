@@ -455,3 +455,86 @@ export function upsertStaffFaithProfile(staffId, data) {
     body: JSON.stringify(data),
   });
 }
+
+// ── Scheduling ───────────────────────────────────────────────────────────────
+
+export function fetchAppointmentTypes() {
+  return apiFetch('/api/v1/appointment-types');
+}
+
+export function fetchAppointments() {
+  return apiFetch('/api/v1/appointments');
+}
+
+export function fetchSchedulingCalendar({ day, timezone, counselorName, locationName } = {}) {
+  const params = new URLSearchParams();
+  if (day) params.set('day', day);
+  if (timezone) params.set('timezone', timezone);
+  if (counselorName) params.set('counselorName', counselorName);
+  if (locationName) params.set('locationName', locationName);
+  const query = params.toString();
+  return apiFetch(`/api/v1/scheduling/calendar${query ? `?${query}` : ''}`);
+}
+
+export async function createAppointmentRecord(data) {
+  const response = await fetch('/api/v1/appointments', {
+    method: 'POST',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch (_) {
+      payload = null;
+    }
+    const error = new Error(payload?.error || payload?.message || `Request failed: ${response.status}`);
+    if (payload?.conflicts) error.conflicts = payload.conflicts;
+    throw error;
+  }
+
+  return response.json();
+}
+
+export async function updateAppointmentRecord(appointmentId, data) {
+  const response = await fetch(`/api/v1/appointments/${appointmentId}`, {
+    method: 'PATCH',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch (_) {
+      payload = null;
+    }
+    const error = new Error(payload?.error || payload?.message || `Request failed: ${response.status}`);
+    if (payload?.conflicts) error.conflicts = payload.conflicts;
+    throw error;
+  }
+
+  return response.json();
+}
+
+export async function deleteAppointmentRecord(appointmentId) {
+  const response = await fetch(`/api/v1/appointments/${appointmentId}`, {
+    method: 'DELETE',
+    headers: csrfHeaders(),
+  });
+
+  if (!response.ok) {
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch (_) {
+      payload = null;
+    }
+    throw new Error(payload?.error || payload?.message || `Request failed: ${response.status}`);
+  }
+
+  return response.json();
+}

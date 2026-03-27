@@ -12,6 +12,8 @@ import UserMaintenance from './components/UserMaintenance.jsx';
 import CounselorMaintenance from './components/CounselorMaintenance.jsx';
 import ClientPickerModal from './components/ClientPickerModal.jsx';
 import WorkspaceStudioPage from './components/WorkspaceStudio/WorkspaceStudioPage.jsx';
+import SchedulingPage from './components/SchedulingPage.jsx';
+import { csrfHeaders } from './lib/csrf.js';
 import './App.css';
 
 function firstString(...values) {
@@ -46,6 +48,12 @@ function normalizeSessionUser(profile) {
   };
 }
 
+function defaultCalendarView(role) {
+  return ['platform_admin', 'practice_owner', 'practice_admin', 'scheduler_biller'].includes(role || '')
+    ? 'practice'
+    : 'counselor';
+}
+
 export default function App() {
   const [navOpened, { toggle: toggleNav, close: closeNav }] = useDisclosure(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -59,6 +67,12 @@ export default function App() {
   const [selectedCounselorId, setSelectedCounselorId] = useState(null);
   const [currentView, setCurrentView] = useState('dashboard');
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
+  const [schedulingState, setSchedulingState] = useState({
+    composerOpen: false,
+    initialClientId: null,
+    initialView: null,
+    initialPortalRequest: null,
+  });
   const userRole = currentUser?.role ?? null;
 
   useEffect(() => {
@@ -126,6 +140,9 @@ export default function App() {
     setCurrentView(view);
     if (view !== 'clients') setSelectedClientId(null);
     if (view !== 'counselors') setSelectedCounselorId(null);
+    if (view !== 'scheduling') {
+      setSchedulingState({ composerOpen: false, initialClientId: null, initialView: null, initialPortalRequest: null });
+    }
     closeNav();
   };
 
@@ -133,12 +150,36 @@ export default function App() {
   const handleClientBack     = ()          => { setSelectedClientId(null);   setCurrentView('clients'); };
   const handleOpenCounselor  = (staffId)   => { setCurrentView('counselors'); setSelectedCounselorId(staffId); };
   const handleCounselorBack  = ()          => { setSelectedCounselorId(null); };
+  const handleOpenScheduling = ({
+    composerOpen = false,
+    initialClientId = null,
+    initialView = null,
+    initialPortalRequest = null,
+  } = {}) => {
+    setSchedulingState({ composerOpen, initialClientId, initialView, initialPortalRequest });
+    setCurrentView('scheduling');
+    closeNav();
+  };
+
+  const handlePortalRequestScheduled = async (portalRequest) => {
+    if (!portalRequest?.id) return;
+    try {
+      await fetch('/api/v1/portal/appointment-requests', {
+        method: 'PATCH',
+        headers: csrfHeaders(),
+        body: JSON.stringify({ requestId: portalRequest.id, status: 'scheduled' }),
+      });
+    } catch {
+      // best effort; scheduling already succeeded
+    }
+  };
 
   const showDashboard        = currentView === 'dashboard';
   const showUsers            = currentView === 'users';
   const showCounselors       = currentView === 'counselors';
+  const showScheduling       = currentView === 'scheduling';
   const showWorkspaceStudio  = currentView === 'workspace-studio';
-  const showClientsWorkspace = currentView === 'clients' || (!showDashboard && !showUsers && !showCounselors && !showWorkspaceStudio);
+  const showClientsWorkspace = currentView === 'clients' || (!showDashboard && !showUsers && !showCounselors && !showScheduling && !showWorkspaceStudio);
 
   if (authBootstrapping) {
     return (
@@ -191,7 +232,15 @@ export default function App() {
         />
 
         {selectedClientId ? (
-          <ClientDetailPage clientId={selectedClientId} onBack={handleClientBack} />
+          <ClientDetailPage
+            clientId={selectedClientId}
+            onBack={handleClientBack}
+            onScheduleClient={() => handleOpenScheduling({
+              composerOpen: true,
+              initialClientId: selectedClientId,
+              initialView: defaultCalendarView(userRole),
+            })}
+          />
         ) : selectedCounselorId ? (
           <CounselorDetailPage staffId={selectedCounselorId} onBack={handleCounselorBack} currentUser={currentUser} />
         ) : showUsers ? (
@@ -202,8 +251,27 @@ export default function App() {
           <div style={{ padding: '20px' }}>
             <CounselorMaintenance userRole={userRole} onViewCounselor={handleOpenCounselor} />
           </div>
+        ) : showScheduling ? (
+          <SchedulingPage
+            currentUser={currentUser}
+            clients={clientsData.items}
+            initialComposerOpen={schedulingState.composerOpen}
+            initialClientId={schedulingState.initialClientId}
+            initialView={schedulingState.initialView}
+            initialPortalRequest={schedulingState.initialPortalRequest}
+            onComposerHandled={() => setSchedulingState((state) => ({ ...state, composerOpen: false, initialPortalRequest: null }))}
+            onPortalRequestScheduled={handlePortalRequestScheduled}
+            onOpenClient={handleOpenClient}
+          />
         ) : showWorkspaceStudio ? (
-          <WorkspaceStudioPage />
+          <WorkspaceStudioPage
+            onSchedulePortalRequest={(clientId, portalRequest) => handleOpenScheduling({
+              composerOpen: true,
+              initialClientId: clientId,
+              initialView: 'practice',
+              initialPortalRequest: portalRequest,
+            })}
+          />
         ) : (
           <>
             {showDashboard ? <Metrics data={metricsData} /> : null}
@@ -212,6 +280,13 @@ export default function App() {
                 clientsData={clientsData}
                 onClientsUpdated={() => setRefreshClientsKey((k) => k + 1)}
                 onViewClient={handleOpenClient}
+                onViewCalendar={() => handleOpenScheduling({ initialView: defaultCalendarView(userRole) })}
+                onNewAppointment={() => handleOpenScheduling({ composerOpen: true, initialView: defaultCalendarView(userRole) })}
+                onScheduleClient={(clientId) => handleOpenScheduling({
+                  composerOpen: true,
+                  initialClientId: clientId,
+                  initialView: defaultCalendarView(userRole),
+                })}
               />
             ) : null}
           </>

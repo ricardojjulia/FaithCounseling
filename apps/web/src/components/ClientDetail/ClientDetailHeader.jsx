@@ -19,7 +19,7 @@ function formatDate(ds) {
   return isNaN(d.getTime()) ? ds : d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
-export default function ClientDetailHeader({ client, onBack }) {
+export default function ClientDetailHeader({ client, onBack, onScheduleClient }) {
   const displayName = client.preferredName
     ? `${client.preferredName} (${client.firstName} ${client.lastName})`
     : `${client.firstName}${client.middleName ? ' ' + client.middleName : ''} ${client.lastName}`;
@@ -31,6 +31,7 @@ export default function ClientDetailHeader({ client, onBack }) {
     <Paper radius={0} withBorder style={{ borderLeft: 0, borderRight: 0, borderTop: 0 }} p="md">
       <Group gap="md" wrap="wrap">
         <Button variant="default" size="sm" onClick={onBack}>← Clients</Button>
+        <Button size="sm" onClick={onScheduleClient}>Schedule Appointment</Button>
         <Box style={{ flex: 1, minWidth: 0 }}>
           <Group gap="sm" wrap="wrap" align="center">
             <Title order={1} fz="xl" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

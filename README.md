@@ -4,8 +4,83 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `1.6.0`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export)
+- Current release: `1.8.0`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + major Scheduling feature)
+
+## v1.8.0 — Major Feature Addition: Scheduling (March 2026)
+
+### v1.8.0 Overview
+
+This release formally declares **Scheduling** as a major platform feature. The product now includes an end-to-end scheduling workflow covering calendar access, appointment creation, lifecycle updates, client-preselected booking flows, and portal request conversion into scheduled appointments.
+
+### v1.8.0 Highlights
+
+- Scheduling is now a first-class module in the primary app shell
+- General, counselor, and practice-manager calendar views are available
+- Dashboard `View Calendar` and `New Appointment` actions are fully wired
+- Appointment lifecycle actions (edit, complete, cancel, no-show, delete) are available from scheduling views
+- Staff can open scheduling with client-preselected context from client list and client detail
+- Portal appointment requests can be converted into live scheduled appointments
+
+### v1.8.0 Backward Compatibility
+
+No breaking API changes were introduced. The scheduling feature is built on existing appointment endpoints and extends UI/workflow capability without altering established API contracts.
+
+## v1.7.0 — Scheduling Module Foundation, Client Scheduling Flows & Portal Conversion (March 2026)
+
+### v1.7.0 Overview
+
+Introduces the first end-to-end Scheduling module implementation in the React app. The release adds a dedicated Scheduling surface, working dashboard scheduling actions, appointment lifecycle controls, client-preselected scheduling flows, and portal request handoff into live appointment scheduling.
+
+### v1.7.0 Changes
+
+#### Dedicated Scheduling Surface
+
+- Added a real Scheduling page in the app shell (replacing placeholder navigation behavior)
+- Added role-aware calendar modes:
+  - General Calendar
+  - Counselor Calendar
+  - Practice Manager Calendar
+- Added operational metrics cards for day-level scheduling visibility
+
+#### Working Scheduling Entry Points
+
+- `View Calendar` on the dashboard now opens the Scheduling page
+- `New Appointment` on the dashboard now opens a functioning appointment composer
+- Client rows now expose a `Schedule` action that opens scheduling with the client preselected
+- Client detail header now exposes `Schedule Appointment` for direct scheduling
+
+#### Appointment Creation & Lifecycle Actions
+
+- Appointment composer supports:
+  - client
+  - appointment type
+  - counselor
+  - start/end
+  - location or remote mode
+  - timezone
+- Added conflict handling from API `409` responses to surface scheduling collisions
+- Added lifecycle actions from Scheduling agenda/grid:
+  - Edit appointment
+  - Mark completed
+  - Mark cancelled
+  - Mark no-show
+  - Delete appointment
+
+#### Portal Request to Appointment Conversion
+
+- Portal appointment requests now provide `Schedule` actions for requested/approved items
+- Selecting `Schedule` opens Scheduling with the client preselected and request timing prefilled
+- Successful appointment creation marks the originating portal request as `scheduled`
+
+#### Planning & Documentation
+
+- Added implementation record: `PLANS/CALENDAR.md`
+- Updated package versions to the `1.x` major line with synchronized release value `1.7.0`
+
+### v1.7.0 Backward Compatibility
+
+No breaking API changes were introduced. Existing appointment endpoints remain in place and were reused for the new Scheduling UX. The release adds UI and workflow capabilities on top of the current API contract.
 
 ## v1.6.0 — Explicit Health Probes & OTEL Health Metrics (March 2026)
 
@@ -28,6 +103,11 @@ Adds explicit liveness and readiness health endpoints to the API and exports ded
 - Added `faith.service.healthcheck.duration` histogram
 - Added `faith.service.healthcheck.total` counter
 - Readiness results now update the API telemetry summary health block for operator visibility
+
+### v1.6.0 Bug Fixes
+
+- `exportedViaOtel` in `GET /v1/telemetry/summary` now reports active OTEL export when only `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` is configured
+- Repository package manifests and OpenAPI metadata have been normalized to the `1.6.0` release line
 
 ### v1.6.0 Backward Compatibility
 
@@ -89,7 +169,7 @@ The monitoring page has been completely rewritten as a self-contained dark-theme
 
 ##### OTEL Settings Panel (admin)
 
-- Active / Inactive status banner driven by `exportedViaOtel` from the API
+- Active / Inactive status banner driven by `exportedViaOtel` from the API, including metrics-only OTLP configuration
 - Editable inputs for `OTEL_EXPORTER_OTLP_ENDPOINT`, traces endpoint, and metrics endpoint
 - Test Connection — sends a live OTLP probe (`POST { resourceSpans: [] }`) with a 5-second timeout; reports success or failure inline
 - Generate .env Snippet — outputs a ready-to-paste `.env` block with current endpoint values
@@ -524,6 +604,10 @@ The initial implementation follows a modular monolith approach with clear domain
   - `GET /health/ready`
 - API telemetry summary endpoint:
   - `GET /v1/telemetry/summary`
+- `exportedViaOtel` is `true` when any of these are configured:
+  - `OTEL_EXPORTER_OTLP_ENDPOINT`
+  - `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`
+  - `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`
 - Web proxy telemetry summary endpoint:
   - `GET /telemetry/summary`
 - Browser vitals ingestion endpoint:

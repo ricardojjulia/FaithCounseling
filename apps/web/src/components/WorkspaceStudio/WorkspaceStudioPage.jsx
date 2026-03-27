@@ -14,7 +14,7 @@ const STUDIO_TABS = [
   { id: 'portal',          label: 'Portal' },
 ];
 
-export default function WorkspaceStudioPage() {
+export default function WorkspaceStudioPage({ onSchedulePortalRequest }) {
   return (
     <Stack gap="md" p="md">
       <Title order={2} fz="lg">Workspace Studio</Title>
@@ -30,7 +30,7 @@ export default function WorkspaceStudioPage() {
           {STUDIO_TABS.map((t) => (
             <Tabs.Panel key={t.id} value={t.id} pt="md">
               {t.id === 'portal' ? (
-                <PortalTab />
+                <PortalTab onSchedulePortalRequest={onSchedulePortalRequest} />
               ) : (
                 <Text c="dimmed" fz="sm">Content for {t.label} tab</Text>
               )}
