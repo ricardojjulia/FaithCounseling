@@ -1204,7 +1204,7 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
-    if (requestUrl.pathname === '/v1/audit/intelligence') {
+    if (requestUrl.pathname === '/v1/audit/intelligence' || requestUrl.pathname === '/v1/audit/intelligence/') {
       await handleAuditIntelligence(request, response, requestUrl, session);
       return;
     }
@@ -8595,7 +8595,7 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/faith/referral-coordination') return '/v1/faith/referral-coordination';
   if (pathname === '/v1/faith/language-preferences') return '/v1/faith/language-preferences';
   if (pathname === '/v1/reporting/overview') return '/v1/reporting/overview';
-  if (pathname === '/v1/audit/intelligence') return '/v1/audit/intelligence';
+  if (pathname === '/v1/audit/intelligence' || pathname === '/v1/audit/intelligence/') return '/v1/audit/intelligence';
   if (pathname === '/v1/platform/overview') return '/v1/platform/overview';
   if (pathname === '/v1/platform/tenant-provisioning') return '/v1/platform/tenant-provisioning';
   if (pathname === '/v1/platform/impersonation-sessions') return '/v1/platform/impersonation-sessions';
