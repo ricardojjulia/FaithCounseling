@@ -557,74 +557,6 @@ export async function updateAppointmentRecord(appointmentId, data) {
 }
 
 export async function deleteAppointmentRecord(appointmentId) {
-
-  // ── Phase 4 — ScheduleOps ─────────────────────────────────────────────────
-
-  export function fetchAvailabilityOverrides({ staffId, from, to } = {}) {
-    const params = new URLSearchParams();
-    if (staffId) params.set('staffId', staffId);
-    if (from)    params.set('from', from);
-    if (to)      params.set('to', to);
-    const query = params.toString();
-    return apiFetch(`/api/v1/scheduling/availability-overrides${query ? `?${query}` : ''}`);
-  }
-
-  export function createAvailabilityOverride(data) {
-    return apiFetch('/api/v1/scheduling/availability-overrides', {
-      method: 'POST',
-      headers: csrfHeaders(),
-      body: JSON.stringify(data),
-    });
-  }
-
-  export function updateAvailabilityOverride(data) {
-    return apiFetch('/api/v1/scheduling/availability-overrides', {
-      method: 'PATCH',
-      headers: csrfHeaders(),
-      body: JSON.stringify(data),
-    });
-  }
-
-  export function deleteAvailabilityOverride(id) {
-    return apiFetch(`/api/v1/scheduling/availability-overrides?id=${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-      headers: csrfHeaders(),
-    });
-  }
-
-  export function fetchSeries(filters = {}) {
-    const params = new URLSearchParams();
-    if (filters.counselorId) params.set('counselorId', filters.counselorId);
-    if (filters.clientId)    params.set('clientId',    filters.clientId);
-    if (filters.status)      params.set('status',      filters.status);
-    const query = params.toString();
-    return apiFetch(`/api/v1/scheduling/series${query ? `?${query}` : ''}`);
-  }
-
-  export function createSeries(data) {
-    return apiFetch('/api/v1/scheduling/series', {
-      method: 'POST',
-      headers: csrfHeaders(),
-      body: JSON.stringify(data),
-    });
-  }
-
-  export function updateSeries(data) {
-    return apiFetch('/api/v1/scheduling/series', {
-      method: 'PATCH',
-      headers: csrfHeaders(),
-      body: JSON.stringify(data),
-    });
-  }
-
-  export function fetchUtilization({ from, to, counselorId } = {}) {
-    const params = new URLSearchParams();
-    if (from)        params.set('from', from);
-    if (to)          params.set('to', to);
-    if (counselorId) params.set('counselorId', counselorId);
-    const query = params.toString();
-    return apiFetch(`/api/v1/scheduling/utilization${query ? `?${query}` : ''}`);
-  }
   const response = await fetch(`/api/v1/appointments/${appointmentId}`, {
     method: 'DELETE',
     headers: csrfHeaders(),
@@ -641,4 +573,72 @@ export async function deleteAppointmentRecord(appointmentId) {
   }
 
   return response.json();
+}
+
+// ── Phase 4 — ScheduleOps ─────────────────────────────────────────────────
+
+export function fetchAvailabilityOverrides({ staffId, from, to } = {}) {
+  const params = new URLSearchParams();
+  if (staffId) params.set('staffId', staffId);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  const query = params.toString();
+  return apiFetch(`/api/v1/scheduling/availability-overrides${query ? `?${query}` : ''}`);
+}
+
+export function createAvailabilityOverride(data) {
+  return apiFetch('/api/v1/scheduling/availability-overrides', {
+    method: 'POST',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateAvailabilityOverride(data) {
+  return apiFetch('/api/v1/scheduling/availability-overrides', {
+    method: 'PATCH',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteAvailabilityOverride(id) {
+  return apiFetch(`/api/v1/scheduling/availability-overrides?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: csrfHeaders(),
+  });
+}
+
+export function fetchSeries(filters = {}) {
+  const params = new URLSearchParams();
+  if (filters.counselorId) params.set('counselorId', filters.counselorId);
+  if (filters.clientId) params.set('clientId', filters.clientId);
+  if (filters.status) params.set('status', filters.status);
+  const query = params.toString();
+  return apiFetch(`/api/v1/scheduling/series${query ? `?${query}` : ''}`);
+}
+
+export function createSeries(data) {
+  return apiFetch('/api/v1/scheduling/series', {
+    method: 'POST',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateSeries(data) {
+  return apiFetch('/api/v1/scheduling/series', {
+    method: 'PATCH',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function fetchUtilization({ from, to, counselorId } = {}) {
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  if (counselorId) params.set('counselorId', counselorId);
+  const query = params.toString();
+  return apiFetch(`/api/v1/scheduling/utilization${query ? `?${query}` : ''}`);
 }

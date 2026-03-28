@@ -1369,11 +1369,11 @@ export default function SchedulingPage({
           <Tabs.Tab value="appointments">Appointments</Tabs.Tab>
           <Tabs.Tab value="waitlist">Waitlist</Tabs.Tab>
           <Tabs.Tab value="reminders">Reminders</Tabs.Tab>
-                  <Tabs.Tab value="availability">Availability</Tabs.Tab>
-                  <Tabs.Tab value="recurring">Recurring</Tabs.Tab>
-                  {['practice_owner', 'practice_admin', 'scheduler_biller'].includes(currentUser?.role) && (
-                    <Tabs.Tab value="utilization">Utilization</Tabs.Tab>
-                  )}
+          <Tabs.Tab value="availability">Availability</Tabs.Tab>
+          <Tabs.Tab value="recurring">Recurring</Tabs.Tab>
+          {['practice_owner', 'practice_admin', 'scheduler_biller'].includes(currentUser?.role) && (
+            <Tabs.Tab value="utilization">Utilization</Tabs.Tab>
+          )}
         </Tabs.List>
 
         <Tabs.Panel value="appointments" pt="md">
@@ -1516,22 +1516,21 @@ export default function SchedulingPage({
         <Tabs.Panel value="reminders" pt="md">
           <RemindersPanel appointments={appointments} />
         </Tabs.Panel>
+
+        <Tabs.Panel value="availability" pt="md">
+          <AvailabilityOverridesPanel staff={staff} />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="recurring" pt="md">
+          <SeriesPanel staff={staff} clients={clients} />
+        </Tabs.Panel>
+
+        {['practice_owner', 'practice_admin', 'scheduler_biller'].includes(currentUser?.role) && (
+          <Tabs.Panel value="utilization" pt="md">
+            <UtilizationPanel />
+          </Tabs.Panel>
+        )}
       </Tabs>
-
-            <Tabs.Panel value="availability" pt="md">
-              <AvailabilityOverridesPanel staff={staff} />
-            </Tabs.Panel>
-
-            <Tabs.Panel value="recurring" pt="md">
-              <SeriesPanel staff={staff} clients={clients} />
-            </Tabs.Panel>
-
-            {['practice_owner', 'practice_admin', 'scheduler_biller'].includes(currentUser?.role) && (
-              <Tabs.Panel value="utilization" pt="md">
-                <UtilizationPanel />
-              </Tabs.Panel>
-            )}
-          </Tabs>
     </Stack>
   );
 }

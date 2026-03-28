@@ -3921,8 +3921,17 @@ async function handleWaitlist(request, response, session) {
 // Phase 4 — ScheduleOps handlers
 // ---------------------------------------------------------------------------
 
+const AVAILABILITY_OVERRIDE_WRITE_ROLES = new Set(['platform_admin', 'practice_owner', 'practice_admin', 'scheduler_biller']);
+const SERIES_WRITE_ROLES = new Set(['platform_admin', 'practice_owner', 'practice_admin', 'scheduler_biller', 'counselor']);
+
 async function handleAvailabilityOverrides(request, response, requestUrl, session) {
   const tenantId = callerTenant(request, session);
+  const role = callerRole(request, session);
+
+  if (request.method !== 'GET' && !AVAILABILITY_OVERRIDE_WRITE_ROLES.has(role)) {
+    writeJson(response, 403, { error: 'Forbidden' });
+    return;
+  }
 
   if (request.method === 'GET') {
     if (process.env.DB_NAME) {
@@ -4007,6 +4016,12 @@ async function handleAvailabilityOverrides(request, response, requestUrl, sessio
 
 async function handleAppointmentSeries(request, response, requestUrl, session) {
   const tenantId = callerTenant(request, session);
+  const role = callerRole(request, session);
+
+  if (request.method !== 'GET' && !SERIES_WRITE_ROLES.has(role)) {
+    writeJson(response, 403, { error: 'Forbidden' });
+    return;
+  }
 
   if (request.method === 'GET') {
     if (process.env.DB_NAME) {
