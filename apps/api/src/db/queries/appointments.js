@@ -647,7 +647,7 @@ export async function getUtilizationSummary(tenantId, from, to, counselorId) {
      FROM appointments a
      LEFT JOIN locations l ON l.id = a.location_id AND l.tenant_id = a.tenant_id
      WHERE ${where}
-     GROUP BY location_name`,
+     GROUP BY a.location_name, l.name`,
     values
   );
 
