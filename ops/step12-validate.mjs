@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { cleanupClientArtifacts } from './lib/clientArtifactCleanup.mjs';
 
 const base = process.env.API_BASE_URL || 'http://localhost:3001';
 
@@ -88,24 +89,27 @@ function rawRequest(pathname, { method = 'POST', headers = {}, body = '', timeou
 }
 
 async function main() {
-  const practicesResult = await req('/v1/practices');
-  assert(practicesResult.status === 200, 'Expected practices list to load');
-  const practiceId = practicesResult.payload.items?.[0]?.id;
-  assert(practiceId, 'Expected at least one practice');
+  let clientId = null;
 
-  const clientResult = await req('/v1/clients', {
-    method: 'POST',
-    body: {
-      firstName: 'Step12',
-      lastName: 'Validation',
-      faithBackground: 'Non-denominational',
-      status: 'active',
-    },
-  });
-  assert(clientResult.status === 201, 'Expected client creation to succeed');
-  const clientId = clientResult.payload.item?.id;
-  assert(clientId, 'Expected client id');
-  console.log('client-created', clientResult.status, clientId);
+  try {
+    const practicesResult = await req('/v1/practices');
+    assert(practicesResult.status === 200, 'Expected practices list to load');
+    const practiceId = practicesResult.payload.items?.[0]?.id;
+    assert(practiceId, 'Expected at least one practice');
+
+    const clientResult = await req('/v1/clients', {
+      method: 'POST',
+      body: {
+        firstName: 'Step12',
+        lastName: 'Validation',
+        faithBackground: 'Non-denominational',
+        status: 'active',
+      },
+    });
+    assert(clientResult.status === 201, 'Expected client creation to succeed');
+    clientId = clientResult.payload.item?.id;
+    assert(clientId, 'Expected client id');
+    console.log('client-created', clientResult.status, clientId);
 
   const lifecycleResult = await req(`/v1/clients/${clientId}/lifecycle`, {
     method: 'PATCH',
@@ -595,8 +599,18 @@ async function main() {
   assert(corsResult.status === 204, 'Expected CORS preflight to succeed for local web origin');
   console.log('cors-preflight', corsResult.status, corsResult.headers['access-control-allow-origin']);
 
-  console.log('step12-validation', 'passed');
-  process.exit(0);
+    console.log('step12-validation', 'passed');
+    process.exit(0);
+  } finally {
+    if (clientId && process.env.DB_NAME) {
+      try {
+        const cleanupResult = await cleanupClientArtifacts([clientId]);
+        console.log('step12-cleanup', cleanupResult.deleted.clients ?? 0, clientId);
+      } catch (cleanupError) {
+        console.warn('step12-cleanup-warning', cleanupError.message || cleanupError);
+      }
+    }
+  }
 }
 
 main().catch((error) => {
