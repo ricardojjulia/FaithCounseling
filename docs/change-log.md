@@ -1,13 +1,11 @@
 # Change Log
 
-## v2.0.0 — Tenant-Model Update
-
 ## v2.1.0 — ScheduleOps
 
-**Date:** April 2, 2026
+**Date:** March 28, 2026
 **Type:** Minor Release
 
-### Overview
+### v2.1.0 Overview
 
 Phase 4 of the scheduling roadmap — availability overrides, recurring appointment series, utilization reporting, and worker reminder lifecycle hardening.
 
@@ -29,7 +27,13 @@ Phase 4 of the scheduling roadmap — availability overrides, recurring appointm
 - Added in-loop cancellation re-check guard in `processDueReminders()`: each reminder's status is re-fetched before dispatch to prevent a race between cancel and send
 - Introduced `poll()` orchestrator that runs `processDueReminders` and `expireStaleReminders` concurrently on each interval
 
-### Breaking Changes
+### Runtime
+
+- Added graceful startup handling for `EADDRINUSE` in the API server so port collisions now fail with a direct remediation message instead of an unhandled Node error event
+- Added `pnpm start:api:standalone` and `@faith/api start:standalone` to run the API on port `3104` for isolated local development
+- Updated `start-api.sh` to load `.env` and respect an existing `PORT` override while defaulting to `3104`
+
+### v2.1.0 Breaking Changes
 
 None.
 
@@ -40,11 +44,11 @@ None.
 **Date:** March 27, 2026
 **Type:** Major Release
 
-### Overview
+### v2.0.0 Overview
 
 Hardened the full DB query layer to enforce tenant isolation on every domain. Stabilized smoke test suites (Step 11, Step 12, security regression) and resolved SQL timestamp, return-shape, and CORS preflight failures that blocked DB-mode operation.
 
-### Changes
+### v2.0.0 Changes
 
 - Normalized all SQL `TIMESTAMP` inserts to `YYYY-MM-DD HH:MM:SS` format across all query modules
 - Fixed return-shape mismatches in `clinical.js` and `platform.js` query helpers to match the API contract
@@ -53,7 +57,7 @@ Hardened the full DB query layer to enforce tenant isolation on every domain. St
 - Added `docs/security/tenant-query-safety-checklist.md` with 7 required query rules and a grep-based CI gate design
 - Verified all Step 11, Step 12, and security regression smokes green under DB mode
 
-### Breaking Changes
+### v2.0.0 Breaking Changes
 
 None — DB-mode query shapes are now correct and consistent with in-memory equivalents.
 
@@ -64,11 +68,11 @@ None — DB-mode query shapes are now correct and consistent with in-memory equi
 **Date:** March 27, 2026  
 **Type:** Minor Release
 
-### Overview
+### v1.6.0 Overview
 
 Adds explicit API liveness/readiness endpoints and dedicated OpenTelemetry health metrics so infrastructure can distinguish process-up from dependency-ready.
 
-### Changes
+### v1.6.0 Changes
 
 - Added `GET /health/live`
 - Added `GET /health/ready`
@@ -81,7 +85,7 @@ Adds explicit API liveness/readiness endpoints and dedicated OpenTelemetry healt
 - Added readiness health state into `/v1/telemetry/summary`
 - Exposed new health routes through the public-route allowlist for probes
 
-### Breaking Changes
+### v1.6.0 Breaking Changes
 
 None.
 
@@ -90,7 +94,7 @@ None.
 **Date:** March 24, 2026  
 **Type:** Major Release
 
-### Overview
+### v1.0.0 Overview
 
 First production-ready release completing Phase 1 of the full client management suite. Implements comprehensive client CRUD operations with React UI components, audit logging, RBAC enforcement, and complete OpenAPI documentation.
 
@@ -132,7 +136,7 @@ First production-ready release completing Phase 1 of the full client management 
 - `README.md` — Updated version and release notes
 - `package.json` (all) — Bumped to 1.0.0
 
-### Breaking Changes
+### v1.0.0 Breaking Changes
 
 None — fully backward compatible.
 

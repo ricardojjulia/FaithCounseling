@@ -7,11 +7,11 @@ Christian counseling practice management SaaS for solo counselors, group practic
 - Current release: `2.1.0`
 - Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening)
 
-## v2.1.0 — ScheduleOps: Audit Hardening & Waitlist Promotion (March 2026)
+## v2.1.0 — ScheduleOps: Audit Hardening, Waitlist Promotion & Startup Hardening (March 2026)
 
 ### v2.1.0 Overview
 
-Patches two latent defects discovered during tenant-model validation smoke runs, and delivers the first ScheduleOps Phase 4 quick-win: manual waitlist-to-appointment promotion from the Scheduling page.
+Patches latent defects discovered during tenant-model validation and ScheduleOps rollout, delivers the first ScheduleOps Phase 4 quick-wins, and hardens local API startup behavior when shared dev ports are already occupied.
 
 ### v2.1.0 Changes
 
@@ -27,11 +27,22 @@ The **Waitlist** tab now exposes a **Schedule** button on each row. Clicking any
 - `SchedulingPage` manages a `composerClientId` state that overrides the default `initialClientId` for the duration of a promoted session
 - Selecting **New Appointment** from the toolbar resets `composerClientId` back to the default, preserving existing entry-point behavior
 
+#### API Runtime — Graceful Port Collision Handling (`apps/api/src/index.js`, `apps/api/package.json`, `start-api.sh`)
+
+The API server now handles `EADDRINUSE` startup failures explicitly instead of crashing with an unhandled Node `error` event. When the default/shared local port is already occupied, startup exits cleanly and prints a direct remediation hint.
+
+- `pnpm start:api` keeps the default/shared startup path
+- `pnpm start:api:standalone` starts the API on port `3104` for isolated local work
+- `apps/api/package.json` adds `start:standalone`
+- `start-api.sh` now loads `.env` and honors an existing `PORT` override while defaulting to `3104`
+
 ### v2.1.0 Validation
 
 - Audit events written in DB mode no longer produce `Column 'id' cannot be null` errors
 - Clicking **Schedule** on any waitlist row opens the composer pre-seeded with the correct client
 - **New Appointment** toolbar button continues to function as before
+- `pnpm start:api` now reports a clear port-in-use message instead of terminating on an unhandled server event
+- `pnpm start:api:standalone` successfully starts the API on port `3104`
 - All previously-passing smoke tests (`step11`, `step12`, `security-regression`) remain green
 
 ## Tenant-Model Update (March 2026)

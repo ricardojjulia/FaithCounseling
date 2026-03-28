@@ -141,6 +141,7 @@ const currentFilePath = fileURLToPath(import.meta.url);
 const currentDirPath = path.dirname(currentFilePath);
 const openApiSpecPath = path.resolve(currentDirPath, '../../../docs/api/openapi.yaml');
 const openApiSpecYaml = await readFile(openApiSpecPath, 'utf8');
+const standaloneHint = 'If the shared dev stack is already running, use `pnpm start:api:standalone`.';
 
 await startNodeTelemetry({ serviceName: 'faith-api' });
 const telemetry = createServiceTelemetry('faith-api');
@@ -1366,6 +1367,17 @@ const server = http.createServer(async (request, response) => {
   } finally {
     requestScope.end(response.statusCode || 200, requestTelemetryAttributes);
   }
+});
+
+server.on('error', (error) => {
+  if (error?.code === 'EADDRINUSE') {
+    console.error(`Port ${port} is already in use.`);
+    console.error(standaloneHint);
+    process.exit(1);
+  }
+
+  console.error('API server failed to start:', error.message || error);
+  process.exit(1);
 });
 
 server.listen(port, () => {

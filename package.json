@@ -15,6 +15,7 @@
     "start:all": "node --env-file=.env ops/start-all.mjs",
     "start:web": "pnpm --filter @faith/web start",
     "start:api": "pnpm --filter @faith/api start",
+    "start:api:standalone": "pnpm --filter @faith/api start:standalone",
     "start:worker": "pnpm --filter @faith/worker start",
     "reset:language": "node ops/reset-language-settings.mjs && node ops/push-clean-messages.mjs",
     "lint": "pnpm -r lint",

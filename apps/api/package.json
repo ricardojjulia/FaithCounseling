@@ -12,6 +12,7 @@
   },
   "scripts": {
     "start": "node --env-file=../../.env src/index.js",
+    "start:standalone": "PORT=3104 node --env-file=../../.env src/index.js",
     "lint": "node -e \"console.log('No lint rules configured for @faith/api yet')\"",
     "test": "node -e \"console.log('No tests configured for @faith/api yet')\""
   }
