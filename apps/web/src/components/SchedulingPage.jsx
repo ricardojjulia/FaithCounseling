@@ -15,6 +15,7 @@ import {
   SimpleGrid,
   Stack,
   Table,
+  Tabs,
   Text,
   TextInput,
   Title,
@@ -22,11 +23,16 @@ import {
 import { notifications } from '@mantine/notifications';
 import {
   createAppointmentRecord,
+  createReminderRecord,
   deleteAppointmentRecord,
   fetchAppointments,
   fetchAppointmentTypes,
+  fetchReminders,
   fetchSchedulingCalendar,
   fetchStaff,
+  fetchWaitlist,
+  patchReminderRecord,
+  patchWaitlistEntry,
   updateAppointmentRecord,
 } from '../lib/clientApi.js';
 
@@ -490,6 +496,297 @@ function PracticeOperationsView({ calendars, locations, timezone }) {
   );
 }
 
+const SESSION_TYPE_OPTIONS = [
+  { value: 'either', label: 'Either' },
+  { value: 'in_person', label: 'In Person' },
+  { value: 'remote', label: 'Remote' },
+];
+
+const DELIVERY_CHANNEL_OPTIONS = [
+  { value: 'email', label: 'Email' },
+  { value: 'sms', label: 'SMS' },
+  { value: 'both', label: 'Both' },
+];
+
+function WaitlistPanel() {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const editForm = useForm({
+    initialValues: { priorityRank: 99, requestedService: '', preferredSessionType: 'either', notes: '' },
+  });
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await fetchWaitlist();
+      setItems(Array.isArray(data?.items) ? data.items : []);
+    } catch (err) {
+      setError(err.message || 'Unable to load waitlist');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleEdit = (item) => {
+    setEditingId(item.clientId);
+    editForm.setValues({
+      priorityRank: item.priorityRank ?? 99,
+      requestedService: item.requestedService ?? '',
+      preferredSessionType: item.preferredSessionType ?? 'either',
+      notes: item.notes ?? '',
+    });
+  };
+
+  const handleSave = async () => {
+    try {
+      await patchWaitlistEntry({ clientId: editingId, ...editForm.values });
+      notifications.show({ title: 'Waitlist updated', message: 'Entry saved.', color: 'green' });
+      setEditingId(null);
+      await load();
+    } catch (err) {
+      notifications.show({ title: 'Save failed', message: err.message, color: 'red' });
+    }
+  };
+
+  if (loading) return <Group justify="center" py="xl"><Loader size="sm" /></Group>;
+  if (error) return <Alert color="red" title="Unable to load waitlist">{error}</Alert>;
+
+  return (
+    <Stack gap="md">
+      <Group justify="space-between">
+        <Text c="dimmed" fz="sm">Clients awaiting an opening — sorted by priority rank.</Text>
+        <Button variant="default" size="xs" onClick={load}>Refresh</Button>
+      </Group>
+
+      {items.length === 0 ? (
+        <Paper withBorder radius="md" p="md">
+          <Text c="dimmed" fz="sm" ta="center">No clients on the waitlist.</Text>
+        </Paper>
+      ) : (
+        <Paper withBorder radius="md">
+          <Table striped highlightOnHover>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Priority</Table.Th>
+                <Table.Th>Client</Table.Th>
+                <Table.Th>Requested Service</Table.Th>
+                <Table.Th>Session Type</Table.Th>
+                <Table.Th>Notes</Table.Th>
+                <Table.Th />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {items.map((item) => (
+                editingId === item.clientId ? (
+                  <Table.Tr key={item.clientId}>
+                    <Table.Td>
+                      <TextInput
+                        type="number"
+                        w={70}
+                        {...editForm.getInputProps('priorityRank')}
+                      />
+                    </Table.Td>
+                    <Table.Td><Text fw={600}>{item.clientName}</Text></Table.Td>
+                    <Table.Td>
+                      <TextInput w={180} {...editForm.getInputProps('requestedService')} />
+                    </Table.Td>
+                    <Table.Td>
+                      <Select
+                        w={130}
+                        data={SESSION_TYPE_OPTIONS}
+                        {...editForm.getInputProps('preferredSessionType')}
+                      />
+                    </Table.Td>
+                    <Table.Td>
+                      <TextInput w={200} {...editForm.getInputProps('notes')} />
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap="xs">
+                        <Button size="xs" onClick={handleSave}>Save</Button>
+                        <Button size="xs" variant="default" onClick={() => setEditingId(null)}>Cancel</Button>
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                ) : (
+                  <Table.Tr key={item.clientId}>
+                    <Table.Td><Badge variant="outline">{item.priorityRank}</Badge></Table.Td>
+                    <Table.Td><Text fw={600}>{item.clientName}</Text></Table.Td>
+                    <Table.Td>{item.requestedService || '—'}</Table.Td>
+                    <Table.Td>{item.preferredSessionType || '—'}</Table.Td>
+                    <Table.Td><Text fz="sm" c="dimmed" lineClamp={1}>{item.notes || '—'}</Text></Table.Td>
+                    <Table.Td>
+                      <Button size="xs" variant="default" onClick={() => handleEdit(item)}>Edit</Button>
+                    </Table.Td>
+                  </Table.Tr>
+                )
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Paper>
+      )}
+    </Stack>
+  );
+}
+
+function RemindersPanel({ appointments }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [creatorOpen, setCreatorOpen] = useState(false);
+  const createForm = useForm({
+    initialValues: {
+      appointmentId: '',
+      reminderType: 'appointment',
+      deliveryChannel: 'email',
+      reminderAt: '',
+    },
+  });
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await fetchReminders();
+      setItems(Array.isArray(data?.items) ? data.items : []);
+    } catch (err) {
+      setError(err.message || 'Unable to load reminders');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleCreate = async (values) => {
+    try {
+      await createReminderRecord(values);
+      notifications.show({ title: 'Reminder created', message: 'Reminder scheduled.', color: 'green' });
+      setCreatorOpen(false);
+      createForm.reset();
+      await load();
+    } catch (err) {
+      notifications.show({ title: 'Create failed', message: err.message, color: 'red' });
+    }
+  };
+
+  const handleStatusChange = async (reminderId, status) => {
+    try {
+      await patchReminderRecord({ reminderId, status });
+      notifications.show({ title: 'Reminder updated', message: `Marked ${status}.`, color: 'green' });
+      await load();
+    } catch (err) {
+      notifications.show({ title: 'Update failed', message: err.message, color: 'red' });
+    }
+  };
+
+  const appointmentOptions = appointments
+    .filter((a) => a.status === 'scheduled')
+    .map((a) => ({
+      value: a.id,
+      label: `${a.clientName} — ${a.startsAt ? new Date(a.startsAt).toLocaleDateString() : ''}`,
+    }));
+
+  const reminderStatusColor = (status) => ({ pending: 'yellow', sent: 'green', cancelled: 'gray' }[status] || 'gray');
+
+  if (loading) return <Group justify="center" py="xl"><Loader size="sm" /></Group>;
+  if (error) return <Alert color="red" title="Unable to load reminders">{error}</Alert>;
+
+  return (
+    <Stack gap="md">
+      <Group justify="space-between">
+        <Text c="dimmed" fz="sm">Manage appointment reminders sent to clients.</Text>
+        <Group gap="xs">
+          <Button variant="default" size="xs" onClick={load}>Refresh</Button>
+          <Button size="xs" onClick={() => setCreatorOpen(true)}>New Reminder</Button>
+        </Group>
+      </Group>
+
+      <Modal opened={creatorOpen} onClose={() => setCreatorOpen(false)} title="Schedule Reminder" size="md">
+        <form onSubmit={createForm.onSubmit(handleCreate)}>
+          <Stack gap="sm">
+            <Select
+              label="Appointment"
+              placeholder="Select appointment"
+              data={appointmentOptions}
+              searchable
+              required
+              {...createForm.getInputProps('appointmentId')}
+            />
+            <Select
+              label="Delivery Channel"
+              data={DELIVERY_CHANNEL_OPTIONS}
+              {...createForm.getInputProps('deliveryChannel')}
+            />
+            <TextInput
+              label="Reminder Type"
+              placeholder="e.g. appointment, follow_up"
+              {...createForm.getInputProps('reminderType')}
+            />
+            <TextInput
+              label="Send At"
+              type="datetime-local"
+              {...createForm.getInputProps('reminderAt')}
+            />
+            <Group justify="flex-end" mt="sm">
+              <Button variant="default" onClick={() => setCreatorOpen(false)}>Cancel</Button>
+              <Button type="submit">Schedule</Button>
+            </Group>
+          </Stack>
+        </form>
+      </Modal>
+
+      {items.length === 0 ? (
+        <Paper withBorder radius="md" p="md">
+          <Text c="dimmed" fz="sm" ta="center">No reminders found. Create one from an upcoming appointment.</Text>
+        </Paper>
+      ) : (
+        <Paper withBorder radius="md">
+          <Table striped highlightOnHover>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Status</Table.Th>
+                <Table.Th>Type</Table.Th>
+                <Table.Th>Channel</Table.Th>
+                <Table.Th>Send At</Table.Th>
+                <Table.Th>Sent At</Table.Th>
+                <Table.Th />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {items.map((item) => (
+                <Table.Tr key={item.id}>
+                  <Table.Td><Badge color={reminderStatusColor(item.status)}>{item.status}</Badge></Table.Td>
+                  <Table.Td>{typeLabel(item.reminderType)}</Table.Td>
+                  <Table.Td>{item.deliveryChannel || '—'}</Table.Td>
+                  <Table.Td>{item.reminderAt ? new Date(item.reminderAt).toLocaleString() : '—'}</Table.Td>
+                  <Table.Td>{item.sentAt ? new Date(item.sentAt).toLocaleString() : '—'}</Table.Td>
+                  <Table.Td>
+                    {item.status === 'pending' ? (
+                      <Group gap="xs">
+                        <Button size="xs" color="green" variant="light" onClick={() => handleStatusChange(item.id, 'sent')}>
+                          Mark Sent
+                        </Button>
+                        <Button size="xs" color="red" variant="light" onClick={() => handleStatusChange(item.id, 'cancelled')}>
+                          Cancel
+                        </Button>
+                      </Group>
+                    ) : null}
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Paper>
+      )}
+    </Stack>
+  );
+}
+
 export default function SchedulingPage({
   currentUser,
   clients,
@@ -503,6 +800,7 @@ export default function SchedulingPage({
 }) {
   const timezone = detectTimezone();
   const canManageAll = GLOBAL_SCHEDULING_ROLES.has(currentUser?.role || '');
+  const [activeTab, setActiveTab] = useState('appointments');
   const [selectedDay, setSelectedDay] = useState(todayKey());
   const [view, setView] = useState(initialView || (canManageAll ? 'practice' : 'counselor'));
   const [composerOpen, setComposerOpen] = useState(initialComposerOpen);
@@ -677,128 +975,149 @@ export default function SchedulingPage({
             Calendar management for practice-wide scheduling, counselor calendars, and client appointments.
           </Text>
         </div>
-        <Group>
-          <Button variant="default" onClick={loadScheduling}>Refresh</Button>
-          <Button onClick={() => {
-            setComposerMode('create');
-            setEditingAppointment(null);
-            setComposerOpen(true);
-          }}>
-            New Appointment
-          </Button>
-        </Group>
       </Group>
 
-      <Paper withBorder radius="md" p="md">
-        <Group align="flex-end" gap="sm" wrap="wrap">
-          <TextInput
-            label="Day"
-            type="date"
-            value={selectedDay}
-            onChange={(event) => setSelectedDay(event.currentTarget.value)}
-          />
-          <Select
-            label="Calendar View"
-            data={canManageAll
-              ? [
-                { value: 'general', label: 'General Calendar' },
-                { value: 'counselor', label: 'Counselor Calendar' },
-                { value: 'practice', label: 'Practice Manager Calendar' },
-              ]
-              : [{ value: 'counselor', label: 'My Calendar' }]}
-            value={view}
-            onChange={(value) => setView(value || (canManageAll ? 'practice' : 'counselor'))}
-            w={240}
-          />
-          {view === 'counselor' ? (
-            <Select
-              label="Counselor"
-              data={counselorOptions}
-              searchable
-              disabled={!canManageAll}
-              value={selectedCounselorName}
-              onChange={(value) => setSelectedCounselorName(value || '')}
-              w={260}
-            />
-          ) : null}
-        </Group>
-        <Text c="dimmed" fz="sm" mt="sm">{formatDateLabel(selectedDay)}</Text>
-      </Paper>
+      <Tabs value={activeTab} onChange={setActiveTab}>
+        <Tabs.List>
+          <Tabs.Tab value="appointments">Appointments</Tabs.Tab>
+          <Tabs.Tab value="waitlist">Waitlist</Tabs.Tab>
+          <Tabs.Tab value="reminders">Reminders</Tabs.Tab>
+        </Tabs.List>
 
-      <SimpleGrid cols={{ base: 2, md: 4 }}>
-        <Card withBorder radius="md" p="md">
-          <Text c="dimmed" fz="xs" tt="uppercase" fw={700}>Appointments</Text>
-          <Text fz="xl" fw={700}>{metrics.total}</Text>
-        </Card>
-        <Card withBorder radius="md" p="md">
-          <Text c="dimmed" fz="xs" tt="uppercase" fw={700}>Scheduled</Text>
-          <Text fz="xl" fw={700}>{metrics.scheduled}</Text>
-        </Card>
-        <Card withBorder radius="md" p="md">
-          <Text c="dimmed" fz="xs" tt="uppercase" fw={700}>Remote</Text>
-          <Text fz="xl" fw={700}>{metrics.remote}</Text>
-        </Card>
-        <Card withBorder radius="md" p="md">
-          <Text c="dimmed" fz="xs" tt="uppercase" fw={700}>Counselors Active</Text>
-          <Text fz="xl" fw={700}>{metrics.counselors}</Text>
-        </Card>
-      </SimpleGrid>
+        <Tabs.Panel value="appointments" pt="md">
+          <Stack gap="md">
+            <Group justify="flex-end">
+              <Button variant="default" onClick={loadScheduling}>Refresh</Button>
+              <Button onClick={() => {
+                setComposerMode('create');
+                setEditingAppointment(null);
+                setComposerOpen(true);
+              }}>
+                New Appointment
+              </Button>
+            </Group>
 
-      {loading ? (
-        <Group justify="center" py="xl"><Loader size="sm" /></Group>
-      ) : error ? (
-        <Alert color="red" title="Unable to load scheduling data">{error}</Alert>
-      ) : (
-        <>
-          {view === 'practice' ? (
-            <PracticeOperationsView
-              calendars={calendarPayload.counselorCalendars}
-              locations={calendarPayload.locationCalendars}
-              timezone={timezone}
-            />
-          ) : view === 'counselor' ? (
-            <Stack gap="md">
-              {availabilityNote ? (
-                <Alert color="blue" title="Availability template">
-                  {availabilityNote.template?.length
-                    ? `Availability slots configured: ${availabilityNote.template.length}`
-                    : 'No availability slots configured for this counselor yet.'}
-                </Alert>
-              ) : null}
-              <Paper withBorder radius="md" p="md">
-                <Title order={3} fz="md" mb="sm">Counselor calendar</Title>
-                <CounselorCalendarCards calendars={filteredCounselorCalendars} timezone={timezone} />
-              </Paper>
-            </Stack>
-          ) : (
             <Paper withBorder radius="md" p="md">
-              <Title order={3} fz="md" mb="sm">General calendar</Title>
-              <AppointmentTable
-                appointments={dayAppointments}
-                timezone={timezone}
-                onOpenClient={onOpenClient}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onStatusChange={handleStatusChange}
-              />
+              <Group align="flex-end" gap="sm" wrap="wrap">
+                <TextInput
+                  label="Day"
+                  type="date"
+                  value={selectedDay}
+                  onChange={(event) => setSelectedDay(event.currentTarget.value)}
+                />
+                <Select
+                  label="Calendar View"
+                  data={canManageAll
+                    ? [
+                      { value: 'general', label: 'General Calendar' },
+                      { value: 'counselor', label: 'Counselor Calendar' },
+                      { value: 'practice', label: 'Practice Manager Calendar' },
+                    ]
+                    : [{ value: 'counselor', label: 'My Calendar' }]}
+                  value={view}
+                  onChange={(value) => setView(value || (canManageAll ? 'practice' : 'counselor'))}
+                  w={240}
+                />
+                {view === 'counselor' ? (
+                  <Select
+                    label="Counselor"
+                    data={counselorOptions}
+                    searchable
+                    disabled={!canManageAll}
+                    value={selectedCounselorName}
+                    onChange={(value) => setSelectedCounselorName(value || '')}
+                    w={260}
+                  />
+                ) : null}
+              </Group>
+              <Text c="dimmed" fz="sm" mt="sm">{formatDateLabel(selectedDay)}</Text>
             </Paper>
-          )}
 
-          <Divider />
+            <SimpleGrid cols={{ base: 2, md: 4 }}>
+              <Card withBorder radius="md" p="md">
+                <Text c="dimmed" fz="xs" tt="uppercase" fw={700}>Appointments</Text>
+                <Text fz="xl" fw={700}>{metrics.total}</Text>
+              </Card>
+              <Card withBorder radius="md" p="md">
+                <Text c="dimmed" fz="xs" tt="uppercase" fw={700}>Scheduled</Text>
+                <Text fz="xl" fw={700}>{metrics.scheduled}</Text>
+              </Card>
+              <Card withBorder radius="md" p="md">
+                <Text c="dimmed" fz="xs" tt="uppercase" fw={700}>Remote</Text>
+                <Text fz="xl" fw={700}>{metrics.remote}</Text>
+              </Card>
+              <Card withBorder radius="md" p="md">
+                <Text c="dimmed" fz="xs" tt="uppercase" fw={700}>Counselors Active</Text>
+                <Text fz="xl" fw={700}>{metrics.counselors}</Text>
+              </Card>
+            </SimpleGrid>
 
-          <Paper withBorder radius="md" p="md">
-            <Title order={3} fz="md" mb="sm">Agenda</Title>
-            <AppointmentTable
-              appointments={dayAppointments}
-              timezone={timezone}
-              onOpenClient={onOpenClient}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onStatusChange={handleStatusChange}
-            />
-          </Paper>
-        </>
-      )}
+            {loading ? (
+              <Group justify="center" py="xl"><Loader size="sm" /></Group>
+            ) : error ? (
+              <Alert color="red" title="Unable to load scheduling data">{error}</Alert>
+            ) : (
+              <>
+                {view === 'practice' ? (
+                  <PracticeOperationsView
+                    calendars={calendarPayload.counselorCalendars}
+                    locations={calendarPayload.locationCalendars}
+                    timezone={timezone}
+                  />
+                ) : view === 'counselor' ? (
+                  <Stack gap="md">
+                    {availabilityNote ? (
+                      <Alert color="blue" title="Availability template">
+                        {availabilityNote.template?.length
+                          ? `Availability slots configured: ${availabilityNote.template.length}`
+                          : 'No availability slots configured for this counselor yet.'}
+                      </Alert>
+                    ) : null}
+                    <Paper withBorder radius="md" p="md">
+                      <Title order={3} fz="md" mb="sm">Counselor calendar</Title>
+                      <CounselorCalendarCards calendars={filteredCounselorCalendars} timezone={timezone} />
+                    </Paper>
+                  </Stack>
+                ) : (
+                  <Paper withBorder radius="md" p="md">
+                    <Title order={3} fz="md" mb="sm">General calendar</Title>
+                    <AppointmentTable
+                      appointments={dayAppointments}
+                      timezone={timezone}
+                      onOpenClient={onOpenClient}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                      onStatusChange={handleStatusChange}
+                    />
+                  </Paper>
+                )}
+
+                <Divider />
+
+                <Paper withBorder radius="md" p="md">
+                  <Title order={3} fz="md" mb="sm">Agenda</Title>
+                  <AppointmentTable
+                    appointments={dayAppointments}
+                    timezone={timezone}
+                    onOpenClient={onOpenClient}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onStatusChange={handleStatusChange}
+                  />
+                </Paper>
+              </>
+            )}
+          </Stack>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="waitlist" pt="md">
+          <WaitlistPanel />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="reminders" pt="md">
+          <RemindersPanel appointments={appointments} />
+        </Tabs.Panel>
+      </Tabs>
     </Stack>
   );
 }

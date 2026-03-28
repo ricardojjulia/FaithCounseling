@@ -38,6 +38,7 @@ import {
 } from '../../../packages/domain/src/index.js';
 import { createServiceTelemetry, startNodeTelemetry } from '../../../packages/telemetry/src/index.js';
 import { createI18nStore } from './lib/i18n-store.js';
+import { featureFlags } from './lib/feature-flags.js';
 import { HttpError, readJsonBody, writeJson } from './lib/http.js';
 import { translateMessages } from './lib/translate.js';
 import { handleCors, checkRateLimit, enforceRbac, enforceTenantScope, callerIdentity } from './lib/security.js';
@@ -863,9 +864,19 @@ const retentionPolicies = [
 const server = http.createServer(async (request, response) => {
   const requestUrl = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
   const route = resolveRoute(requestUrl.pathname);
+  const requestTelemetryAttributes = {};
+
+  if (featureFlags.tenantTelemetry) {
+    const headerTenantId = normalizeTenantId(request.headers['x-tenant-id']);
+    if (headerTenantId) {
+      requestTelemetryAttributes.tenantId = headerTenantId;
+    }
+  }
+
   const requestScope = telemetry.beginRequest({
     method: request.method ?? 'GET',
     route,
+    ...requestTelemetryAttributes,
   });
 
   try {
@@ -877,6 +888,14 @@ const server = http.createServer(async (request, response) => {
 
     // Resolve session from cookie (null if unauthenticated or DB not configured)
     const session = process.env.DB_NAME ? await resolveSession(request) : null;
+
+    if (featureFlags.tenantTelemetry) {
+      const identity = callerIdentity(request, session);
+      const scopedTenantId = normalizeTenantId(identity.tenantId);
+      if (scopedTenantId) {
+        requestTelemetryAttributes.tenantId = scopedTenantId;
+      }
+    }
 
     // RBAC — uses session when available, falls back to headers in dev
     if (enforceRbac(request, response, route, session)) return;
@@ -1299,19 +1318,25 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === '/v1/telemetry/vitals') {
-      await handleFrontendVitals(request, response);
+      await handleFrontendVitals(request, response, session);
       return;
     }
 
     if (requestUrl.pathname === '/v1/telemetry/summary' && request.method === 'GET') {
       writeJson(response, 200, {
         service: 'api',
+        features: {
+          tenantTelemetry: featureFlags.tenantTelemetry,
+          tenantTelemetrySummary: featureFlags.tenantTelemetrySummary,
+        },
         exportedViaOtel: Boolean(
           process.env.OTEL_EXPORTER_OTLP_ENDPOINT
           || process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
           || process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
         ),
-        summary: telemetry.getSummary(),
+        summary: telemetry.getSummary({
+          includeTenantBreakdown: featureFlags.tenantTelemetrySummary,
+        }),
       });
       return;
     }
@@ -1321,7 +1346,7 @@ const server = http.createServer(async (request, response) => {
     const statusCode = error instanceof HttpError ? error.statusCode : 500;
     writeJson(response, statusCode, { error: error.message || 'Unexpected server error' });
   } finally {
-    requestScope.end(response.statusCode || 200);
+    requestScope.end(response.statusCode || 200, requestTelemetryAttributes);
   }
 });
 
@@ -3451,7 +3476,7 @@ async function handleAppointmentTypes(request, response) {
   });
 }
 
-async function handleSchedulingCalendar(request, response, requestUrl) {
+async function handleSchedulingCalendar(request, response, requestUrl, session) {
   if (request.method !== 'GET') {
     writeJson(response, 405, { error: 'Method not allowed' });
     return;
@@ -3466,6 +3491,29 @@ async function handleSchedulingCalendar(request, response, requestUrl) {
   const day = sanitizeStr(requestUrl.searchParams.get('day') ?? '', 20) || dateKeyInTimezone(new Date().toISOString(), timezone);
   const counselorFilter = sanitizeStr(requestUrl.searchParams.get('counselorName') ?? '', 200);
   const locationFilter = sanitizeStr(requestUrl.searchParams.get('locationName') ?? '', 200);
+
+  if (process.env.DB_NAME) {
+    const tenantId = callerTenant(request, session);
+    const dayStart = `${day}T00:00:00.000Z`;
+    const dayEnd = `${day}T23:59:59.999Z`;
+    let allItems = await listAppointmentsByDateRange(tenantId, dayStart, dayEnd);
+    if (counselorFilter) allItems = allItems.filter((a) => a.counselorName === counselorFilter);
+    if (locationFilter) allItems = allItems.filter((a) => a.locationName === locationFilter);
+    allItems.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+
+    const counselorCalendars = Object.entries(groupBy(allItems, (a) => a.counselorName)).map(([counselorName, entries]) => ({ counselorName, appointments: entries }));
+    const locationCalendars = Object.entries(groupBy(allItems, (a) => a.locationName)).map(([locationName, entries]) => ({ locationName, appointments: entries }));
+
+    const [staffRows] = await pool.query('SELECT id, first_name_enc, last_name_enc FROM staff_members WHERE tenant_id = ?', [tenantId]);
+    const availability = await Promise.all(staffRows.map(async (staff) => {
+      const slots = await listAvailabilityTemplates(staff.id, tenantId);
+      return { staffId: staff.id, counselorName: `${decrypt(staff.first_name_enc)} ${decrypt(staff.last_name_enc)}`, template: slots };
+    }));
+
+    emitAudit(request, 'scheduling.calendar.read', 'appointment', 'collection', session);
+    writeJson(response, 200, { timezone, day, counselorCalendars, locationCalendars, availability });
+    return;
+  }
 
   const items = filterByTenant(appointments, request)
     .filter((appointment) => dateKeyInTimezone(appointment.startsAt, timezone) === day)
@@ -3585,7 +3633,7 @@ async function handleReminders(request, response, requestUrl, session) {
   const reminderId = sanitizeStr(payload.reminderId, 50);
   if (process.env.DB_NAME) {
     const tenantId = callerTenant(request, session);
-    const [rows] = await pool.query('SELECT * FROM appointment_reminders WHERE id = ? AND tenant_id = ?', [reminderId, tenantId]);
+    const [rows] = await pool.query('SELECT * FROM reminders WHERE id = ? AND tenant_id = ?', [reminderId, tenantId]);
     if (!rows[0]) { writeJson(response, 404, { error: 'Reminder not found' }); return; }
     const fields = {};
     if (typeof payload.status === 'string') { const s = normalizeReminderStatus(payload.status); if (!s) { writeJson(response, 400, { error: 'status must be valid' }); return; } fields.status = s; fields.sentAt = s === 'sent' ? new Date().toISOString() : null; }
@@ -3622,8 +3670,30 @@ async function handleReminders(request, response, requestUrl, session) {
   writeJson(response, 200, { item });
 }
 
-async function handleWaitlist(request, response) {
+async function handleWaitlist(request, response, session) {
   if (request.method === 'GET') {
+    if (process.env.DB_NAME) {
+      const tenantId = callerTenant(request, session);
+      const rows = await listWaitlist(tenantId);
+      const enriched = await Promise.all(rows.map(async (entry) => {
+        const [clientRows] = await pool.query(
+          'SELECT first_name_enc, last_name_enc FROM clients WHERE id = ? AND tenant_id = ?',
+          [entry.clientId, tenantId]
+        );
+        const clientRow = clientRows[0];
+        return {
+          ...entry,
+          clientName: clientRow
+            ? `${decrypt(clientRow.first_name_enc)} ${decrypt(clientRow.last_name_enc)}`
+            : entry.clientId,
+        };
+      }));
+      enriched.sort((a, b) => a.priorityRank - b.priorityRank);
+      emitAudit(request, 'waitlist.read', 'client', 'collection', session);
+      writeJson(response, 200, { items: enriched });
+      return;
+    }
+
     const items = clients
       .filter((client) => client.status === 'waitlist')
       .map((client) => {
@@ -3660,6 +3730,26 @@ async function handleWaitlist(request, response) {
 
   const payload = await readJsonBody(request);
   const clientId = sanitizeStr(payload.clientId, 50);
+
+  if (process.env.DB_NAME) {
+    const tenantId = callerTenant(request, session);
+    const [existing] = await pool.query(
+      'SELECT id FROM waitlist_metadata WHERE client_id = ? AND tenant_id = ?',
+      [clientId, tenantId]
+    );
+    if (!existing[0]) { writeJson(response, 404, { error: 'Waitlist client not found' }); return; }
+    const fields = {};
+    if (payload.priorityRank !== undefined) fields.priorityRank = Number.isFinite(Number(payload.priorityRank)) ? Number(payload.priorityRank) : undefined;
+    if (payload.requestedService !== undefined) fields.requestedService = sanitizeStr(payload.requestedService, 160);
+    if (payload.preferredSessionType !== undefined) fields.preferredSessionType = sanitizeStr(payload.preferredSessionType, 40);
+    if (payload.notes !== undefined) fields.notes = sanitizeStr(payload.notes, 500);
+    const item = await updateWaitlistEntry(existing[0].id, tenantId, fields);
+    telemetry.recordMutation('waitlist.update');
+    emitAudit(request, 'waitlist.update', 'client', clientId, session);
+    writeJson(response, 200, { item: { clientId, ...item } });
+    return;
+  }
+
   const client = clients.find((item) => item.id === clientId && item.status === 'waitlist');
   if (!client) {
     writeJson(response, 404, { error: 'Waitlist client not found' });
@@ -6813,7 +6903,7 @@ async function handleTranslationSettingsByLocale(request, response, requestUrl) 
   });
 }
 
-async function handleFrontendVitals(request, response) {
+async function handleFrontendVitals(request, response, session = null) {
   if (request.method !== 'POST') {
     writeJson(response, 405, { error: 'Method not allowed' });
     return;
@@ -6823,6 +6913,14 @@ async function handleFrontendVitals(request, response) {
   if (!payload.name || typeof payload.value !== 'number') {
     writeJson(response, 400, { error: 'name and value are required' });
     return;
+  }
+
+  if (featureFlags.tenantTelemetry && !payload.tenantId && session) {
+    const identity = callerIdentity(request, session);
+    const tenantId = normalizeTenantId(identity.tenantId);
+    if (tenantId) {
+      payload.tenantId = tenantId;
+    }
   }
 
   telemetry.recordBrowserVital(payload);
@@ -6847,6 +6945,12 @@ function createId(prefix, collection) {
 // Use this instead of genId('prefix') on all DB paths.
 function genId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function normalizeTenantId(value) {
+  if (typeof value !== 'string') return null;
+  const candidate = value.trim();
+  return candidate ? candidate : null;
 }
 
 function normalizeIsoDate(value) {
@@ -7809,6 +7913,11 @@ async function emitAudit(request, action, targetType, targetId, session = null) 
 
     // Always emit to console for structured log aggregation.
     console.log('[AUDIT]', JSON.stringify(event));
+
+    const mutationAttributes = featureFlags.tenantTelemetry
+      ? { tenantId: normalizeTenantId(tenantId) ?? 'unknown' }
+      : {};
+    telemetry.recordMutation(`audit.${action}`, 'success', mutationAttributes);
 
     // Persist to DB when available (append-only, never update/delete).
     if (process.env.DB_NAME) {

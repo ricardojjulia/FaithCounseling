@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import pool from '../pool.js';
 import { encrypt, decrypt } from '../../lib/encrypt.js';
 
@@ -30,9 +31,10 @@ function rowToReminder(row) {
     clientId: row.client_id,
     appointmentId: row.appointment_id,
     reminderType: row.reminder_type,
-    scheduledFor: row.scheduled_for instanceof Date ? row.scheduled_for.toISOString() : row.scheduled_for,
+    deliveryChannel: row.delivery_channel,
+    reminderAt: row.reminder_at instanceof Date ? row.reminder_at.toISOString() : row.reminder_at,
     status: row.status,
-    channel: row.channel,
+    sentAt: row.sent_at instanceof Date ? row.sent_at.toISOString() : row.sent_at,
     createdAt: row.created_at,
   };
 }
@@ -42,12 +44,11 @@ function rowToWaitlist(row) {
     id: row.id,
     tenantId: row.tenant_id,
     clientId: row.client_id,
-    requestedCounselorId: row.requested_counselor_id,
-    preferredDays: typeof row.preferred_days === 'string' ? JSON.parse(row.preferred_days) : row.preferred_days,
-    estimatedWait: row.estimated_wait,
-    priority: row.priority,
+    priorityRank: row.priority_rank,
+    requestedService: row.requested_service,
+    preferredSessionType: row.preferred_session_type,
     notes: row.notes,
-    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -56,11 +57,8 @@ function rowToAvailabilityTemplate(row) {
     id: row.id,
     staffId: row.staff_id,
     tenantId: row.tenant_id,
-    dayOfWeek: row.day_of_week,
-    startTime: row.start_time,
-    endTime: row.end_time,
-    isActive: Boolean(row.is_active),
-    createdAt: row.created_at,
+    slots: typeof row.slots === 'string' ? JSON.parse(row.slots) : (row.slots ?? []),
+    updatedAt: row.updated_at,
   };
 }
 
@@ -174,17 +172,15 @@ export async function listAppointmentsByDateRange(tenantId, startDate, endDate) 
 // Reminders
 // ---------------------------------------------------------------------------
 
-export async function listReminders(tenantId, clientId) {
-  if (clientId !== undefined) {
-    const [rows] = await pool.query(
-      'SELECT * FROM reminders WHERE tenant_id = ? AND client_id = ?',
-      [tenantId, clientId]
-    );
-    return rows.map(rowToReminder);
-  }
+export async function listReminders(tenantId, filters = {}) {
+  const conditions = ['tenant_id = ?'];
+  const values = [tenantId];
+  if (filters.clientId) { conditions.push('client_id = ?'); values.push(filters.clientId); }
+  if (filters.appointmentId) { conditions.push('appointment_id = ?'); values.push(filters.appointmentId); }
+  if (filters.status) { conditions.push('status = ?'); values.push(filters.status); }
   const [rows] = await pool.query(
-    'SELECT * FROM reminders WHERE tenant_id = ?',
-    [tenantId]
+    `SELECT * FROM reminders WHERE ${conditions.join(' AND ')} ORDER BY reminder_at ASC`,
+    values
   );
   return rows.map(rowToReminder);
 }
@@ -195,15 +191,16 @@ export async function createReminder({
   clientId,
   appointmentId,
   reminderType,
-  scheduledFor,
+  deliveryChannel,
+  reminderAt,
   status,
-  channel,
+  sentAt,
 }) {
   await pool.query(
     `INSERT INTO reminders
-       (id, tenant_id, client_id, appointment_id, reminder_type, scheduled_for, status, channel)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, tenantId, clientId, appointmentId, reminderType, scheduledFor, status, channel]
+       (id, tenant_id, client_id, appointment_id, reminder_type, delivery_channel, reminder_at, status, sent_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, tenantId, clientId, appointmentId, reminderType, deliveryChannel, reminderAt, status, sentAt ?? null]
   );
   const [rows] = await pool.query(
     'SELECT * FROM reminders WHERE id = ? AND tenant_id = ?',
@@ -219,9 +216,10 @@ export async function updateReminder(id, tenantId, fields) {
   if (fields.clientId !== undefined) { setClauses.push('client_id = ?'); values.push(fields.clientId); }
   if (fields.appointmentId !== undefined) { setClauses.push('appointment_id = ?'); values.push(fields.appointmentId); }
   if (fields.reminderType !== undefined) { setClauses.push('reminder_type = ?'); values.push(fields.reminderType); }
-  if (fields.scheduledFor !== undefined) { setClauses.push('scheduled_for = ?'); values.push(fields.scheduledFor); }
+  if (fields.deliveryChannel !== undefined) { setClauses.push('delivery_channel = ?'); values.push(fields.deliveryChannel); }
+  if (fields.reminderAt !== undefined) { setClauses.push('reminder_at = ?'); values.push(fields.reminderAt); }
   if (fields.status !== undefined) { setClauses.push('status = ?'); values.push(fields.status); }
-  if (fields.channel !== undefined) { setClauses.push('channel = ?'); values.push(fields.channel); }
+  if (fields.sentAt !== undefined) { setClauses.push('sent_at = ?'); values.push(fields.sentAt); }
 
   if (setClauses.length > 0) {
     values.push(id, tenantId);
@@ -255,27 +253,16 @@ export async function createWaitlistEntry({
   id,
   tenantId,
   clientId,
-  requestedCounselorId,
-  preferredDays,
-  estimatedWait,
-  priority,
+  priorityRank,
+  requestedService,
+  preferredSessionType,
   notes,
 }) {
   await pool.query(
     `INSERT INTO waitlist_metadata
-       (id, tenant_id, client_id, requested_counselor_id, preferred_days,
-        estimated_wait, priority, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      tenantId,
-      clientId,
-      requestedCounselorId,
-      JSON.stringify(preferredDays),
-      estimatedWait,
-      priority,
-      notes,
-    ]
+       (id, tenant_id, client_id, priority_rank, requested_service, preferred_session_type, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, tenantId, clientId, priorityRank ?? 99, requestedService ?? null, preferredSessionType ?? null, notes ?? null]
   );
   const [rows] = await pool.query(
     'SELECT * FROM waitlist_metadata WHERE id = ? AND tenant_id = ?',
@@ -289,10 +276,9 @@ export async function updateWaitlistEntry(id, tenantId, fields) {
   const values = [];
 
   if (fields.clientId !== undefined) { setClauses.push('client_id = ?'); values.push(fields.clientId); }
-  if (fields.requestedCounselorId !== undefined) { setClauses.push('requested_counselor_id = ?'); values.push(fields.requestedCounselorId); }
-  if (fields.preferredDays !== undefined) { setClauses.push('preferred_days = ?'); values.push(JSON.stringify(fields.preferredDays)); }
-  if (fields.estimatedWait !== undefined) { setClauses.push('estimated_wait = ?'); values.push(fields.estimatedWait); }
-  if (fields.priority !== undefined) { setClauses.push('priority = ?'); values.push(fields.priority); }
+  if (fields.priorityRank !== undefined) { setClauses.push('priority_rank = ?'); values.push(fields.priorityRank); }
+  if (fields.requestedService !== undefined) { setClauses.push('requested_service = ?'); values.push(fields.requestedService); }
+  if (fields.preferredSessionType !== undefined) { setClauses.push('preferred_session_type = ?'); values.push(fields.preferredSessionType); }
   if (fields.notes !== undefined) { setClauses.push('notes = ?'); values.push(fields.notes); }
 
   if (setClauses.length > 0) {
@@ -320,5 +306,23 @@ export async function listAvailabilityTemplates(staffId, tenantId) {
     'SELECT * FROM availability_templates WHERE staff_id = ? AND tenant_id = ?',
     [staffId, tenantId]
   );
-  return rows.map(rowToAvailabilityTemplate);
+  if (rows.length === 0) return [];
+  const record = rowToAvailabilityTemplate(rows[0]);
+  return record.slots;
+}
+
+export async function upsertAvailabilityTemplate(staffId, tenantId, slots) {
+  await pool.query(
+    `INSERT INTO availability_templates (id, staff_id, tenant_id, slots)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE slots = VALUES(slots)`,
+    [randomUUID(), staffId, tenantId, JSON.stringify(slots)]
+  );
+}
+
+export async function deleteAvailabilityTemplate(staffId, tenantId) {
+  await pool.query(
+    'DELETE FROM availability_templates WHERE staff_id = ? AND tenant_id = ?',
+    [staffId, tenantId]
+  );
 }

@@ -4,8 +4,64 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `1.8.0`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + major Scheduling feature)
+- Current release: `1.9.0`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support)
+
+## v1.9.0 — Scheduling: Waitlist, Reminders & Calendar DB Support (March 2026)
+
+### v1.9.0 Overview
+
+Completes the scheduling module by wiring the three remaining features — waitlist management, appointment reminders, and the calendar endpoint — to the MySQL persistence layer. Fixes three latent schema mismatches in the DB query module that would have caused runtime crashes when `DB_NAME` is set. Adds a live reminder-dispatch polling loop to the worker process.
+
+### v1.9.0 Changes
+
+#### Frontend — Waitlist & Reminders Tabs (`apps/web/src/components/SchedulingPage.jsx`)
+
+The Scheduling page now exposes three tabs:
+
+- **Appointments** — existing calendar, counselor, and practice-manager views (unchanged)
+- **Waitlist** — priority-sorted table showing all clients in waitlist status; inline editing of priority rank, requested service, preferred session type, and notes
+- **Reminders** — list of all reminders with status badges; "New Reminder" modal to schedule a reminder against any upcoming appointment; mark-sent and cancel actions per row
+
+#### API — DB Branches for Waitlist & Calendar (`apps/api/src/index.js`)
+
+- `handleWaitlist` (GET + PATCH) — now has a full DB-mode branch; GET enriches rows with decrypted client names; PATCH updates via the query module
+- `handleSchedulingCalendar` — DB-mode branch uses `listAppointmentsByDateRange` for appointments and a live staff query for availability templates
+- Fixed bug: PATCH reminders was querying a non-existent `appointment_reminders` table — corrected to `reminders`
+
+#### DB Query Module — Schema Mismatches Fixed (`apps/api/src/db/queries/appointments.js`)
+
+Three column-name mismatches that would have caused runtime errors in DB mode:
+
+| Table | Was | Now |
+| --- | --- | --- |
+| `reminders` | `scheduled_for`, `channel` | `reminder_at`, `delivery_channel` |
+| `waitlist_metadata` | `requested_counselor_id`, `preferred_days`, `estimated_wait`, `priority` | `priority_rank`, `requested_service`, `preferred_session_type` |
+| `availability_templates` | normalized `day_of_week`/`start_time`/`end_time` rows | single JSON `slots` column |
+
+Also added the previously-missing `upsertAvailabilityTemplate` and `deleteAvailabilityTemplate` functions that were imported by `index.js` but did not exist.
+
+#### Worker — Reminder Polling Loop (`apps/worker/src/index.js`)
+
+- Added a 60-second polling loop that queries `reminders WHERE status='pending' AND reminder_at <= NOW()`
+- Each due reminder is logged (delivery channel, type, appointment, client) and marked `sent` with a `sent_at` timestamp
+- In production, replace the `console.log` dispatch with your email/SMS provider integration
+- Loop is skipped gracefully when `DB_NAME` is not set
+- `mysql2` added to worker dependencies
+
+#### API Client — New Scheduling Functions (`apps/web/src/lib/clientApi.js`)
+
+- `fetchWaitlist()` — `GET /v1/waitlist`
+- `patchWaitlistEntry(data)` — `PATCH /v1/waitlist`
+- `fetchReminders({ status, appointmentId })` — `GET /v1/reminders`
+- `createReminderRecord(data)` — `POST /v1/reminders`
+- `patchReminderRecord(data)` — `PATCH /v1/reminders`
+
+### v1.9.0 Backward Compatibility
+
+No breaking changes. All existing API routes and in-memory fallback behavior are preserved. The new tabs are additive UI surfaces. The worker reminder loop is a no-op when `DB_NAME` is not configured.
+
+---
 
 ## Hotfixes (March 2026)
 

@@ -458,6 +458,42 @@ export function upsertStaffFaithProfile(staffId, data) {
 
 // ── Scheduling ───────────────────────────────────────────────────────────────
 
+export function fetchWaitlist() {
+  return apiFetch('/api/v1/waitlist');
+}
+
+export function patchWaitlistEntry(data) {
+  return apiFetch('/api/v1/waitlist', {
+    method: 'PATCH',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function fetchReminders({ status, appointmentId } = {}) {
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  if (appointmentId) params.set('appointmentId', appointmentId);
+  const query = params.toString();
+  return apiFetch(`/api/v1/reminders${query ? `?${query}` : ''}`);
+}
+
+export function createReminderRecord(data) {
+  return apiFetch('/api/v1/reminders', {
+    method: 'POST',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function patchReminderRecord(data) {
+  return apiFetch('/api/v1/reminders', {
+    method: 'PATCH',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
 export function fetchAppointmentTypes() {
   return apiFetch('/api/v1/appointment-types');
 }

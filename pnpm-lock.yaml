@@ -81,6 +81,9 @@ importers:
       '@faith/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
+      mysql2:
+        specifier: ^3.9.7
+        version: 3.20.0(@types/node@25.5.0)
 
   packages/domain: {}
 

@@ -105,9 +105,11 @@ export function createServiceTelemetry(serviceName) {
         span,
         end(statusCode, extraAttributes = {}) {
           const duration = performance.now() - start;
+          const tenantId = normalizeTenantId(extraAttributes.tenantId ?? attributes.tenantId);
           requestDuration.record(duration, {
             ...attributes,
             ...extraAttributes,
+            tenantId,
             statusCode,
           });
           activeRequestsCounter.add(-1, attributes);
@@ -118,6 +120,7 @@ export function createServiceTelemetry(serviceName) {
             statusCode,
             route: attributes.route,
             method: attributes.method,
+            tenantId,
           });
           trimSamples(state.requestSamples);
           span.setAttribute('http.response.status_code', statusCode);
@@ -125,8 +128,8 @@ export function createServiceTelemetry(serviceName) {
         },
       };
     },
-    recordMutation(name, result = 'success') {
-      mutationCounter.add(1, { name, result });
+    recordMutation(name, result = 'success', attributes = {}) {
+      mutationCounter.add(1, { name, result, ...attributes });
       state.mutationCount += 1;
       state.lastMutationAt = new Date().toISOString();
     },
@@ -134,9 +137,11 @@ export function createServiceTelemetry(serviceName) {
       browserVitalHistogram.record(vital.value, {
         name: vital.name,
         rating: vital.rating,
+        tenantId: normalizeTenantId(vital.tenantId),
       });
       state.vitalSamples.push({
         ...vital,
+        tenantId: normalizeTenantId(vital.tenantId),
         at: Date.now(),
       });
       trimSamples(state.vitalSamples);
@@ -173,13 +178,16 @@ export function createServiceTelemetry(serviceName) {
         ]),
       );
     },
-    getSummary() {
+    getSummary(options = {}) {
       const requestLatencySummary = summarizeDurations(state.requestSamples);
       const proxyLatencySummary = summarizeDurations(state.proxySamples);
       const errorCount = state.requestSamples.filter((sample) => Number(sample.statusCode) >= 400).length;
       const lastRequest = state.requestSamples[state.requestSamples.length - 1] ?? null;
       const statusCounts = summarizeStatusCounts(state.requestSamples);
       const errorStatusCounts = summarizeErrorStatusCounts(state.requestSamples);
+      const requestsByTenant = options.includeTenantBreakdown
+        ? summarizeRequestsByTenant(state.requestSamples)
+        : null;
       const recentErrors = state.requestSamples
         .filter((sample) => Number(sample.statusCode) >= 400)
         .slice(-10)
@@ -198,6 +206,7 @@ export function createServiceTelemetry(serviceName) {
         errorCount,
         statusCounts,
         errorStatusCounts,
+        requestsByTenant,
         recentErrors,
         avgDurationMs: requestLatencySummary.avg,
         lastRoute: lastRequest?.route ?? null,
@@ -256,6 +265,46 @@ function summarizeDurations(samples) {
     max: round(durations[durations.length - 1]),
     count: durations.length,
   };
+}
+
+function summarizeRequestsByTenant(samples) {
+  const tenants = new Map();
+  for (const sample of samples) {
+    const tenantId = normalizeTenantId(sample.tenantId);
+    if (!tenants.has(tenantId)) {
+      tenants.set(tenantId, {
+        tenantId,
+        requestCount: 0,
+        errorCount: 0,
+        durations: [],
+      });
+    }
+
+    const summary = tenants.get(tenantId);
+    summary.requestCount += 1;
+    summary.durations.push(sample.duration);
+    if (Number(sample.statusCode) >= 400) {
+      summary.errorCount += 1;
+    }
+  }
+
+  return [...tenants.values()].map((summary) => {
+    const sortedDurations = summary.durations.sort((left, right) => left - right);
+    return {
+      tenantId: summary.tenantId,
+      requestCount: summary.requestCount,
+      errorCount: summary.errorCount,
+      avgDurationMs: round(sortedDurations.reduce((sum, value) => sum + value, 0) / sortedDurations.length),
+      p95DurationMs: round(sortedDurations[Math.min(sortedDurations.length - 1, Math.floor(sortedDurations.length * 0.95))]),
+      maxDurationMs: round(sortedDurations[sortedDurations.length - 1]),
+    };
+  });
+}
+
+function normalizeTenantId(value) {
+  if (typeof value !== 'string') return 'unknown';
+  const candidate = value.trim();
+  return candidate || 'unknown';
 }
 
 function summarizeVitals(samples) {
