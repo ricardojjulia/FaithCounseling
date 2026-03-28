@@ -18,6 +18,14 @@ Updates the root documentation to reflect the recent Workspace Studio repair wor
 - Updated `README.md` with a new `v3.0.6` maintenance release section.
 - Added and normalized `docs/FUNCTIONAL-TESTING.md` as the detailed functional validation report for the recent repair cycle.
 - Added an inclusive-smoke testing addendum in `docs/FUNCTIONAL-TESTING.md` documenting new Playwright coverage, failure modes observed during stabilization, and final passing validation.
+- Hardened security around public portal intake and diagnostics:
+  - unauthenticated `/v1/portal/public-requests` submissions no longer accept caller-controlled tenant or internal status values
+  - `/v1/monitoring/db` now requires an authenticated admin role
+- Extended the same hardening cycle to:
+  - require an authenticated admin role for `/v1/telemetry/summary`
+  - persist the canonical audit contract fields in `audit_events`
+  - encrypt staff login email and tenant-provisioning owner email at rest with migration-backed rollout
+- Added a dated run record at `docs/SECURITY-RUN-2026-03-28.md`.
 - Added `docs/RELEASE_3.0.6.md` and `docs/v3.0.6-RELEASE-SUMMARY.md` for release tracking.
 - Updated `.gitignore` to ignore transient `test-results/*` folders while preserving `test-results/.last-run.json`, and to ignore `.claude/settings.local.json`.
 

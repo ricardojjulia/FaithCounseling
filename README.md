@@ -38,6 +38,14 @@ This maintenance revision consolidates the recent Workspace Studio repair work i
   - public monitoring landmark validation
   - portal feedback-state validation
   - mobile viewport usability checks
+- Added security hardening for:
+  - admin-only access to database diagnostics at `/v1/monitoring/db`
+  - public portal request creation ignoring caller-supplied tenant and internal status fields
+  - admin-only access to `/v1/telemetry/summary`
+  - encrypted-at-rest staff login email and tenant-provisioning owner email with migration-backed lookup support
+  - canonical audit ledger fields persisted in DB mode
+- Added dated security run documentation:
+  - `docs/SECURITY-RUN-2026-03-28.md`
 - Added release artifacts:
   - `docs/RELEASE_3.0.6.md`
   - `docs/v3.0.6-RELEASE-SUMMARY.md`

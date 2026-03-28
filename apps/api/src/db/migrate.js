@@ -63,6 +63,7 @@ try {
 
 async function applyColumnMigrations(conn) {
   const dbName = process.env.DB_NAME;
+  const { encrypt, deriveLookupHash } = await import('../lib/encrypt.js');
 
   // Helper: add a column if it doesn't already exist
   async function addColumnIfMissing(table, column, definition) {
@@ -74,23 +75,121 @@ async function applyColumnMigrations(conn) {
     if (cnt === 0) {
       await conn.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${definition}`);
       console.log(`  + ${table}.${column} added`);
+      return true;
     }
+    return false;
   }
 
   // Helper: add an index if it doesn't already exist
   async function addIndexIfMissing(table, indexName, definition) {
     const [[{ cnt }]] = await conn.query(
       `SELECT COUNT(*) AS cnt FROM information_schema.statistics
-       WHERE table_schema = ? AND table_name = ? AND index_name = ?`,
+      WHERE table_schema = ? AND table_name = ? AND index_name = ?`,
       [dbName, table, indexName],
     );
     if (cnt === 0) {
       await conn.query(`ALTER TABLE \`${table}\` ADD INDEX \`${indexName}\` ${definition}`);
       console.log(`  + index ${indexName} on ${table} added`);
+      return true;
     }
+    return false;
+  }
+
+  async function addUniqueIndexIfMissing(table, indexName, definition) {
+    const [[{ cnt }]] = await conn.query(
+      `SELECT COUNT(*) AS cnt FROM information_schema.statistics
+       WHERE table_schema = ? AND table_name = ? AND index_name = ?`,
+      [dbName, table, indexName],
+    );
+    if (cnt === 0) {
+      await conn.query(`ALTER TABLE \`${table}\` ADD UNIQUE INDEX \`${indexName}\` ${definition}`);
+      console.log(`  + unique index ${indexName} on ${table} added`);
+      return true;
+    }
+    return false;
+  }
+
+  async function alterColumn(table, column, definition) {
+    const [[{ cnt }]] = await conn.query(
+      `SELECT COUNT(*) AS cnt FROM information_schema.columns
+       WHERE table_schema = ? AND table_name = ? AND column_name = ?`,
+      [dbName, table, column],
+    );
+    if (cnt === 0) return false;
+    await conn.query(`ALTER TABLE \`${table}\` MODIFY COLUMN \`${column}\` ${definition}`);
+    console.log(`  ~ ${table}.${column} altered`);
+    return true;
   }
 
   console.log('Applying column migrations…');
+  await addColumnIfMissing('staff_accounts', 'email_enc', 'TEXT NULL AFTER email');
+  await addColumnIfMissing('staff_accounts', 'email_lookup_hash', 'CHAR(64) NULL AFTER email_enc');
+  await addUniqueIndexIfMissing('staff_accounts', 'uq_staff_accounts_email_lookup_hash', '(email_lookup_hash)');
+  await alterColumn('staff_accounts', 'email', 'VARCHAR(320) NULL');
+
+  await addColumnIfMissing('tenant_provisioning', 'owner_email_enc', 'TEXT NULL AFTER requested_practice_name');
+  await alterColumn('tenant_provisioning', 'owner_email', 'VARCHAR(320) NULL');
+
+  const auditActorTypeAdded = await addColumnIfMissing('audit_events', 'actor_type', "VARCHAR(32) NOT NULL DEFAULT 'anonymous' AFTER actor_role");
+  const auditResultAdded = await addColumnIfMissing('audit_events', 'result', "VARCHAR(16) NOT NULL DEFAULT 'success' AFTER target_id");
+  const auditReasonAdded = await addColumnIfMissing('audit_events', 'reason_code', "VARCHAR(64) NOT NULL DEFAULT 'ok' AFTER result");
+  const auditSourceSurfaceAdded = await addColumnIfMissing('audit_events', 'source_surface', "VARCHAR(128) NOT NULL DEFAULT 'api' AFTER request_id");
+  const auditSourceWorkflowAdded = await addColumnIfMissing('audit_events', 'source_workflow', "VARCHAR(128) NOT NULL DEFAULT 'request' AFTER source_surface");
+  const auditSystemComponentAdded = await addColumnIfMissing('audit_events', 'system_component', "VARCHAR(128) NOT NULL DEFAULT 'faith-api' AFTER source_workflow");
+  await addIndexIfMissing('audit_events', 'idx_audit_result', '(tenant_id, result)');
+
+  const [staffAccountRows] = await conn.query(
+    'SELECT id, email, email_enc, email_lookup_hash FROM staff_accounts',
+  );
+  for (const row of staffAccountRows) {
+    const legacyEmail = typeof row.email === 'string' ? row.email.trim().toLowerCase() : '';
+    if (!legacyEmail && row.email_enc && row.email_lookup_hash) continue;
+    if (!legacyEmail) continue;
+    await conn.query(
+      'UPDATE staff_accounts SET email_enc = ?, email_lookup_hash = ?, email = NULL WHERE id = ?',
+      [encrypt(legacyEmail), deriveLookupHash(legacyEmail, { lowercase: true }), row.id],
+    );
+  }
+
+  const [tenantRows] = await conn.query(
+    'SELECT id, owner_email, owner_email_enc FROM tenant_provisioning',
+  );
+  for (const row of tenantRows) {
+    const legacyOwnerEmail = typeof row.owner_email === 'string' ? row.owner_email.trim() : '';
+    if (!legacyOwnerEmail && row.owner_email_enc) continue;
+    if (!legacyOwnerEmail) continue;
+    await conn.query(
+      'UPDATE tenant_provisioning SET owner_email_enc = ?, owner_email = NULL WHERE id = ?',
+      [encrypt(legacyOwnerEmail), row.id],
+    );
+  }
+
+  if (auditActorTypeAdded || auditResultAdded || auditReasonAdded || auditSourceSurfaceAdded || auditSourceWorkflowAdded || auditSystemComponentAdded) {
+    await conn.query(
+      `UPDATE audit_events
+       SET actor_type = CASE
+             WHEN actor_role = 'client' THEN 'user'
+             WHEN actor_role = 'unknown' OR actor_id = 'anonymous' THEN 'anonymous'
+             WHEN actor_id LIKE 'system%' OR actor_role LIKE 'system%' THEN 'system'
+             ELSE 'user'
+           END,
+           result = CASE
+             WHEN action LIKE '%.denied%' THEN 'denied'
+             WHEN action LIKE '%.failed%' OR action LIKE '%.error%' THEN 'error'
+             ELSE 'success'
+           END,
+           reason_code = CASE
+             WHEN action LIKE '%.denied%' THEN 'rbac_denied'
+             WHEN action LIKE '%.failed%' THEN 'operation_failed'
+             WHEN action LIKE '%.error%' THEN 'operation_error'
+             ELSE 'ok'
+           END,
+           source_surface = CASE WHEN source_surface = 'api' THEN 'api' ELSE source_surface END,
+           source_workflow = CASE WHEN source_workflow = 'request' THEN 'request' ELSE source_workflow END,
+           system_component = CASE WHEN system_component = 'faith-api' THEN 'faith-api' ELSE system_component END`,
+    );
+  }
+
   await addColumnIfMissing('clients', 'primary_counselor_id', 'VARCHAR(64) NULL');
   await addIndexIfMissing('clients', 'idx_clients_counselor', '(primary_counselor_id)');
 
@@ -212,9 +311,17 @@ async function seedDevData(conn) {
   // Default staff account: admin@faithcounseling.local / ChangeMe!Dev2024#
   await conn.query(
     `INSERT INTO staff_accounts
-       (id, staff_member_id, tenant_id, email, password_hash)
-     VALUES (?, ?, ?, ?, ?)`,
-    ['acct-001', 'staff-001', 'system', 'admin@faithcounseling.local', passwordHash],
+       (id, staff_member_id, tenant_id, email, email_enc, email_lookup_hash, password_hash)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      'acct-001',
+      'staff-001',
+      'system',
+      null,
+      encrypt('admin@faithcounseling.local'),
+      deriveLookupHash('admin@faithcounseling.local', { lowercase: true }),
+      passwordHash,
+    ],
   );
 
   console.log('Dev seed complete.');

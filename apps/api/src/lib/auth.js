@@ -19,7 +19,7 @@
 import crypto from 'node:crypto';
 import argon2 from 'argon2';
 import pool from '../db/pool.js';
-import { decrypt } from './encrypt.js';
+import { decrypt, encrypt, deriveLookupHash } from './encrypt.js';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -141,12 +141,19 @@ export async function login(email, password, response) {
     throw { statusCode: 400, error: 'email and password are required' };
   }
 
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    throw { statusCode: 400, error: 'A valid email is required' };
+  }
+  const emailLookupHash = deriveLookupHash(normalizedEmail, { lowercase: true });
+
   // Look up account by email
   const [rows] = await pool.query(
     'SELECT sa.*, sm.role, sm.first_name_enc, sm.last_name_enc FROM staff_accounts sa ' +
     'JOIN staff_members sm ON sm.id = sa.staff_member_id ' +
-    'WHERE sa.email = ?',
-    [email.toLowerCase().trim()],
+    'WHERE sa.email_lookup_hash = ? OR sa.email = ? ' +
+    'LIMIT 1',
+    [emailLookupHash, normalizedEmail],
   );
   const account = rows[0];
 
@@ -209,7 +216,7 @@ export async function login(email, password, response) {
     staffId:  account.staff_member_id,
     tenantId: account.tenant_id,
     role:     account.role,
-    email:    account.email,
+    email:    account.email_enc ? decrypt(account.email_enc) : account.email,
     name:     `${decrypt(account.first_name_enc)} ${decrypt(account.last_name_enc)}`,
   };
 }
@@ -332,7 +339,11 @@ export async function createStaffAccount({ staffMemberId, tenantId, email, passw
     };
   }
 
-  const [existingRows] = await pool.query('SELECT id FROM staff_accounts WHERE email = ?', [normalizedEmail]);
+  const emailLookupHash = deriveLookupHash(normalizedEmail, { lowercase: true });
+  const [existingRows] = await pool.query(
+    'SELECT id FROM staff_accounts WHERE email_lookup_hash = ? OR email = ?',
+    [emailLookupHash, normalizedEmail],
+  );
   if (existingRows.length > 0) {
     throw { statusCode: 409, error: 'An account with this email already exists' };
   }
@@ -342,9 +353,9 @@ export async function createStaffAccount({ staffMemberId, tenantId, email, passw
 
   await pool.query(
     `INSERT INTO staff_accounts
-      (id, staff_member_id, tenant_id, email, password_hash)
-     VALUES (?, ?, ?, ?, ?)`,
-    [accountId, staffMemberId, tenantId, normalizedEmail, passwordHash],
+      (id, staff_member_id, tenant_id, email, email_enc, email_lookup_hash, password_hash)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [accountId, staffMemberId, tenantId, null, encrypt(normalizedEmail), emailLookupHash, passwordHash],
   );
 
   return { accountId, email: normalizedEmail };

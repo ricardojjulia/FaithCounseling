@@ -94,6 +94,10 @@ async function main() {
   if (apiAlreadyRunning) {
     console.log(`[start-all] API already running on http://127.0.0.1:${apiPort} (reusing existing process).`);
   } else {
+    if (process.env.DB_NAME) {
+      console.log('[start-all] Running API migration...');
+      await runStep('api migrate', node, ['--env-file=.env', 'apps/api/src/db/migrate.js']);
+    }
     console.log(`[start-all] Starting API on http://127.0.0.1:${apiPort}`);
     spawnService('api', ['apps/api/src/index.js'], { PORT: String(apiPort) });
   }

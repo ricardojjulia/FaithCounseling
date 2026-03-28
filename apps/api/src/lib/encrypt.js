@@ -96,3 +96,20 @@ export function decryptJson(stored) {
   if (raw == null) return null;
   return JSON.parse(raw);
 }
+
+function normalizeLookupInput(value, { lowercase = false } = {}) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return lowercase ? trimmed.toLowerCase() : trimmed;
+}
+
+/**
+ * Derive a deterministic HMAC-SHA256 lookup hash for sensitive identifiers that
+ * still need equality matching, such as login emails.
+ */
+export function deriveLookupHash(value, options = {}) {
+  const normalized = normalizeLookupInput(value, options);
+  if (!normalized) return null;
+  return crypto.createHmac('sha256', key()).update(normalized, 'utf8').digest('hex');
+}

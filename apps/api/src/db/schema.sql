@@ -68,14 +68,15 @@ CREATE TABLE IF NOT EXISTS staff_members (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─── Staff accounts (credentials) ────────────────────────────────────────────
--- email is stored as plaintext to enable fast lookup during login.
--- All other PHI lives in staff_members.
+-- email is encrypted at rest and looked up through a deterministic HMAC hash.
 
 CREATE TABLE IF NOT EXISTS staff_accounts (
   id               VARCHAR(64)   NOT NULL,
   staff_member_id  VARCHAR(64)   NOT NULL,
   tenant_id        VARCHAR(64)   NOT NULL,
-  email            VARCHAR(320)  NOT NULL,    -- plaintext for lookup
+  email            VARCHAR(320)  NULL,        -- legacy plaintext column retained only for migration compatibility
+  email_enc        TEXT          NOT NULL,    -- encrypted email address
+  email_lookup_hash CHAR(64)     NOT NULL,    -- deterministic HMAC-SHA256 lookup hash
   password_hash    VARCHAR(255)  NOT NULL,    -- argon2id
   failed_attempts  INT           NOT NULL DEFAULT 0,
   locked_until     TIMESTAMP     NULL,
@@ -84,7 +85,7 @@ CREATE TABLE IF NOT EXISTS staff_accounts (
   created_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_staff_accounts_email (email),
+  UNIQUE KEY uq_staff_accounts_email_lookup_hash (email_lookup_hash),
   INDEX idx_staff_accounts_tenant (tenant_id),
   CONSTRAINT fk_staff_accounts_member FOREIGN KEY (staff_member_id) REFERENCES staff_members (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -192,20 +193,27 @@ CREATE TABLE IF NOT EXISTS appointments (
 -- PHI values must NEVER appear in any column.
 
 CREATE TABLE IF NOT EXISTS audit_events (
-  id          VARCHAR(64)  NOT NULL,
-  tenant_id   VARCHAR(64)  NOT NULL,
-  actor_id    VARCHAR(255) NOT NULL,
-  actor_role  VARCHAR(64)  NOT NULL,
-  action      VARCHAR(128) NOT NULL,
-  target_type VARCHAR(64)  NOT NULL,
-  target_id   VARCHAR(255) NOT NULL,
-  occurred_at TIMESTAMP    NOT NULL,
-  request_id  VARCHAR(128),
+  id               VARCHAR(64)  NOT NULL,
+  tenant_id        VARCHAR(64)  NOT NULL,
+  actor_id         VARCHAR(255) NOT NULL,
+  actor_role       VARCHAR(64)  NOT NULL,
+  actor_type       VARCHAR(32)  NOT NULL,
+  action           VARCHAR(128) NOT NULL,
+  target_type      VARCHAR(64)  NOT NULL,
+  target_id        VARCHAR(255) NOT NULL,
+  result           VARCHAR(16)  NOT NULL,
+  reason_code      VARCHAR(64)  NOT NULL,
+  occurred_at      TIMESTAMP    NOT NULL,
+  request_id       VARCHAR(128),
+  source_surface   VARCHAR(128) NOT NULL,
+  source_workflow  VARCHAR(128) NOT NULL,
+  system_component VARCHAR(128) NOT NULL,
   PRIMARY KEY (id),
   INDEX idx_audit_tenant     (tenant_id),
   INDEX idx_audit_occurred   (tenant_id, occurred_at),
   INDEX idx_audit_actor      (tenant_id, actor_id),
-  INDEX idx_audit_action     (tenant_id, action)
+  INDEX idx_audit_action     (tenant_id, action),
+  INDEX idx_audit_result     (tenant_id, result)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─── Consent records ─────────────────────────────────────────────────────────
@@ -1091,7 +1099,8 @@ CREATE TABLE IF NOT EXISTS tenant_provisioning (
   tenant_id             VARCHAR(64)  NOT NULL,
   requested_tenant_id   VARCHAR(64)  NOT NULL,
   requested_practice_name VARCHAR(255) NOT NULL,
-  owner_email           VARCHAR(320) NOT NULL,   -- plaintext; no PHI lookup needed
+  owner_email           VARCHAR(320) NULL,       -- legacy plaintext column retained only for migration compatibility
+  owner_email_enc       TEXT         NOT NULL,
   status                VARCHAR(64)  NOT NULL DEFAULT 'queued',
   requested_at          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   completed_at          TIMESTAMP    NULL,

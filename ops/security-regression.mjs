@@ -174,6 +174,53 @@ async function main() {
   assert(result.status === 403, 'Scheduler/biller must not create client records');
   console.log('scheduler-write-guard', result.status, result.payload.error);
 
+  result = await req('/v1/monitoring/db');
+  assert(result.status === 401, 'Unauthenticated callers must not access DB diagnostics');
+  console.log('monitoring-db-auth-guard', result.status, result.payload.error);
+
+  result = await req('/v1/monitoring/db', { headers: headersByRole.practiceAdmin });
+  assert(result.status === 200, 'Practice admin must access DB diagnostics');
+  console.log('monitoring-db-admin-read', result.status, result.payload.mode);
+
+  result = await req('/v1/telemetry/summary');
+  assert(result.status === 401, 'Unauthenticated callers must not access telemetry summary');
+  console.log('telemetry-summary-auth-guard', result.status, result.payload.error);
+
+  result = await req('/v1/telemetry/summary', { headers: headersByRole.practiceAdmin });
+  assert(result.status === 200, 'Practice admin must access telemetry summary');
+  console.log('telemetry-summary-admin-read', result.status, result.payload.service);
+
+  result = await req('/v1/portal/public-requests', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: {
+      firstName: 'Public',
+      lastName: 'Probe',
+      email: 'public-probe@example.test',
+      tenantId: 'tenant-other',
+      status: 'approved',
+    },
+  });
+  assert(result.status === 201, 'Public portal request should still be accepted');
+  const createdPublicRequestId = result.payload.item?.id;
+  console.log('public-request-create', result.status, createdPublicRequestId);
+
+  result = await req('/v1/portal/public-requests', {
+    headers: {
+      ...headersByRole.platformAdmin,
+      'x-tenant-id': 'tenant-other',
+    },
+  });
+  assert(Array.isArray(result.payload.items), 'Expected public request list response');
+  assert(!result.payload.items.some((item) => item.id === createdPublicRequestId), 'Public portal request must not be written into an attacker-selected tenant');
+  console.log('public-request-tenant-guard', result.status, result.payload.items.length);
+
+  result = await req('/v1/portal/public-requests', { headers: headersByRole.platformAdmin });
+  assert(Array.isArray(result.payload.items), 'Expected system tenant public request list response');
+  const createdSystemRequest = result.payload.items.find((item) => item.id === createdPublicRequestId);
+  assert(createdSystemRequest?.status === 'requested', 'Public portal request status must be forced to requested');
+  console.log('public-request-status-guard', result.status, createdSystemRequest?.status);
+
   console.log('security-regression', 'passed');
 }
 

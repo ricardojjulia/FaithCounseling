@@ -1,5 +1,6 @@
 import pool from '../pool.js';
 import { randomUUID } from 'node:crypto';
+import { decrypt, encrypt } from '../../lib/encrypt.js';
 
 function toSqlTimestamp(value) {
   if (!value) return null;
@@ -24,7 +25,7 @@ function rowToTenantProvisioningRequest(row) {
     tenantId: row.tenant_id,
     requestedTenantId: row.requested_tenant_id,
     requestedPracticeName: row.requested_practice_name,
-    ownerEmail: row.owner_email,
+    ownerEmail: row.owner_email_enc ? decrypt(row.owner_email_enc) : row.owner_email,
     status: row.status,
     requestedAt: row.requested_at,
     completedAt: row.completed_at,
@@ -95,9 +96,9 @@ export async function createTenantProvisioningRequest({
 }) {
   await pool.query(
     `INSERT INTO tenant_provisioning
-       (id, tenant_id, requested_tenant_id, requested_practice_name, owner_email, status)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [id, tenantId, requestedTenantId, requestedPracticeName, ownerEmail, status]
+       (id, tenant_id, requested_tenant_id, requested_practice_name, owner_email, owner_email_enc, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, tenantId, requestedTenantId, requestedPracticeName, null, encrypt(ownerEmail), status]
   );
   const [rows] = await pool.query(
     'SELECT * FROM tenant_provisioning WHERE id = ?',
@@ -112,7 +113,12 @@ export async function updateTenantProvisioningRequest(id, fields) {
 
   if (fields.requestedTenantId !== undefined) { setClauses.push('requested_tenant_id = ?'); values.push(fields.requestedTenantId); }
   if (fields.requestedPracticeName !== undefined) { setClauses.push('requested_practice_name = ?'); values.push(fields.requestedPracticeName); }
-  if (fields.ownerEmail !== undefined) { setClauses.push('owner_email = ?'); values.push(fields.ownerEmail); }
+  if (fields.ownerEmail !== undefined) {
+    setClauses.push('owner_email = ?');
+    values.push(null);
+    setClauses.push('owner_email_enc = ?');
+    values.push(encrypt(fields.ownerEmail));
+  }
   if (fields.status !== undefined) { setClauses.push('status = ?'); values.push(fields.status); }
   if (fields.tenantId !== undefined) { setClauses.push('tenant_id = ?'); values.push(fields.tenantId); }
   if (fields.requestedAt !== undefined) { setClauses.push('requested_at = ?'); values.push(toSqlTimestamp(fields.requestedAt)); }

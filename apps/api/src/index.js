@@ -989,6 +989,7 @@ const server = http.createServer(async (request, response) => {
   let requestFailureLogged = false;
 
   request.requestId = requestId;
+  request.route = route;
   response.setHeader('x-request-id', requestId);
 
   if (featureFlags.tenantTelemetry) {
@@ -1498,11 +1499,13 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === '/v1/monitoring/db' && request.method === 'GET') {
+      if (requirePracticeAdmin(request, response, session)) return;
       await handleMonitoringDb(response);
       return;
     }
 
     if (requestUrl.pathname === '/v1/telemetry/summary' && request.method === 'GET') {
+      if (requirePracticeAdmin(request, response, session)) return;
       writeJson(response, 200, {
         service: 'api',
         features: {
@@ -1606,7 +1609,7 @@ async function handleAuthMe(request, response, session) {
   }
   // Fetch display name from staff_members
   const [rows] = await pool.query(
-    'SELECT sm.first_name_enc, sm.last_name_enc, sa.email FROM staff_accounts sa ' +
+    'SELECT sm.first_name_enc, sm.last_name_enc, sa.email, sa.email_enc FROM staff_accounts sa ' +
     'JOIN staff_members sm ON sm.id = sa.staff_member_id ' +
     'WHERE sa.id = ?',
     [session.staff_account_id],
@@ -1617,7 +1620,7 @@ async function handleAuthMe(request, response, session) {
     tenantId: session.tenant_id,
     role: session.role,
     name: row ? `${decrypt(row.first_name_enc)} ${decrypt(row.last_name_enc)}` : null,
-    email: row?.email ?? null,
+    email: row?.email_enc ? decrypt(row.email_enc) : (row?.email ?? null),
   });
 }
 
@@ -4077,14 +4080,22 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
   const requestedServices = Array.isArray(payload.requestedServices)
     ? payload.requestedServices.map((entry) => sanitizeStr(String(entry), 120)).filter(Boolean)
     : [];
-  const tenantId = sanitizeStr(payload.tenantId, 64) ?? callerTenant(request, session) ?? 'system';
+
+  // Public portal submissions must never choose an arbitrary tenant or internal
+  // workflow state. In authenticated/internal flows, tenant still comes from
+  // the caller identity rather than request body.
+  const tenantId = session
+    ? callerTenant(request, session)
+    : (normalizeTenantId(process.env.PUBLIC_PORTAL_TENANT_ID) ?? 'system');
 
   if (!firstName || !lastName || !email) {
     writeJson(response, 400, { error: 'firstName, lastName, and email are required' });
     return;
   }
 
-  const status = normalizePortalRegistrationStatus(payload.status ?? 'requested') ?? 'requested';
+  const status = session
+    ? (normalizePortalRegistrationStatus(payload.status ?? 'requested') ?? 'requested')
+    : 'requested';
 
   if (process.env.DB_NAME) {
     const id = genId('pr');
@@ -6904,13 +6915,7 @@ async function handleAuditIntelligence(request, response, requestUrl, session) {
     );
 
     const [resultRows] = await pool.query(
-      `SELECT
-         CASE
-           WHEN action LIKE '%.denied%' THEN 'denied'
-           WHEN action LIKE '%.failed%' OR action LIKE '%.error%' THEN 'error'
-           ELSE 'success'
-         END AS result,
-         COUNT(*) AS total
+      `SELECT result, COUNT(*) AS total
        FROM audit_events
        ${whereSql}
        GROUP BY result
@@ -6919,7 +6924,8 @@ async function handleAuditIntelligence(request, response, requestUrl, session) {
     );
 
     const [recentRows] = await pool.query(
-      `SELECT id, tenant_id, actor_id, actor_role, action, target_type, target_id, occurred_at, request_id
+      `SELECT id, tenant_id, actor_id, actor_role, actor_type, action, target_type, target_id,
+              result, reason_code, occurred_at, request_id, source_surface, source_workflow, system_component
        FROM audit_events
        ${whereSql}
        ORDER BY occurred_at DESC
@@ -6945,14 +6951,17 @@ async function handleAuditIntelligence(request, response, requestUrl, session) {
       tenantId: row.tenant_id,
       actorId: row.actor_id,
       actorRole: row.actor_role,
-      actorType: inferAuditActorType(row.actor_role, row.actor_id),
+      actorType: row.actor_type,
       action: row.action,
       targetType: row.target_type,
       targetId: row.target_id,
       occurredAt: new Date(row.occurred_at).toISOString(),
       requestId: row.request_id,
-      result: inferAuditResultFromAction(row.action),
-      reasonCode: inferAuditReasonCodeFromAction(row.action),
+      result: row.result,
+      reasonCode: row.reason_code,
+      sourceSurface: row.source_surface,
+      sourceWorkflow: row.source_workflow,
+      systemComponent: row.system_component,
     }));
   } else {
     const filtered = runtimeAuditEvents
@@ -6961,7 +6970,7 @@ async function handleAuditIntelligence(request, response, requestUrl, session) {
         if (filters.tenantId && entry.tenantId !== filters.tenantId) return false;
         if (filters.action && entry.action !== filters.action) return false;
         if (filters.actorRole && entry.actorRole !== filters.actorRole) return false;
-        if (filters.result && inferAuditResultFromAction(entry.action) !== filters.result) return false;
+        if (filters.result && (entry.result ?? inferAuditResultFromAction(entry.action)) !== filters.result) return false;
         return true;
       })
       .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt));
@@ -6975,7 +6984,7 @@ async function handleAuditIntelligence(request, response, requestUrl, session) {
       byAction.set(entry.action, (byAction.get(entry.action) ?? 0) + 1);
       byActorRole.set(entry.actorRole, (byActorRole.get(entry.actorRole) ?? 0) + 1);
       byTargetType.set(entry.targetType, (byTargetType.get(entry.targetType) ?? 0) + 1);
-      const result = inferAuditResultFromAction(entry.action);
+      const result = entry.result ?? inferAuditResultFromAction(entry.action);
       byResult.set(result, (byResult.get(result) ?? 0) + 1);
     }
 
@@ -6994,9 +7003,12 @@ async function handleAuditIntelligence(request, response, requestUrl, session) {
 
     events = filtered.slice(0, recentLimit).map((entry) => ({
       ...entry,
-      result: inferAuditResultFromAction(entry.action),
-      reasonCode: inferAuditReasonCodeFromAction(entry.action),
-      actorType: inferAuditActorType(entry.actorRole, entry.actorId),
+      result: entry.result ?? inferAuditResultFromAction(entry.action),
+      reasonCode: entry.reasonCode ?? inferAuditReasonCodeFromAction(entry.action),
+      actorType: entry.actorType ?? inferAuditActorType(entry.actorRole, entry.actorId),
+      sourceSurface: entry.sourceSurface ?? 'api',
+      sourceWorkflow: entry.sourceWorkflow ?? inferAuditWorkflowFromAction(entry.action),
+      systemComponent: entry.systemComponent ?? 'faith-api',
     }));
   }
 
@@ -7621,7 +7633,7 @@ async function handleStaffCollection(request, response, session) {
       const tenantId = callerTenant(request, session);
       const items = await listStaff(tenantId);
       const [accountRows] = await pool.query(
-        `SELECT staff_member_id, email, failed_attempts, locked_until, mfa_enabled, last_login_at
+        `SELECT staff_member_id, email, email_enc, failed_attempts, locked_until, mfa_enabled, last_login_at
          FROM staff_accounts
          WHERE tenant_id = ?`,
         [tenantId],
@@ -7633,7 +7645,7 @@ async function handleStaffCollection(request, response, session) {
         const lockedUntil = account?.locked_until ? new Date(account.locked_until) : null;
         return {
           ...item,
-          email: account?.email ?? null,
+          email: account?.email_enc ? decrypt(account.email_enc) : (account?.email ?? null),
           hasAccount: Boolean(account),
           accountLocked: Boolean(lockedUntil && lockedUntil.getTime() > Date.now()),
           mfaEnabled: Boolean(account?.mfa_enabled),
@@ -8745,13 +8757,8 @@ function buildAuditIntelligenceFilters(request, requestUrl, session) {
   }
 
   if (result) {
-    if (result === 'denied') {
-      where.push("action LIKE '%.denied%'");
-    } else if (result === 'error') {
-      where.push("(action LIKE '%.failed%' OR action LIKE '%.error%')");
-    } else if (result === 'success') {
-      where.push("action NOT LIKE '%.denied%' AND action NOT LIKE '%.failed%' AND action NOT LIKE '%.error%'");
-    }
+    where.push('result = ?');
+    whereArgs.push(result);
   }
 
   return {
@@ -8801,6 +8808,30 @@ function inferAuditActorType(actorRole, actorId) {
   if (actorRole === 'unknown' || actorId === 'anonymous') return 'anonymous';
   if (String(actorId ?? '').startsWith('system') || String(actorRole ?? '').startsWith('system')) return 'system';
   return 'user';
+}
+
+function inferAuditWorkflowFromAction(action) {
+  const [domain = 'request', resource = 'activity'] = String(action ?? '').toLowerCase().split('.');
+  return `${domain}.${resource}`;
+}
+
+function deriveAuditMetadata(request, action, session = null) {
+  const tenantId = session?.tenant_id ?? (request.headers['x-tenant-id'] || 'system').trim();
+  const actorRole = session?.role ?? (request.headers['x-staff-role'] || 'unknown').trim();
+  const actorId = session?.staff_account_id ?? (request.headers['x-actor-id'] || 'anonymous').trim();
+  const requestId = request.requestId || (request.headers['x-request-id'] || '').trim();
+  return {
+    tenantId,
+    actorRole,
+    actorId,
+    actorType: inferAuditActorType(actorRole, actorId),
+    requestId: requestId || undefined,
+    result: inferAuditResultFromAction(action),
+    reasonCode: inferAuditReasonCodeFromAction(action),
+    sourceSurface: request.route ?? 'api',
+    sourceWorkflow: inferAuditWorkflowFromAction(action),
+    systemComponent: 'faith-api',
+  };
 }
 
 function mapToTopEntries(counter, keyName) {
@@ -9874,27 +9905,30 @@ function roundMetric(value) {
 }
 
 /**
- * Emit an immutable PHI audit event.
+ * Emit an immutable, privacy-safe audit event.
  * When a session is provided, role/tenant/actorId are read from it.
  * Falls back to request headers for dev/test environments.
  * Never include PHI field values — only IDs and action names.
  */
 async function emitAudit(request, action, targetType, targetId, session = null) {
   try {
-    const tenantId  = session?.tenant_id  ?? (request.headers['x-tenant-id']  || 'system').trim();
-    const actorRole = session?.role       ?? (request.headers['x-staff-role']  || 'unknown').trim();
-    const actorId   = session?.staff_account_id ?? (request.headers['x-actor-id'] || 'anonymous').trim();
-    const requestId = request.requestId || (request.headers['x-request-id'] || '').trim();
+    const metadata = deriveAuditMetadata(request, action, session);
 
     const event = createAuditEvent({
-      tenantId,
+      tenantId: metadata.tenantId,
       action,
       targetType,
       targetId: String(targetId),
       occurredAt: new Date().toISOString(),
-      actorRole,
-      actorId,
-      requestId: requestId || undefined,
+      actorRole: metadata.actorRole,
+      actorId: metadata.actorId,
+      actorType: metadata.actorType,
+      requestId: metadata.requestId,
+      result: metadata.result,
+      reasonCode: metadata.reasonCode,
+      sourceSurface: metadata.sourceSurface,
+      sourceWorkflow: metadata.sourceWorkflow,
+      systemComponent: metadata.systemComponent,
     });
 
     runtimeAuditEvents.push(event);
@@ -9905,7 +9939,7 @@ async function emitAudit(request, action, targetType, targetId, session = null) 
     logInfo('audit.event', { audit: event });
 
     const mutationAttributes = featureFlags.tenantTelemetry
-      ? { tenantId: normalizeTenantId(tenantId) ?? 'unknown' }
+      ? { tenantId: normalizeTenantId(metadata.tenantId) ?? 'unknown' }
       : {};
     telemetry.recordMutation(`audit.${action}`, 'success', mutationAttributes);
 
@@ -9913,12 +9947,25 @@ async function emitAudit(request, action, targetType, targetId, session = null) 
     if (process.env.DB_NAME) {
       await pool.query(
         `INSERT INTO audit_events
-           (id, tenant_id, actor_id, actor_role, action, target_type, target_id, occurred_at, request_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, tenant_id, actor_id, actor_role, actor_type, action, target_type, target_id,
+            result, reason_code, occurred_at, request_id, source_surface, source_workflow, system_component)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          event.id, event.tenantId, event.actorId, event.actorRole,
-          event.action, event.targetType, String(targetId),
-          new Date(event.occurredAt), event.requestId ?? null,
+          event.id,
+          event.tenantId,
+          event.actorId,
+          event.actorRole,
+          event.actorType,
+          event.action,
+          event.targetType,
+          String(targetId),
+          event.result,
+          event.reasonCode,
+          new Date(event.occurredAt),
+          event.requestId ?? null,
+          event.sourceSurface,
+          event.sourceWorkflow,
+          event.systemComponent,
         ],
       );
     }

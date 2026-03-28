@@ -193,6 +193,14 @@ export function createAuditEvent(event) {
 
   return Object.freeze({
     id: crypto.randomUUID(),
+    actorId: event.actorId ?? 'anonymous',
+    actorRole: event.actorRole ?? 'unknown',
+    actorType: event.actorType ?? 'anonymous',
+    result: event.result ?? 'success',
+    reasonCode: event.reasonCode ?? 'ok',
+    sourceSurface: event.sourceSurface ?? 'api',
+    sourceWorkflow: event.sourceWorkflow ?? 'request',
+    systemComponent: event.systemComponent ?? 'faith-api',
     ...event,
   });
 }
