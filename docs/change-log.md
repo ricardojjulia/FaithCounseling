@@ -1,5 +1,28 @@
 # Change Log
 
+## v2.1.11 — Operations Header And Session Card Refresh
+
+**Date:** March 28, 2026
+**Type:** Minor Release
+
+### Overview
+
+Refreshes the main dashboard header and relocates session identity out of the top bar. The previous header still used the older `Practice HUB` title and surfaced `Admin User` / `Server-managed session` inline in the brand area, which diluted the visual hierarchy and made the top bar feel administrative instead of operational. This update turns the header into a more deliberate operations banner, adds a lightweight animated counseling motif, and moves session context into a dedicated metric card beside the audit summary.
+
+### Web (v2.1.11)
+
+- Renamed the main header title from `Practice HUB` to `Practice Operations Center`
+- Increased header visual hierarchy with larger title styling and supporting operational subtitle copy
+- Added a CSS-animated counseling scene in the top bar instead of relying on a static or external graphic asset
+- Removed `Admin User` and `Server-managed session` from the header itself
+- Added a new `Current Session` dashboard card that shows the active user identity and server-managed session status beside `Audit Events`
+- Expanded the metric band from three to four cards and added dedicated styling so the session card reads as contextual status rather than a numeric KPI
+- Increased the application header height to support the larger title and animated header composition without degrading mobile behavior
+
+### Breaking changes
+
+None.
+
 ## v2.1.10 — Static File Server Query-String Fix
 
 **Date:** March 28, 2026

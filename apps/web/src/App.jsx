@@ -310,7 +310,7 @@ export default function App() {
 
   return (
     <AppShell
-      header={{ height: 56 }}
+      header={{ height: 96 }}
       navbar={{ width: 280, breakpoint: 'sm', collapsed: { mobile: !navOpened } }}
       padding={0}
     >
@@ -319,7 +319,6 @@ export default function App() {
           opened={navOpened}
           onMenuToggle={toggleNav}
           connectionStatus={connectionStatus}
-          currentUser={currentUser}
         />
       </AppShell.Header>
 
@@ -385,7 +384,7 @@ export default function App() {
           />
         ) : (
           <>
-            {showDashboard ? <Metrics data={metricsData} /> : null}
+            {showDashboard ? <Metrics data={metricsData} currentUser={currentUser} /> : null}
             {showClientsWorkspace || showDashboard ? (
               <WorkspaceGrid
                 clientsData={clientsData}

@@ -4,8 +4,35 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `2.1.10`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix)
+- Current release: `2.1.11`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh)
+
+## v2.1.11 — Operations Header And Session Card Refresh (March 2026)
+
+### v2.1.11 Overview
+
+Refreshes the main application header so the first screen feels like an operations workspace instead of a dated admin shell. The old top bar used a smaller `Practice HUB` title and spent prominent space on session identity text (`Admin User`, `Server-managed session`) that belongs in the dashboard context instead of the primary brand/header area. This patch reframes the entry point as an operations center, adds a lightweight animated counseling visual, and relocates the session information into the metric band where it sits naturally beside `Audit Events`.
+
+### v2.1.11 Changes
+
+#### Main app header (`apps/web/src/components/TopBar.jsx`, `apps/web/src/App.css`, `apps/web/src/App.jsx`)
+
+- Renamed the primary title from `Practice HUB` to `Practice Operations Center`
+- Increased the title scale and hierarchy so the screen leads with a clearer, more intentional operational identity
+- Added a small CSS-animated counseling scene in the top bar to give the header more energy without introducing a heavy asset dependency
+- Removed the user/session identity block from the top bar so the header no longer burns prime space on `Admin User` and `Server-managed session`
+- Increased the app-shell header height so the refreshed copy and visual have enough room to breathe on desktop without collapsing on mobile
+
+#### Dashboard metrics row (`apps/web/src/components/Metrics.jsx`, `apps/web/src/App.jsx`, `apps/web/src/App.css`)
+
+- Added a new `Current Session` card to the primary metric band
+- Moved session identity details into that card so the active user and session mode now appear alongside `Audit Events` instead of inside the header
+- Expanded the metric grid to support four cards cleanly across desktop breakpoints
+- Added dedicated card styling so the session card reads as contextual system state rather than another numeric KPI
+
+### v2.1.11 Validation
+
+- `pnpm --filter @faith/web build`
 
 ## v2.1.10 — Static File Server Query-String Fix (March 2026)
 

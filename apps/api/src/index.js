@@ -950,15 +950,15 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
-    if (requestUrl.pathname === '/openapi.yaml' && request.method === 'GET') {
+    if (requestUrl.pathname === '/openapi.yaml' && ['GET', 'HEAD'].includes(request.method)) {
       response.writeHead(200, { 'content-type': 'application/yaml; charset=utf-8' });
-      response.end(openApiSpecYaml);
+      response.end(request.method === 'HEAD' ? undefined : openApiSpecYaml);
       return;
     }
 
-    if ((requestUrl.pathname === '/docs' || requestUrl.pathname === '/docs/') && request.method === 'GET') {
+    if ((requestUrl.pathname === '/docs' || requestUrl.pathname === '/docs/') && ['GET', 'HEAD'].includes(request.method)) {
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      response.end(renderSwaggerUiHtml('/openapi.yaml'));
+      response.end(request.method === 'HEAD' ? undefined : renderSwaggerUiHtml('./openapi.yaml'));
       return;
     }
 
@@ -9078,6 +9078,7 @@ function renderSwaggerUiHtml(specUrl) {
     <script>
       window.ui = SwaggerUIBundle({
         url: '${specUrl}',
+        validatorUrl: null,
         dom_id: '#swagger-ui',
         deepLinking: true,
         presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],

@@ -14,27 +14,31 @@ const STATUS_CONFIG = {
   error:     { color: 'red',   label: 'Connection Error' },
 };
 
-export default function TopBar({ opened, onMenuToggle, connectionStatus, currentUser }) {
+export default function TopBar({ opened, onMenuToggle, connectionStatus }) {
   const [language, setLanguage] = useState('en');
   const status = STATUS_CONFIG[connectionStatus] ?? STATUS_CONFIG.loading;
 
-  const userLabel =
-    typeof currentUser?.name === 'string' && currentUser.name.trim()
-      ? currentUser.name.trim()
-      : typeof currentUser?.email === 'string' && currentUser.email.trim()
-        ? currentUser.email.trim()
-        : 'Secure session';
-
   return (
-    <Group h="100%" px="md" justify="space-between" wrap="nowrap">
-      <Burger opened={opened} onClick={onMenuToggle} aria-label="Toggle navigation" size="sm" />
-
-      <Group gap="xs" justify="center" style={{ flex: 1 }}>
-        <Text fw={700} fz="lg" style={{ whiteSpace: 'nowrap' }}>Practice HUB</Text>
-        <Badge color={status.color} variant="light" size="sm">{status.label}</Badge>
+    <Group className="workspace-topbar" h="100%" px="md" justify="space-between" wrap="nowrap">
+      <Group gap="md" wrap="nowrap" className="workspace-topbar-main">
+        <Burger opened={opened} onClick={onMenuToggle} aria-label="Toggle navigation" size="sm" />
+        <Box className="topbar-counseling-scene" aria-hidden="true">
+          <span className="topbar-scene-glow"></span>
+          <span className="topbar-person topbar-person--left"></span>
+          <span className="topbar-person topbar-person--right"></span>
+          <span className="topbar-bubble topbar-bubble--left"></span>
+          <span className="topbar-bubble topbar-bubble--right"></span>
+        </Box>
+        <Box className="workspace-topbar-copy">
+          <Text className="workspace-topbar-kicker">Faith Counseling Workspace</Text>
+          <Text className="workspace-topbar-title">Practice Operations Center</Text>
+          <Text className="workspace-topbar-subtitle">
+            Care delivery, scheduling, billing, reporting, and oversight in one flow.
+          </Text>
+        </Box>
       </Group>
 
-      <Group gap="sm" wrap="nowrap">
+      <Group gap="sm" wrap="nowrap" className="workspace-topbar-actions">
         <Select
           data={LANGUAGES}
           value={language}
@@ -43,12 +47,7 @@ export default function TopBar({ opened, onMenuToggle, connectionStatus, current
           w={120}
           aria-label="Language"
         />
-        <Box>
-          <Badge variant="outline" color="gray" radius="xl" size="lg">
-            {userLabel}
-          </Badge>
-          <Text fz="xs" c="dimmed" ta="right" mt={2}>Server-managed session</Text>
-        </Box>
+        <Badge color={status.color} variant="light" size="lg" radius="xl">{status.label}</Badge>
       </Group>
     </Group>
   );
