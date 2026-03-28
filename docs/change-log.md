@@ -1,5 +1,70 @@
 # Change Log
 
+## v2.1.2 — Monitoring Foundation And OTEL Surface Coverage
+
+**Date:** March 28, 2026
+**Type:** Minor Release
+
+### Overview
+
+Adds the first full frontend monitoring foundation across visible application surfaces, expands the monitoring dashboard to consume per-surface telemetry, and formalizes the repo governance baseline for monitoring and security/auditing work.
+
+### Governance and planning
+
+- Added implementation record: `docs/MONITORING-AND-GOVERNANCE-FOUNDATION.md`
+- Added canonical monitoring enforcement in `AGENTS.md`
+- Added canonical security/auditing enforcement in `AGENTS.md`
+- Added `PLANS/FULL-SECURITY-AND-AUDITING.md`
+- Expanded `PLANS/FULL-SURFACE-MONITORING.md` with audit-intelligence monitoring obligations and audit-vs-telemetry separation rules
+
+### API and telemetry
+
+- Added structured frontend telemetry ingestion: `POST /v1/telemetry/events`
+- Extended `GET /v1/telemetry/summary` with `overall`, `frontend`, `surfaces`, and health detail blocks
+- Added OTEL-ready UI metric families for screen views, load time, active time, interaction latency, actions, validation failures, empty states, UI errors, and fetch failures
+- Kept local monitoring available without OTEL export while preserving optional OTLP export support
+- Corrected `exportedViaOtel` behavior so metrics-only OTLP configuration is treated as active export
+
+### Web and monitoring
+
+- Added shared surface registry and frontend telemetry helpers for React and standalone pages
+- Instrumented app shell views, detail tabs, scheduling subviews, Workspace Studio tabs, and standalone pages
+- Expanded the monitoring dashboard with overall UI summary, failing surface/workflow lists, health probe visibility, OTEL export status, and per-surface breakdown tables
+
+### Breaking changes
+
+None.
+
+## v2.1.1 — AegisTrail Baseline Slice
+
+**Date:** March 28, 2026
+**Type:** Minor Release
+
+### Overview
+
+Introduces the first implementation slice of the AegisTrail security and auditing initiative: canonical standards, enforcement updates, and a privileged audit intelligence read path.
+
+### Standards and governance
+
+- Added canonical security and auditing standard document: `PLANS/FULL-SECURITY-AND-AUDITING.md`
+- Updated `PLANS/FULL-SURFACE-MONITORING.md` to include audit intelligence monitoring obligations
+- Updated `AGENTS.md` to require the canonical security plan for security/audit-related work
+
+### API (v2.1.1)
+
+- Added `GET /v1/audit/intelligence`
+- Added bounded filters (`days`, `limit`, `action`, `actorRole`, `result`, optional `tenantId` for platform admin)
+- Added aggregated summary outputs and recent event list for investigation workflows
+- Added in-memory runtime audit event buffer for non-DB mode visibility
+
+### Web (v2.1.1)
+
+- Added **Audit Intelligence** tab in Operations Studio with filter controls, summary output, and recent-event output
+
+### Breaking changes
+
+None.
+
 ## v2.1.0 — ScheduleOps
 
 **Date:** March 28, 2026

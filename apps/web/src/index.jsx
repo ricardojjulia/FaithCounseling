@@ -5,10 +5,13 @@ import { Notifications } from '@mantine/notifications';
 import { DatesProvider } from '@mantine/dates';
 import App from './App';
 import { theme } from './theme';
+import { frontendTelemetry } from './lib/frontendTelemetry.js';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import '@mantine/dates/styles.css';
 import './index.css';
+
+frontendTelemetry.start();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

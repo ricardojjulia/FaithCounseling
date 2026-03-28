@@ -7,6 +7,11 @@ For any work touching UI, telemetry, monitoring, OTEL, health, screens, tabs, wo
 - Read [PLANS/FULL-SURFACE-MONITORING.md](PLANS/FULL-SURFACE-MONITORING.md) first.
 - Treat that file as the source of truth.
 
+For any work touching security, auditing, compliance, PHI handling, RBAC, auth/session behavior, tenant isolation, exports, retention, impersonation, background jobs, or system automation:
+
+- Read [PLANS/FULL-SECURITY-AND-AUDITING.md](PLANS/FULL-SECURITY-AND-AUDITING.md) first.
+- Treat that file as the source of truth.
+
 Required repo rules:
 
 - Every visible surface must expose monitoring signals for performance, usability, errors, and telemetry/export status.
@@ -18,13 +23,18 @@ Required repo rules:
 - External OTEL export must remain optional and config-driven.
 - Never emit PHI, free text, names, emails, IDs, or other high-cardinality labels in telemetry.
 - Placeholder but visible screens still require baseline monitoring coverage.
+- Audit ledger and telemetry must remain separate systems: never export raw audit rows via telemetry.
+- Security and auditing changes must follow canonical audit result semantics (`success`, `failure`, `denied`, `error`).
 
 Documentation rules:
 
 - If a session changes the monitoring standard, update `PLANS/FULL-SURFACE-MONITORING.md` first.
+- If a session changes the security or auditing standard, update `PLANS/FULL-SECURITY-AND-AUDITING.md` first.
 - If a session changes user-visible monitoring behavior, also update the relevant README and documentation entries.
+- If a session changes user-visible security or auditing behavior, also update the relevant README and documentation entries.
 
 Relationship of the two files:
 
 - `PLANS/FULL-SURFACE-MONITORING.md` is the detailed canonical implementation spec.
-- `AGENTS.md` is the durable session-level instruction layer and defers to the plan file when details are needed.
+- `PLANS/FULL-SECURITY-AND-AUDITING.md` is the detailed canonical implementation spec for security and auditing.
+- `AGENTS.md` is the durable session-level instruction layer and defers to the canonical plan files when details are needed.

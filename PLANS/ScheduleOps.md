@@ -21,7 +21,7 @@ This phase is named after its intent — not just scheduling, but *operating* a 
 ### Included
 
 | Feature | Description |
-|---|---|
+| --- | --- |
 | Availability overrides | Block time or open one-off slots for counselors (PTO, holidays, closures, special openings) |
 | Recurring appointment series | Create and manage repeating appointment patterns (weekly, bi-weekly, monthly) with individual exception support |
 | Reminder lifecycle management | Full reminder state machine: pending → sent / cancelled; retry logic; delivery timestamp tracking |
@@ -53,7 +53,7 @@ All existing scheduling security rules apply and extend:
 ## RBAC Rules
 
 | Route / Surface | Practice Owner | Practice Admin | Scheduler/Biller | Counselor | Intern | Client |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | Availability overrides — view | Yes | Yes | Yes | Own | Own | No |
 | Availability overrides — create/edit/delete | Yes | Yes | Yes | Own | No | No |
 | Recurring series — view | Yes | Yes | Yes | Own | Own | No |
@@ -89,6 +89,7 @@ CREATE TABLE availability_overrides (
 ```
 
 **`override_type` semantics:**
+
 - `block` — counselor unavailable for the indicated date/time window (PTO, holiday, closure)
 - `open` — one-off opening outside the normal template (Saturday session, extended hours)
 
@@ -134,7 +135,7 @@ Individual appointment rows link back via a `series_id` column added to `appoint
 ### Availability Overrides
 
 | Method | Path | Description |
-|---|---|---|
+| ------ | ---- | ----------- |
 | `GET` | `/v1/scheduling/availability-overrides` | List overrides for a staff member and date range |
 | `POST` | `/v1/scheduling/availability-overrides` | Create an override |
 | `PATCH` | `/v1/scheduling/availability-overrides` | Update an override |
@@ -145,20 +146,21 @@ Query params for GET: `staffId`, `from` (date), `to` (date).
 ### Appointment Series
 
 | Method | Path | Description |
-|---|---|---|
+| ------ | ---- | ----------- |
 | `GET` | `/v1/scheduling/series` | List series for tenant (filterable by counselorId, clientId, status) |
 | `POST` | `/v1/scheduling/series` | Create a series and generate the initial occurrence appointments |
 | `PATCH` | `/v1/scheduling/series` | Update series metadata or status (pause/cancel) |
 
 ### Utilization Report
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/v1/scheduling/utilization` | Summary of appointment volume, counselor load, location occupancy for a date range |
+| Method | Path                          | Description                                                                        |
+| ------ | ----------------------------- | ---------------------------------------------------------------------------------- |
+| `GET`  | `/v1/scheduling/utilization`  | Summary of appointment volume, counselor load, location occupancy for a date range |
 
 Query params: `from`, `to`, `counselorId` (optional).
 
 Response shape:
+
 ```json
 {
   "period": { "from": "2026-03-01", "to": "2026-03-31" },
@@ -195,6 +197,7 @@ Row mappers: `rowToOverride`, `rowToSeries`.
 Add three handler functions following the existing pattern:
 
 **`handleAvailabilityOverrides(req, res, tenantId)`**  
+
 - `GET` → `listAvailabilityOverrides` with query param validation
 - `POST` → validate body, `randomUUID()` id, `createAvailabilityOverride`, emit audit event
 - `PATCH` → `updateAvailabilityOverride`, emit audit event
@@ -202,11 +205,13 @@ Add three handler functions following the existing pattern:
 - In-memory fallback: return `[]` for GET, echo body for write ops (same pattern as reminders in-memory mode)
 
 **`handleAppointmentSeries(req, res, tenantId)`**  
+
 - `GET` → `listSeries`
 - `POST` → validate body, create series row, generate the initial N appointment occurrences (max 52), return series + occurrence ids
 - `PATCH` → update series status; if cancelled, update all future `scheduled` occurrence appointments to `cancelled`
 
 **`handleUtilization(req, res, tenantId)`**  
+
 - `GET` only → `getUtilizationSummary`, RBAC check (practice_owner / practice_admin / scheduler only)
 
 Wire all three into the routing switch in `index.js` under the `/v1/scheduling/` path prefix.
@@ -272,11 +277,13 @@ Add a summary bar to the **Appointments** tab header (visible only to practice m
 Enhance the existing `RemindersPanel` and worker loop:
 
 **UI improvements (`SchedulingPage.jsx` — `RemindersPanel`):**
+
 - Add a **Cancel** action button per pending reminder (calls `patchReminderRecord({ id, status: 'cancelled' })`)
 - Surface `sentAt` timestamp on sent reminders
 - Add a `pending` / `sent` / `cancelled` filter toggle (Mantine `SegmentedControl`)
 
 **Worker (`apps/worker/src/index.js`):**
+
 - Add a `cancelled` status guard — skip any reminder already cancelled between poll cycles
 - Log delivery channel alongside reminder type for better operational observability
 - Emit an audit event for each successful `sent` state transition (using `createAuditEvent` from `@faithcounseling/domain`)
@@ -286,7 +293,7 @@ Enhance the existing `RemindersPanel` and worker loop:
 ## Files Changed
 
 | File | Action |
-|---|---|
+| ---- | ------ |
 | `PLANS/ScheduleOps.md` | New — this plan |
 | `apps/api/src/db/queries/appointments.js` | Enhanced — overrides, series, utilization query functions |
 | `apps/api/src/index.js` | Enhanced — three new route handlers |

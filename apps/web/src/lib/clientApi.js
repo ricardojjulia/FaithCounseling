@@ -1,18 +1,25 @@
 import { csrfHeaders } from './csrf.js';
+import { frontendTelemetry } from './frontendTelemetry.js';
 
 async function apiFetch(url, options = {}) {
-  const response = await fetch(url, options);
-  if (!response.ok) {
-    let message = `Request failed: ${response.status}`;
-    try {
-      const body = await response.json();
-      message = body.error || body.message || message;
-    } catch (_) {
-      // ignore parse error
+  const method = options.method ?? 'GET';
+  return frontendTelemetry.instrumentRequest(url, method, async () => {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+      let message = `Request failed: ${response.status}`;
+      try {
+        const body = await response.json();
+        message = body.error || body.message || message;
+      } catch (_) {
+        // ignore parse error
+      }
+      const error = new Error(message);
+      error.status = response.status;
+      error.statusClass = `${Math.floor(response.status / 100)}xx`;
+      throw error;
     }
-    throw new Error(message);
-  }
-  return response.json();
+    return response.json();
+  });
 }
 
 // ── Client core ──────────────────────────────────────────────────────────────
@@ -513,47 +520,55 @@ export function fetchSchedulingCalendar({ day, timezone, counselorName, location
 }
 
 export async function createAppointmentRecord(data) {
-  const response = await fetch('/api/v1/appointments', {
-    method: 'POST',
-    headers: csrfHeaders(),
-    body: JSON.stringify(data),
-  });
+  return frontendTelemetry.instrumentRequest('/api/v1/appointments', 'POST', async () => {
+    const response = await fetch('/api/v1/appointments', {
+      method: 'POST',
+      headers: csrfHeaders(),
+      body: JSON.stringify(data),
+    });
 
-  if (!response.ok) {
-    let payload = null;
-    try {
-      payload = await response.json();
-    } catch (_) {
-      payload = null;
+    if (!response.ok) {
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch (_) {
+        payload = null;
+      }
+      const error = new Error(payload?.error || payload?.message || `Request failed: ${response.status}`);
+      error.status = response.status;
+      error.statusClass = `${Math.floor(response.status / 100)}xx`;
+      if (payload?.conflicts) error.conflicts = payload.conflicts;
+      throw error;
     }
-    const error = new Error(payload?.error || payload?.message || `Request failed: ${response.status}`);
-    if (payload?.conflicts) error.conflicts = payload.conflicts;
-    throw error;
-  }
 
-  return response.json();
+    return response.json();
+  });
 }
 
 export async function updateAppointmentRecord(appointmentId, data) {
-  const response = await fetch(`/api/v1/appointments/${appointmentId}`, {
-    method: 'PATCH',
-    headers: csrfHeaders(),
-    body: JSON.stringify(data),
-  });
+  return frontendTelemetry.instrumentRequest(`/api/v1/appointments/${appointmentId}`, 'PATCH', async () => {
+    const response = await fetch(`/api/v1/appointments/${appointmentId}`, {
+      method: 'PATCH',
+      headers: csrfHeaders(),
+      body: JSON.stringify(data),
+    });
 
-  if (!response.ok) {
-    let payload = null;
-    try {
-      payload = await response.json();
-    } catch (_) {
-      payload = null;
+    if (!response.ok) {
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch (_) {
+        payload = null;
+      }
+      const error = new Error(payload?.error || payload?.message || `Request failed: ${response.status}`);
+      error.status = response.status;
+      error.statusClass = `${Math.floor(response.status / 100)}xx`;
+      if (payload?.conflicts) error.conflicts = payload.conflicts;
+      throw error;
     }
-    const error = new Error(payload?.error || payload?.message || `Request failed: ${response.status}`);
-    if (payload?.conflicts) error.conflicts = payload.conflicts;
-    throw error;
-  }
 
-  return response.json();
+    return response.json();
+  });
 }
 
 export async function deleteAppointmentRecord(appointmentId) {

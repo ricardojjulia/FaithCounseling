@@ -35,8 +35,11 @@ Default URL: `http://localhost:3000`
 ## Monitoring Notes
 
 - Monitoring and operations pages consume `/api/v1/telemetry/summary` for runtime telemetry
+- Frontend surfaces emit structured telemetry to `/api/v1/telemetry/events`
 - Health probes are available through `/api/health`, `/api/health/live`, and `/api/health/ready`
 - The monitoring OTEL status banner follows the API `exportedViaOtel` flag, which now treats `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` as a valid OTEL export configuration
+- React app views, detail tabs, scheduling subviews, Workspace Studio tabs, and standalone pages now participate in the shared surface-monitoring baseline
+- The monitoring page now renders overall UI summary cards, top failing surfaces/workflows, health probes, and a per-surface breakdown from the shared telemetry summary
 
 ## Next UI Implementation Slices
 

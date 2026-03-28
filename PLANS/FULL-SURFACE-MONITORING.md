@@ -37,6 +37,7 @@ Included in this plan:
 - Extended `/v1/telemetry/summary` as the canonical monitoring payload
 - Monitoring page support for overall summary plus per-surface visibility
 - OTEL export compatibility for all collected metrics when configured
+- Audit intelligence surface monitoring for investigation workflows
 
 Explicitly deferred from this plan:
 
@@ -45,6 +46,20 @@ Explicitly deferred from this plan:
 - PHI-bearing telemetry attributes
 - Custom analytics warehouse behavior outside OTEL-compatible export
 - A second internal observability UI beyond the existing monitoring page
+
+## Security And Audit Boundary
+
+Monitoring telemetry and compliance audit records are separate systems with different purposes.
+
+- Monitoring telemetry: low-cardinality operational signals used for health, reliability, and UX visibility.
+- Audit ledger: append-only compliance records used for forensics, accountability, and legal review.
+
+Required boundary rules:
+
+- Never export raw audit rows through OTEL or frontend telemetry events.
+- Emit only privacy-safe aggregate security signals to monitoring telemetry.
+- Keep actor identifiers, target identifiers, free text, and any potentially sensitive values out of telemetry labels.
+- If a feature needs both monitoring and auditing, emit a telemetry summary signal and a separate audit event.
 
 ## Canonical Surface Inventory
 
@@ -62,12 +77,21 @@ Explicitly deferred from this plan:
 - `billing`
 - `portal`
 - `faith`
+- `audit_intelligence`
 
 ### Static standalone pages
 
 - `about`
 - `operations`
 - `monitor`
+
+### Operations Studio tabs
+
+- `operations.reporting`
+- `operations.platform`
+- `operations.data_retention`
+- `operations.language_studio`
+- `operations.audit_intelligence`
 
 ### Client detail tabs
 
@@ -116,6 +140,9 @@ Explicitly deferred from this plan:
 - User maintenance dialogs
 - Counselor maintenance dialogs
 - Portal action dialogs
+- Audit event detail drawer or panel
+- Audit filter workflow
+- Audit export workflow
 
 Placeholder but visible surfaces still count as monitored surfaces. Until they gain real business logic, they must emit at least visit, active-time, and empty/placeholder-state telemetry.
 
@@ -134,6 +161,14 @@ These categories are satisfied through the following standard behaviors:
 - Usability: surface views, action success/failure, validation friction, empty-state exposure, abandonment proxies for modal workflows
 - Errors: UI exceptions, failed fetches, failed mutations, unhandled rejections, degraded dependency state where surfaced to the user
 - Telemetry / export status: local monitoring availability plus external OTEL export status
+
+Audit-intelligence-specific minimums:
+
+- Filter usage count and filter latency
+- Audit summary fetch duration and failures
+- Event drill-down latency and failures
+- Empty-result-state exposure for constrained date windows
+- Export-attempt outcome at UI level (without payload details)
 
 ## Canonical Metric Families
 
@@ -172,6 +207,8 @@ Forbidden telemetry content:
 - free text
 - search terms
 - any unbounded or high-cardinality label
+- audit event payload contents
+- actor IDs and target IDs
 
 ## Architecture Direction
 
@@ -242,6 +279,7 @@ The monitoring page is the overall monitoring surface and must show:
 - OTEL export state
 - health probes and dependency health
 - request and browser-vitals context already present today
+- audit intelligence surface health and fetch/error trend visibility
 
 ## Intended Public Interfaces
 

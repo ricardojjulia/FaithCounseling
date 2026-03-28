@@ -64,6 +64,40 @@ export function createServiceTelemetry(serviceName) {
   const healthCheckCounter = meter.createCounter('faith.service.healthcheck.total', {
     description: 'Healthcheck executions by check name and result',
   });
+  const uiScreenViewCounter = meter.createCounter('faith.ui.screen.view', {
+    description: 'Visible surface view events',
+  });
+  const uiScreenLoadDuration = meter.createHistogram('faith.ui.screen.load.duration', {
+    description: 'Visible surface load duration in milliseconds',
+    unit: 'ms',
+  });
+  const uiScreenActiveDuration = meter.createHistogram('faith.ui.screen.active.duration', {
+    description: 'Visible surface active duration in milliseconds',
+    unit: 'ms',
+  });
+  const uiInteractionDuration = meter.createHistogram('faith.ui.interaction.duration', {
+    description: 'UI interaction duration in milliseconds',
+    unit: 'ms',
+  });
+  const uiActionCounter = meter.createCounter('faith.ui.action.total', {
+    description: 'UI action outcomes',
+  });
+  const uiValidationErrorCounter = meter.createCounter('faith.ui.validation.error.total', {
+    description: 'UI validation error events',
+  });
+  const uiEmptyStateCounter = meter.createCounter('faith.ui.empty_state.view.total', {
+    description: 'UI empty or placeholder state views',
+  });
+  const uiErrorCounter = meter.createCounter('faith.ui.error.total', {
+    description: 'UI error events',
+  });
+  const uiFetchDuration = meter.createHistogram('faith.ui.fetch.duration', {
+    description: 'Frontend fetch duration in milliseconds',
+    unit: 'ms',
+  });
+  const uiFetchErrorCounter = meter.createCounter('faith.ui.fetch.error.total', {
+    description: 'Frontend fetch failures',
+  });
   const serviceHealthGauge = meter.createObservableGauge('faith.service.health_status', {
     description: 'Overall service health status where 0=unhealthy, 1=degraded, 2=healthy',
   });
@@ -78,6 +112,8 @@ export function createServiceTelemetry(serviceName) {
     proxySamples: [],
     mutationCount: 0,
     lastMutationAt: null,
+    frontendEvents: [],
+    frontendSurfaces: {},
     health: {
       serviceStatus: 2,
       dependencies: {},
@@ -178,6 +214,87 @@ export function createServiceTelemetry(serviceName) {
         ]),
       );
     },
+    recordFrontendEvent(event) {
+      const normalized = normalizeFrontendEvent(event);
+      if (!normalized) return false;
+
+      const metricAttributes = {
+        surface_id: normalized.surfaceId,
+        surface_kind: normalized.surfaceKind,
+        workflow: normalized.workflow,
+        action: normalized.action,
+        result: normalized.result,
+        role: normalized.role,
+        status_class: normalized.statusClass,
+        empty_state: normalized.emptyState,
+        validation_state: normalized.validationState,
+      };
+
+      const surface = state.frontendSurfaces[normalized.surfaceId] ?? createFrontendSurfaceSummary(
+        normalized.surfaceId,
+        normalized.surfaceKind,
+      );
+      surface.surfaceKind = normalized.surfaceKind;
+      surface.lastSeenAt = normalized.at;
+
+      if (normalized.type === 'screen_view') {
+        uiScreenViewCounter.add(1, metricAttributes);
+        surface.viewCount += 1;
+      }
+
+      if (normalized.type === 'screen_load') {
+        uiScreenLoadDuration.record(normalized.durationMs, metricAttributes);
+        surface.loadDurations.push(normalized.durationMs);
+        trimSamples(surface.loadDurations);
+      }
+
+      if (normalized.type === 'screen_active') {
+        uiScreenActiveDuration.record(normalized.durationMs, metricAttributes);
+        surface.activeDurations.push(normalized.durationMs);
+        trimSamples(surface.activeDurations);
+      }
+
+      if (normalized.type === 'interaction') {
+        uiInteractionDuration.record(normalized.durationMs, metricAttributes);
+        surface.interactionDurations.push(normalized.durationMs);
+        trimSamples(surface.interactionDurations);
+      }
+
+      if (normalized.type === 'action') {
+        uiActionCounter.add(1, metricAttributes);
+        surface.actionCounts[normalized.result] = (surface.actionCounts[normalized.result] ?? 0) + 1;
+      }
+
+      if (normalized.type === 'validation_error') {
+        uiValidationErrorCounter.add(1, metricAttributes);
+        surface.validationErrorCount += 1;
+      }
+
+      if (normalized.type === 'empty_state') {
+        uiEmptyStateCounter.add(1, metricAttributes);
+        surface.emptyStates[normalized.emptyState] = (surface.emptyStates[normalized.emptyState] ?? 0) + 1;
+      }
+
+      if (normalized.type === 'ui_error') {
+        uiErrorCounter.add(1, metricAttributes);
+        surface.uiErrorCount += 1;
+      }
+
+      if (normalized.type === 'fetch') {
+        uiFetchDuration.record(normalized.durationMs, metricAttributes);
+        surface.fetchDurations.push(normalized.durationMs);
+        trimSamples(surface.fetchDurations);
+        if (normalized.result !== 'success') {
+          uiFetchErrorCounter.add(1, metricAttributes);
+          surface.fetchErrorCount += 1;
+        }
+      }
+
+      state.frontendSurfaces[normalized.surfaceId] = surface;
+      state.frontendEvents.push(normalized);
+      trimSamples(state.frontendEvents, 200);
+      return true;
+    },
     getSummary(options = {}) {
       const requestLatencySummary = summarizeDurations(state.requestSamples);
       const proxyLatencySummary = summarizeDurations(state.proxySamples);
@@ -188,6 +305,7 @@ export function createServiceTelemetry(serviceName) {
       const requestsByTenant = options.includeTenantBreakdown
         ? summarizeRequestsByTenant(state.requestSamples)
         : null;
+      const frontend = summarizeFrontend(state.frontendSurfaces, state.frontendEvents);
       const recentErrors = state.requestSamples
         .filter((sample) => Number(sample.statusCode) >= 400)
         .slice(-10)
@@ -214,6 +332,9 @@ export function createServiceTelemetry(serviceName) {
         mutationCount: state.mutationCount,
         lastMutationAt: state.lastMutationAt,
         browserVitals: summarizeVitals(state.vitalSamples),
+        overall: frontend.overall,
+        frontend: frontend.frontend,
+        surfaces: frontend.surfaces,
         health: {
           serviceStatus: state.health.serviceStatus,
           dependencies: state.health.dependencies,
@@ -247,10 +368,28 @@ function buildMetricReader() {
   });
 }
 
-function trimSamples(samples) {
-  while (samples.length > 50) {
+function trimSamples(samples, maxSamples = 50) {
+  while (samples.length > maxSamples) {
     samples.shift();
   }
+}
+
+function createFrontendSurfaceSummary(surfaceId, surfaceKind) {
+  return {
+    surfaceId,
+    surfaceKind,
+    viewCount: 0,
+    loadDurations: [],
+    activeDurations: [],
+    interactionDurations: [],
+    fetchDurations: [],
+    fetchErrorCount: 0,
+    uiErrorCount: 0,
+    validationErrorCount: 0,
+    emptyStates: {},
+    actionCounts: {},
+    lastSeenAt: null,
+  };
 }
 
 function summarizeDurations(samples) {
@@ -321,6 +460,163 @@ function summarizeVitals(samples) {
 
 function round(value) {
   return Math.round(value * 100) / 100;
+}
+
+function normalizeFrontendEvent(event) {
+  if (!event || typeof event !== 'object') return null;
+
+  const type = normalizeEnum(event.type, [
+    'screen_view',
+    'screen_load',
+    'screen_active',
+    'interaction',
+    'action',
+    'validation_error',
+    'empty_state',
+    'ui_error',
+    'fetch',
+  ], 'unknown');
+  if (type === 'unknown') return null;
+
+  const surfaceId = normalizeShortString(event.surfaceId, 'unknown');
+  const surfaceKind = normalizeEnum(event.surfaceKind, ['page', 'view', 'tab', 'subview', 'modal', 'panel'], 'unknown');
+  const workflow = normalizeShortString(event.workflow, 'unknown');
+  const action = normalizeShortString(event.action, 'unknown');
+  const result = normalizeEnum(event.result, ['success', 'failure', 'error', 'abandoned', 'unknown'], 'unknown');
+  const role = normalizeShortString(event.role, 'unknown');
+  const statusClass = normalizeShortString(event.statusClass, 'unknown');
+  const emptyState = normalizeShortString(event.emptyState, 'none');
+  const validationState = normalizeShortString(event.validationState, 'unknown');
+  const durationMs = Number.isFinite(event.durationMs) ? round(Math.max(0, event.durationMs)) : 0;
+  const at = normalizeTimestamp(event.at);
+
+  return {
+    type,
+    surfaceId,
+    surfaceKind,
+    workflow,
+    action,
+    result,
+    role,
+    statusClass,
+    emptyState,
+    validationState,
+    durationMs,
+    at,
+  };
+}
+
+function summarizeFrontend(frontendSurfaces, frontendEvents) {
+  const surfaces = Object.values(frontendSurfaces).map((surface) => {
+    const totalActions = Object.values(surface.actionCounts).reduce((sum, count) => sum + count, 0);
+    const successfulActions = surface.actionCounts.success ?? 0;
+
+    return {
+      surfaceId: surface.surfaceId,
+      surfaceKind: surface.surfaceKind,
+      viewCount: surface.viewCount,
+      loadDurationMs: summarizeDurations(surface.loadDurations.map((duration) => ({ duration }))),
+      activeDurationMs: summarizeDurations(surface.activeDurations.map((duration) => ({ duration }))),
+      interactionDurationMs: summarizeDurations(surface.interactionDurations.map((duration) => ({ duration }))),
+      fetchDurationMs: summarizeDurations(surface.fetchDurations.map((duration) => ({ duration }))),
+      fetchErrorCount: surface.fetchErrorCount,
+      uiErrorCount: surface.uiErrorCount,
+      validationErrorCount: surface.validationErrorCount,
+      emptyStates: surface.emptyStates,
+      actionCounts: surface.actionCounts,
+      actionSuccessRate: totalActions ? round((successfulActions / totalActions) * 100) : 0,
+      lastSeenAt: surface.lastSeenAt,
+    };
+  }).sort((left, right) => right.viewCount - left.viewCount || left.surfaceId.localeCompare(right.surfaceId));
+
+  const totalViews = surfaces.reduce((sum, surface) => sum + surface.viewCount, 0);
+  const totalUiErrors = surfaces.reduce((sum, surface) => sum + surface.uiErrorCount, 0);
+  const totalFetchErrors = surfaces.reduce((sum, surface) => sum + surface.fetchErrorCount, 0);
+  const totalValidationErrors = surfaces.reduce((sum, surface) => sum + surface.validationErrorCount, 0);
+  const totalActions = surfaces.reduce((sum, surface) => (
+    sum + Object.values(surface.actionCounts).reduce((inner, count) => inner + count, 0)
+  ), 0);
+  const successfulActions = surfaces.reduce((sum, surface) => sum + (surface.actionCounts.success ?? 0), 0);
+  const slowSurfaceCount = surfaces.filter((surface) => surface.loadDurationMs.p95 >= 1000 || surface.fetchDurationMs.p95 >= 1000).length;
+  const topFailingSurfaces = [...surfaces]
+    .sort((left, right) => (
+      (right.uiErrorCount + right.fetchErrorCount + right.validationErrorCount)
+      - (left.uiErrorCount + left.fetchErrorCount + left.validationErrorCount)
+    ))
+    .slice(0, 5)
+    .map((surface) => ({
+      surfaceId: surface.surfaceId,
+      issueCount: surface.uiErrorCount + surface.fetchErrorCount + surface.validationErrorCount,
+    }));
+
+  const workflowCounts = {};
+  for (const event of frontendEvents) {
+    const workflow = event.workflow || 'unknown';
+    if (!workflowCounts[workflow]) {
+      workflowCounts[workflow] = { workflow, errorCount: 0, actionCount: 0 };
+    }
+    if (event.type === 'ui_error' || (event.type === 'fetch' && event.result !== 'success')) {
+      workflowCounts[workflow].errorCount += 1;
+    }
+    if (event.type === 'action') {
+      workflowCounts[workflow].actionCount += 1;
+    }
+  }
+
+  const topFailingWorkflows = Object.values(workflowCounts)
+    .sort((left, right) => right.errorCount - left.errorCount || right.actionCount - left.actionCount)
+    .slice(0, 5);
+
+  const lastEventAt = frontendEvents.length ? frontendEvents[frontendEvents.length - 1].at : null;
+
+  return {
+    overall: {
+      totalViews,
+      totalUiErrors,
+      totalFetchErrors,
+      totalValidationErrors,
+      totalActions,
+      actionSuccessRate: totalActions ? round((successfulActions / totalActions) * 100) : 0,
+      activeSurfaceCount: surfaces.filter((surface) => surface.lastSeenAt).length,
+      slowSurfaceCount,
+      lastEventAt,
+    },
+    frontend: {
+      totalViews,
+      totalUiErrors,
+      totalFetchErrors,
+      totalValidationErrors,
+      totalActions,
+      actionSuccessRate: totalActions ? round((successfulActions / totalActions) * 100) : 0,
+      topFailingSurfaces,
+      topFailingWorkflows,
+      lastEventAt,
+    },
+    surfaces,
+  };
+}
+
+function normalizeEnum(value, allowedValues, fallback) {
+  if (typeof value !== 'string') return fallback;
+  const candidate = value.trim().toLowerCase();
+  return allowedValues.includes(candidate) ? candidate : fallback;
+}
+
+function normalizeShortString(value, fallback) {
+  if (typeof value !== 'string') return fallback;
+  const candidate = value.trim().toLowerCase().slice(0, 80);
+  return candidate || fallback;
+}
+
+function normalizeTimestamp(value) {
+  if (typeof value === 'string') {
+    const timestamp = new Date(value);
+    if (!Number.isNaN(timestamp.getTime())) {
+      return timestamp.toISOString();
+    }
+  }
+
+  return new Date().toISOString();
 }
 
 function normalizeHealthValue(value) {

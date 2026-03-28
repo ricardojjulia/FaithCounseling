@@ -45,6 +45,34 @@ The API server now handles `EADDRINUSE` startup failures explicitly instead of c
 - `pnpm start:api:standalone` successfully starts the API on port `3104`
 - All previously-passing smoke tests (`step11`, `step12`, `security-regression`) remain green
 
+## AegisTrail Security & Auditing Baseline (March 2026)
+
+Initial implementation slice for the AegisTrail initiative has been added.
+
+### Governance and standards
+
+- Added canonical security/auditing baseline at `PLANS/FULL-SECURITY-AND-AUDITING.md`
+- Extended `PLANS/FULL-SURFACE-MONITORING.md` to include audit intelligence surface obligations and audit-vs-telemetry separation rules
+- Updated `AGENTS.md` so security/auditing work now requires the canonical security plan
+
+### API
+
+- Added `GET /v1/audit/intelligence` (admin-gated) for bounded-window audit investigation
+- Supports filters: `days`, `limit`, `action`, `actorRole`, `result`, and optional `tenantId` for platform admin workflows
+- Returns aggregated summary slices (`byResult`, `byAction`, `byActorRole`, `byTargetType`) plus recent events
+- Added runtime in-memory audit buffer for local/in-memory mode visibility
+
+### Operations Studio
+
+- Added **Audit Intelligence** tab to `apps/web/public/operations.html`
+- Added bounded filters and read-only outputs for summary and recent events
+- Wired frontend behavior in `apps/web/public/operations.js`
+
+### Privacy and compliance boundary
+
+- Audit ledger data and monitoring telemetry are explicitly separated
+- Raw audit rows are not to be exported via OTEL telemetry
+
 ## Tenant-Model Update (March 2026)
 
 This update hardens tenant-isolated DB behavior and completes blocker remediation needed for full cross-module smoke validation in DB mode.
@@ -249,6 +277,14 @@ Adds explicit liveness and readiness health endpoints to the API and exports ded
 - Added `faith.service.healthcheck.duration` histogram
 - Added `faith.service.healthcheck.total` counter
 - Readiness results now update the API telemetry summary health block for operator visibility
+
+#### Frontend Monitoring Foundation
+
+- Added a shared visible-surface registry for app views, tabs, scheduling subviews, workspace studio tabs, static pages, and key modal workflows
+- Added structured frontend telemetry ingestion via `POST /v1/telemetry/events`
+- Extended `GET /v1/telemetry/summary` with `overall`, `frontend`, and `surfaces` sections for per-surface monitoring aggregation
+- Added app-shell, tab, scheduling, shared fetch-layer, and standalone page instrumentation for surface views, load time, active time, fetch timing, action outcomes, and UI errors
+- Expanded the monitoring page to show overall UI health, top failing surfaces/workflows, health probe status, OTEL export state, and a per-surface breakdown sourced from the API summary
 
 ### v1.6.0 Bug Fixes
 
@@ -750,6 +786,12 @@ The initial implementation follows a modular monolith approach with clear domain
   - `GET /health/ready`
 - API telemetry summary endpoint:
   - `GET /v1/telemetry/summary`
+- Frontend telemetry ingestion endpoint:
+  - `POST /v1/telemetry/events`
+- API telemetry summary now includes:
+  - `summary.overall`
+  - `summary.frontend`
+  - `summary.surfaces`
 - `exportedViaOtel` is `true` when any of these are configured:
   - `OTEL_EXPORTER_OTLP_ENDPOINT`
   - `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`
@@ -763,6 +805,17 @@ The initial implementation follows a modular monolith approach with clear domain
   - `faith.service.dependency.health_status`
   - `faith.service.healthcheck.duration`
   - `faith.service.healthcheck.total`
+- Dedicated UI monitoring metrics:
+  - `faith.ui.screen.view`
+  - `faith.ui.screen.load.duration`
+  - `faith.ui.screen.active.duration`
+  - `faith.ui.interaction.duration`
+  - `faith.ui.action.total`
+  - `faith.ui.validation.error.total`
+  - `faith.ui.empty_state.view.total`
+  - `faith.ui.error.total`
+  - `faith.ui.fetch.duration`
+  - `faith.ui.fetch.error.total`
 
 To export traces/metrics to an OTLP backend, set one or more environment variables before startup:
 

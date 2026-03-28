@@ -14,6 +14,8 @@ import ClientPickerModal from './components/ClientPickerModal.jsx';
 import WorkspaceStudioPage from './components/WorkspaceStudio/WorkspaceStudioPage.jsx';
 import SchedulingPage from './components/SchedulingPage.jsx';
 import { csrfHeaders } from './lib/csrf.js';
+import { frontendTelemetry } from './lib/frontendTelemetry.js';
+import { useSurfaceTelemetry } from './lib/useSurfaceTelemetry.js';
 import './App.css';
 
 function firstString(...values) {
@@ -180,6 +182,37 @@ export default function App() {
   const showScheduling       = currentView === 'scheduling';
   const showWorkspaceStudio  = currentView === 'workspace-studio';
   const showClientsWorkspace = currentView === 'clients' || (!showDashboard && !showUsers && !showCounselors && !showScheduling && !showWorkspaceStudio);
+  const topLevelSurfaceId = !isAuthenticated
+    ? 'auth'
+    : selectedClientId || selectedCounselorId
+      ? null
+      : showUsers
+        ? 'users'
+        : showCounselors
+          ? 'counselors'
+          : showScheduling
+            ? 'scheduling'
+            : showWorkspaceStudio
+              ? 'workspace_studio'
+              : showDashboard
+                ? 'dashboard'
+                : currentView;
+
+  useEffect(() => {
+    frontendTelemetry.setRole(userRole ?? 'anonymous');
+  }, [userRole]);
+
+  useSurfaceTelemetry(topLevelSurfaceId, {
+    surfaceKind: 'view',
+    workflow: 'navigation',
+    emptyState: ['clinical', 'documents', 'billing', 'portal', 'faith'].includes(topLevelSurfaceId) ? 'placeholder' : null,
+  });
+
+  useEffect(() => {
+    if (clientPickerOpen) {
+      frontendTelemetry.trackSurfaceView('modal.client_picker', { surfaceKind: 'modal', workflow: 'client_picker' });
+    }
+  }, [clientPickerOpen]);
 
   if (authBootstrapping) {
     return (

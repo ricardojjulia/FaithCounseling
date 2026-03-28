@@ -233,6 +233,165 @@
     .vital-needs-improvement { color: var(--amber); }
     .vital-poor    { color: var(--red); }
 
+    /* ── UI monitoring ─────────────────────────────────────── */
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+    .summary-pill {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .summary-pill-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .summary-pill-value {
+      font-size: 22px;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1;
+    }
+    .summary-pill-sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .issue-list {
+      display: grid;
+      gap: 10px;
+    }
+    .issue-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+    .issue-name {
+      color: #fff;
+      font-weight: 600;
+      font-family: 'Menlo', 'Monaco', monospace;
+      font-size: 12px;
+    }
+    .issue-sub {
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 2px;
+    }
+    .issue-value {
+      color: var(--red);
+      font-weight: 800;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .health-check-list {
+      display: grid;
+      gap: 10px;
+    }
+    .health-check {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .health-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .health-name {
+      color: #fff;
+      font-weight: 700;
+      text-transform: capitalize;
+    }
+    .health-sub {
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .health-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 84px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .health-badge.healthy {
+      color: var(--green);
+      background: rgba(16,185,129,.1);
+      border-color: rgba(16,185,129,.3);
+    }
+    .health-badge.degraded {
+      color: var(--amber);
+      background: rgba(245,158,11,.1);
+      border-color: rgba(245,158,11,.3);
+    }
+    .health-badge.unhealthy {
+      color: var(--red);
+      background: rgba(239,68,68,.1);
+      border-color: rgba(239,68,68,.3);
+    }
+    .surface-table-wrap { overflow-x: auto; }
+    .surface-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .surface-table th {
+      text-align: left;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .surface-table td {
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      white-space: nowrap;
+    }
+    .surface-table tr:last-child td { border-bottom: none; }
+    .surface-id {
+      color: #fff;
+      font-weight: 700;
+      font-family: 'Menlo', 'Monaco', monospace;
+    }
+    .surface-kind {
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 2px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .metric-bad {
+      color: var(--red);
+      font-weight: 700;
+    }
+    .metric-warn {
+      color: var(--amber);
+      font-weight: 700;
+    }
+
     /* ── Toast ──────────────────────────────────────────────── */
     #toast {
       position: fixed; bottom: 20px; right: 20px; z-index: 9999;
@@ -307,6 +466,115 @@
       <div class="kpi-label">Mutations</div>
       <div class="kpi-value" id="kpiMutations">—</div>
       <div class="kpi-sub" id="kpiMutationsSub">DB writes tracked</div>
+    </div>
+  </div>
+
+  <div class="section-label">Surface Monitoring</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Overall UI Summary <span id="uiSummaryLastSeen">Waiting for frontend telemetry</span></div>
+      <div class="summary-grid" id="uiSummaryGrid">
+        <div class="summary-pill">
+          <div class="summary-pill-label">Views</div>
+          <div class="summary-pill-value" id="uiViews">—</div>
+          <div class="summary-pill-sub">screen and page views</div>
+        </div>
+        <div class="summary-pill">
+          <div class="summary-pill-label">UI Errors</div>
+          <div class="summary-pill-value" id="uiErrors">—</div>
+          <div class="summary-pill-sub">runtime and unhandled errors</div>
+        </div>
+        <div class="summary-pill">
+          <div class="summary-pill-label">Fetch Errors</div>
+          <div class="summary-pill-value" id="uiFetchErrors">—</div>
+          <div class="summary-pill-sub">failed or error API calls</div>
+        </div>
+        <div class="summary-pill">
+          <div class="summary-pill-label">Validation</div>
+          <div class="summary-pill-value" id="uiValidationErrors">—</div>
+          <div class="summary-pill-sub">form friction signals</div>
+        </div>
+        <div class="summary-pill">
+          <div class="summary-pill-label">Action Success</div>
+          <div class="summary-pill-value" id="uiActionSuccess">—</div>
+          <div class="summary-pill-sub" id="uiActionSuccessSub">overall workflow outcome rate</div>
+        </div>
+        <div class="summary-pill">
+          <div class="summary-pill-label">Slow Surfaces</div>
+          <div class="summary-pill-value" id="uiSlowSurfaces">—</div>
+          <div class="summary-pill-sub">p95 load or fetch >= 1000 ms</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Top Failing Surfaces &amp; Workflows <span id="uiExportState">Local monitoring</span></div>
+      <div class="issue-list" id="topSurfaceIssues">
+        <div class="empty-state">No surface failures recorded yet.</div>
+      </div>
+      <div style="height:12px"></div>
+      <div class="card-title" style="margin-bottom:12px">Workflow Failure Leaders</div>
+      <div class="issue-list" id="topWorkflowIssues">
+        <div class="empty-state">No workflow failures recorded yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Health Probes &amp; Dependencies <span id="healthSummaryStatus">Loading…</span></div>
+      <div class="health-check-list" id="healthChecksList">
+        <div class="empty-state">No health checks available yet.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Monitored Surfaces <span id="surfaceSummaryCount">0 surfaces</span></div>
+      <div class="summary-grid">
+        <div class="summary-pill">
+          <div class="summary-pill-label">Active</div>
+          <div class="summary-pill-value" id="uiActiveSurfaces">—</div>
+          <div class="summary-pill-sub">recently seen surfaces</div>
+        </div>
+        <div class="summary-pill">
+          <div class="summary-pill-label">Tracked</div>
+          <div class="summary-pill-value" id="uiTrackedSurfaces">—</div>
+          <div class="summary-pill-sub">registered in current summary</div>
+        </div>
+        <div class="summary-pill">
+          <div class="summary-pill-label">Last Event</div>
+          <div class="summary-pill-value" id="uiLastEvent">—</div>
+          <div class="summary-pill-sub">latest frontend telemetry ingest</div>
+        </div>
+        <div class="summary-pill">
+          <div class="summary-pill-label">OTEL Export</div>
+          <div class="summary-pill-value" id="uiOtelExport">—</div>
+          <div class="summary-pill-sub">local summary vs external export</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title">Per-Surface Breakdown <span id="surfaceTableNote">Top 12 by views</span></div>
+    <div class="surface-table-wrap">
+      <table class="surface-table">
+        <thead>
+          <tr>
+            <th>Surface</th>
+            <th>Views</th>
+            <th>Load p95</th>
+            <th>Fetch p95</th>
+            <th>Actions</th>
+            <th>UI / Fetch / Validation</th>
+            <th>Empty States</th>
+            <th>Last Seen</th>
+          </tr>
+        </thead>
+        <tbody id="surfaceTableBody">
+          <tr><td colspan="8" class="empty-state">No surface telemetry recorded yet.</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
@@ -505,6 +773,7 @@
 
 <div id="toast"></div>
 
+<script src="/telemetry.js"></script>
 <script src="/monitor.js"></script>
 </body>
 </html>

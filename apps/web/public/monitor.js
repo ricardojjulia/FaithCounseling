@@ -10,6 +10,8 @@ let countdown = REFRESH_INTERVAL / 1000;
 let refreshTimer = null;
 let countdownTimer = null;
 
+window.faithTelemetry?.start({ surfaceId: 'monitor', surfaceKind: 'page' });
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
 function setText(id, val) { const e = $(id); if (e) e.textContent = val ?? '—'; }
@@ -32,6 +34,10 @@ function fmtTime(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
+function fmtPercent(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? `${Math.round(num)}%` : '—';
+}
 function methodBadge(method) {
   const cls = { GET: 'badge-get', POST: 'badge-post', PATCH: 'badge-patch', DELETE: 'badge-delete' };
   return `<span class="badge ${cls[method?.toUpperCase()] ?? ''}">${method ?? '?'}</span>`;
@@ -40,6 +46,23 @@ function statusBadge(code) {
   const n = Number(code);
   const cls = n >= 500 ? 'badge-5xx' : n >= 400 ? 'badge-4xx' : 'badge-2xx';
   return `<span class="badge ${cls}">${code}</span>`;
+}
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+function healthLabel(status) {
+  if (status === 2) return 'healthy';
+  if (status === 1) return 'degraded';
+  return 'unhealthy';
+}
+function healthBadge(status) {
+  const label = healthLabel(status);
+  return `<span class="health-badge ${label}">${label}</span>`;
 }
 
 // ─── Sparkline ───────────────────────────────────────────────────────────────
@@ -173,6 +196,143 @@ function updateVitals(vitals) {
   }).join('');
 }
 
+function renderIssueList(containerId, items, emptyMessage, valueLabel) {
+  const container = $(containerId);
+  if (!items?.length) {
+    container.innerHTML = `<div class="empty-state">${emptyMessage}</div>`;
+    return;
+  }
+
+  container.innerHTML = items.map((item) => `
+    <div class="issue-row">
+      <div>
+        <div class="issue-name">${escapeHtml(item.name)}</div>
+        <div class="issue-sub">${escapeHtml(item.sub)}</div>
+      </div>
+      <div class="issue-value">${escapeHtml(item.value)} ${escapeHtml(valueLabel)}</div>
+    </div>
+  `).join('');
+}
+
+function summarizeEmptyStates(emptyStates) {
+  return Object.values(emptyStates || {}).reduce((sum, count) => sum + count, 0);
+}
+
+function metricClass(value, warnAt, badAt) {
+  if (!Number.isFinite(value)) return '';
+  if (value >= badAt) return 'metric-bad';
+  if (value >= warnAt) return 'metric-warn';
+  return '';
+}
+
+function updateUiSummary(overall, frontend, surfaces, exportedViaOtel) {
+  setText('uiViews', overall?.totalViews ?? 0);
+  setText('uiErrors', overall?.totalUiErrors ?? 0);
+  setText('uiFetchErrors', overall?.totalFetchErrors ?? 0);
+  setText('uiValidationErrors', overall?.totalValidationErrors ?? 0);
+  setText('uiActionSuccess', fmtPercent(overall?.actionSuccessRate));
+  setText('uiActionSuccessSub', `${overall?.totalActions ?? 0} tracked actions`);
+  setText('uiSlowSurfaces', overall?.slowSurfaceCount ?? 0);
+  setText('uiSummaryLastSeen', overall?.lastEventAt ? `Last event ${fmtTime(overall.lastEventAt)}` : 'Waiting for frontend telemetry');
+
+  setText('uiActiveSurfaces', overall?.activeSurfaceCount ?? 0);
+  setText('uiTrackedSurfaces', surfaces?.length ?? 0);
+  setText('uiLastEvent', overall?.lastEventAt ? fmtTime(overall.lastEventAt) : '—');
+  setText('uiOtelExport', exportedViaOtel ? 'Enabled' : 'Local only');
+  setText('uiExportState', exportedViaOtel ? 'External OTEL export enabled' : 'Local monitoring only');
+  setText('surfaceSummaryCount', `${surfaces?.length ?? 0} surfaces`);
+  setText('surfaceTableNote', `Top ${Math.min(surfaces?.length ?? 0, 12)} by views`);
+
+  renderIssueList(
+    'topSurfaceIssues',
+    (frontend?.topFailingSurfaces ?? []).map((surface) => ({
+      name: surface.surfaceId,
+      sub: 'ui + fetch + validation issues',
+      value: surface.issueCount ?? 0,
+    })),
+    'No surface failures recorded yet.',
+    'issues',
+  );
+
+  renderIssueList(
+    'topWorkflowIssues',
+    (frontend?.topFailingWorkflows ?? []).map((workflow) => ({
+      name: workflow.workflow,
+      sub: `${workflow.actionCount ?? 0} tracked actions`,
+      value: workflow.errorCount ?? 0,
+    })),
+    'No workflow failures recorded yet.',
+    'errors',
+  );
+}
+
+function updateHealthChecks(health) {
+  const checks = Object.entries(health?.checks ?? {});
+  const dependencies = Object.entries(health?.dependencies ?? {});
+  const list = $('healthChecksList');
+
+  setText('healthSummaryStatus', healthLabel(health?.serviceStatus));
+
+  if (!checks.length && !dependencies.length) {
+    list.innerHTML = '<div class="empty-state">No health checks available yet.</div>';
+    return;
+  }
+
+  const checkMarkup = checks.map(([name, check]) => `
+    <div class="health-check">
+      <div class="health-meta">
+        <div class="health-name">${escapeHtml(name)}</div>
+        <div class="health-sub">${check?.durationMs != null ? `${fmtMs(check.durationMs)} check time` : 'No duration recorded'} · ${check?.observedAt ? fmtTime(check.observedAt) : 'No timestamp'}</div>
+      </div>
+      ${healthBadge(check?.status)}
+    </div>
+  `);
+
+  const dependencyMarkup = dependencies.map(([name, status]) => `
+    <div class="health-check">
+      <div class="health-meta">
+        <div class="health-name">${escapeHtml(name)}</div>
+        <div class="health-sub">Dependency status</div>
+      </div>
+      ${healthBadge(status)}
+    </div>
+  `);
+
+  list.innerHTML = [...checkMarkup, ...dependencyMarkup].join('');
+}
+
+function renderSurfaceTable(surfaces) {
+  const tbody = $('surfaceTableBody');
+  if (!surfaces?.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No surface telemetry recorded yet.</td></tr>';
+    return;
+  }
+
+  const topSurfaces = surfaces.slice(0, 12);
+  tbody.innerHTML = topSurfaces.map((surface) => {
+    const emptyStateTotal = summarizeEmptyStates(surface.emptyStates);
+    const loadP95Class = metricClass(surface.loadDurationMs?.p95, 600, 1000);
+    const fetchP95Class = metricClass(surface.fetchDurationMs?.p95, 600, 1000);
+    const issueTotal = (surface.uiErrorCount ?? 0) + (surface.fetchErrorCount ?? 0) + (surface.validationErrorCount ?? 0);
+
+    return `
+      <tr>
+        <td>
+          <div class="surface-id">${escapeHtml(surface.surfaceId)}</div>
+          <div class="surface-kind">${escapeHtml(surface.surfaceKind)}</div>
+        </td>
+        <td>${surface.viewCount ?? 0}</td>
+        <td class="${loadP95Class}">${fmtMs(surface.loadDurationMs?.p95)}</td>
+        <td class="${fetchP95Class}">${fmtMs(surface.fetchDurationMs?.p95)}</td>
+        <td>${surface.actionCounts?.success ?? 0}/${Object.values(surface.actionCounts ?? {}).reduce((sum, count) => sum + count, 0)} (${fmtPercent(surface.actionSuccessRate)})</td>
+        <td class="${issueTotal ? 'metric-bad' : ''}">${surface.uiErrorCount ?? 0} / ${surface.fetchErrorCount ?? 0} / ${surface.validationErrorCount ?? 0}</td>
+        <td>${emptyStateTotal}</td>
+        <td>${surface.lastSeenAt ? fmtTime(surface.lastSeenAt) : '—'}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
 // ─── Drill-down ───────────────────────────────────────────────────────────────
 function openDrill(filter) {
   filterActive = filter || 'all';
@@ -291,6 +451,7 @@ function initOtelSettings() {
 async function doRefresh() {
   const chip = $('healthChip');
   $('refreshBtn').disabled = true;
+  const startedAt = performance.now();
 
   try {
     const [apiHealth, apiSummaryResp, webSummaryResp] = await Promise.allSettled([
@@ -342,6 +503,11 @@ async function doRefresh() {
     const vitals = { ...(sum.browserVitals ?? {}), ...(webData?.summary?.browserVitals ?? {}) };
     updateVitals(vitals);
 
+    // UI / surface monitoring
+    updateUiSummary(sum.overall ?? {}, sum.frontend ?? {}, sum.surfaces ?? [], apiData?.exportedViaOtel ?? false);
+    updateHealthChecks(sum.health ?? {});
+    renderSurfaceTable(sum.surfaces ?? []);
+
     // Errors drill-down
     lastErrors = sum.recentErrors ?? [];
     setText('errorCount', lastErrors.length);
@@ -350,6 +516,16 @@ async function doRefresh() {
     // OTEL
     updateOtelBanner(apiData?.exportedViaOtel ?? false);
 
+    if (!Object.keys(vitals).length) {
+      window.faithTelemetry?.trackEmptyState('no_vitals', { workflow: 'monitor' });
+    }
+
+    window.faithTelemetry?.trackInteraction('monitor.refresh', performance.now() - startedAt, {
+      workflow: 'monitor',
+      result: 'success',
+    });
+    window.faithTelemetry?.trackAction('monitor.refresh', 'success', { workflow: 'monitor' });
+
     // Record heartbeat vital
     recordHeartbeat();
 
@@ -357,6 +533,12 @@ async function doRefresh() {
     chip.className = 'status-chip degraded';
     $('healthText').textContent = 'Error';
     toast(`Refresh failed: ${err.message}`, 'err');
+    window.faithTelemetry?.trackInteraction('monitor.refresh', performance.now() - startedAt, {
+      workflow: 'monitor',
+      result: 'failure',
+    });
+    window.faithTelemetry?.trackAction('monitor.refresh', 'failure', { workflow: 'monitor' });
+    window.faithTelemetry?.trackError('monitor.refresh', { workflow: 'monitor' });
   } finally {
     $('refreshBtn').disabled = false;
   }

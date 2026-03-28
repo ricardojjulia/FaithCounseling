@@ -199,6 +199,7 @@ export function enforceRbac(request, response, route, session = null) {
 
   // Telemetry endpoints accept any authenticated caller; vitals ingestion is
   // also allowed from browser without role (it carries no PHI).
+  if (route === '/v1/telemetry/events') return false;
   if (route === '/v1/telemetry/vitals') return false;
   if (route === '/v1/telemetry/summary') return false;
 

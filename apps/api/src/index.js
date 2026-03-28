@@ -865,6 +865,9 @@ const retentionPolicies = [
   },
 ];
 
+const runtimeAuditEvents = [];
+const MAX_RUNTIME_AUDIT_EVENTS = 4000;
+
 const server = http.createServer(async (request, response) => {
   const requestUrl = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
   const route = resolveRoute(requestUrl.pathname);
@@ -1201,6 +1204,11 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/audit/intelligence') {
+      await handleAuditIntelligence(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/platform/overview') {
       await handlePlatformOverview(request, response, session);
       return;
@@ -1338,6 +1346,11 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === '/v1/telemetry/vitals') {
       await handleFrontendVitals(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/telemetry/events') {
+      await handleFrontendTelemetryEvents(request, response, session);
       return;
     }
 
@@ -6030,6 +6043,177 @@ async function handleReportingOverview(request, response, requestUrl, session) {
   writeJson(response, 200, { summary });
 }
 
+async function handleAuditIntelligence(request, response, requestUrl, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response, session)) return;
+
+  const role = callerRole(request, session);
+  const filters = buildAuditIntelligenceFilters(request, requestUrl, session);
+
+  if (!filters) {
+    writeJson(response, 400, { error: 'Invalid audit query parameters' });
+    return;
+  }
+
+  const { whereSql, whereArgs, recentLimit } = filters;
+  let summary;
+  let events;
+
+  if (process.env.DB_NAME) {
+    const [totalRows] = await pool.query(
+      `SELECT COUNT(*) AS total
+       FROM audit_events
+       ${whereSql}`,
+      whereArgs,
+    );
+
+    const [actionRows] = await pool.query(
+      `SELECT action, COUNT(*) AS total
+       FROM audit_events
+       ${whereSql}
+       GROUP BY action
+       ORDER BY total DESC
+       LIMIT 12`,
+      whereArgs,
+    );
+
+    const [roleRows] = await pool.query(
+      `SELECT actor_role AS actorRole, COUNT(*) AS total
+       FROM audit_events
+       ${whereSql}
+       GROUP BY actor_role
+       ORDER BY total DESC
+       LIMIT 12`,
+      whereArgs,
+    );
+
+    const [targetRows] = await pool.query(
+      `SELECT target_type AS targetType, COUNT(*) AS total
+       FROM audit_events
+       ${whereSql}
+       GROUP BY target_type
+       ORDER BY total DESC
+       LIMIT 12`,
+      whereArgs,
+    );
+
+    const [resultRows] = await pool.query(
+      `SELECT
+         CASE
+           WHEN action LIKE '%.denied%' THEN 'denied'
+           WHEN action LIKE '%.failed%' OR action LIKE '%.error%' THEN 'error'
+           ELSE 'success'
+         END AS result,
+         COUNT(*) AS total
+       FROM audit_events
+       ${whereSql}
+       GROUP BY result
+       ORDER BY total DESC`,
+      whereArgs,
+    );
+
+    const [recentRows] = await pool.query(
+      `SELECT id, tenant_id, actor_id, actor_role, action, target_type, target_id, occurred_at, request_id
+       FROM audit_events
+       ${whereSql}
+       ORDER BY occurred_at DESC
+       LIMIT ?`,
+      [...whereArgs, recentLimit],
+    );
+
+    summary = {
+      window: {
+        days: filters.days,
+        from: filters.fromIso,
+        to: new Date().toISOString(),
+      },
+      total: Number(totalRows?.[0]?.total ?? 0),
+      byResult: resultRows.map((row) => ({ result: row.result, total: Number(row.total) })),
+      byAction: actionRows.map((row) => ({ action: row.action, total: Number(row.total) })),
+      byActorRole: roleRows.map((row) => ({ actorRole: row.actorRole, total: Number(row.total) })),
+      byTargetType: targetRows.map((row) => ({ targetType: row.targetType, total: Number(row.total) })),
+    };
+
+    events = recentRows.map((row) => ({
+      id: row.id,
+      tenantId: row.tenant_id,
+      actorId: row.actor_id,
+      actorRole: row.actor_role,
+      actorType: inferAuditActorType(row.actor_role, row.actor_id),
+      action: row.action,
+      targetType: row.target_type,
+      targetId: row.target_id,
+      occurredAt: new Date(row.occurred_at).toISOString(),
+      requestId: row.request_id,
+      result: inferAuditResultFromAction(row.action),
+      reasonCode: inferAuditReasonCodeFromAction(row.action),
+    }));
+  } else {
+    const filtered = runtimeAuditEvents
+      .filter((entry) => {
+        if (entry.occurredAt < filters.fromIso) return false;
+        if (filters.tenantId && entry.tenantId !== filters.tenantId) return false;
+        if (filters.action && entry.action !== filters.action) return false;
+        if (filters.actorRole && entry.actorRole !== filters.actorRole) return false;
+        if (filters.result && inferAuditResultFromAction(entry.action) !== filters.result) return false;
+        return true;
+      })
+      .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt));
+
+    const byAction = new Map();
+    const byActorRole = new Map();
+    const byTargetType = new Map();
+    const byResult = new Map();
+
+    for (const entry of filtered) {
+      byAction.set(entry.action, (byAction.get(entry.action) ?? 0) + 1);
+      byActorRole.set(entry.actorRole, (byActorRole.get(entry.actorRole) ?? 0) + 1);
+      byTargetType.set(entry.targetType, (byTargetType.get(entry.targetType) ?? 0) + 1);
+      const result = inferAuditResultFromAction(entry.action);
+      byResult.set(result, (byResult.get(result) ?? 0) + 1);
+    }
+
+    summary = {
+      window: {
+        days: filters.days,
+        from: filters.fromIso,
+        to: new Date().toISOString(),
+      },
+      total: filtered.length,
+      byResult: mapToTopEntries(byResult, 'result'),
+      byAction: mapToTopEntries(byAction, 'action'),
+      byActorRole: mapToTopEntries(byActorRole, 'actorRole'),
+      byTargetType: mapToTopEntries(byTargetType, 'targetType'),
+    };
+
+    events = filtered.slice(0, recentLimit).map((entry) => ({
+      ...entry,
+      result: inferAuditResultFromAction(entry.action),
+      reasonCode: inferAuditReasonCodeFromAction(entry.action),
+      actorType: inferAuditActorType(entry.actorRole, entry.actorId),
+    }));
+  }
+
+  await emitAudit(request, 'audit.intelligence.read', 'audit_event', 'collection', session);
+
+  writeJson(response, 200, {
+    summary,
+    events,
+    filters: {
+      days: filters.days,
+      limit: recentLimit,
+      action: filters.action,
+      actorRole: filters.actorRole,
+      result: filters.result,
+      tenantId: role === 'platform_admin' ? filters.tenantId : callerTenant(request, session),
+    },
+  });
+}
+
 async function handlePlatformOverview(request, response, session) {
   if (request.method !== 'GET') {
     writeJson(response, 405, { error: 'Method not allowed' });
@@ -7474,6 +7658,55 @@ async function handleFrontendVitals(request, response, session = null) {
   writeJson(response, 202, { accepted: true });
 }
 
+async function handleFrontendTelemetryEvents(request, response, session = null) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const events = Array.isArray(payload?.events)
+    ? payload.events
+    : payload && typeof payload === 'object'
+      ? [payload]
+      : [];
+
+  if (!events.length) {
+    writeJson(response, 400, { error: 'events payload is required' });
+    return;
+  }
+
+  let accepted = 0;
+  let dropped = 0;
+
+  for (const event of events.slice(0, 100)) {
+    if (!event || typeof event !== 'object') {
+      dropped += 1;
+      continue;
+    }
+
+    if (featureFlags.tenantTelemetry && !event.tenantId && session) {
+      const identity = callerIdentity(request, session);
+      const tenantId = normalizeTenantId(identity.tenantId);
+      if (tenantId) {
+        event.tenantId = tenantId;
+      }
+    }
+
+    if (telemetry.recordFrontendEvent(event)) {
+      accepted += 1;
+    } else {
+      dropped += 1;
+    }
+  }
+
+  writeJson(response, 202, {
+    accepted: true,
+    count: accepted,
+    dropped,
+  });
+}
+
 function atToday(hours, minutes) {
   const now = new Date();
   const date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
@@ -7548,6 +7781,108 @@ function normalizeCaseStatus(value) {
 
 function normalizeTreatmentPlanStatus(value) {
   return treatmentPlanStatuses.includes(value) ? value : null;
+}
+
+function buildAuditIntelligenceFilters(request, requestUrl, session) {
+  const daysRaw = Number(requestUrl.searchParams.get('days') ?? 7);
+  const days = Number.isFinite(daysRaw) && daysRaw >= 1 && daysRaw <= 90 ? Math.floor(daysRaw) : null;
+  if (!days) return null;
+
+  const limitRaw = Number(requestUrl.searchParams.get('limit') ?? 50);
+  const recentLimit = Number.isFinite(limitRaw) && limitRaw >= 1 && limitRaw <= 200 ? Math.floor(limitRaw) : 50;
+
+  const action = sanitizeAuditFilterValue(requestUrl.searchParams.get('action'), 128);
+  const actorRole = sanitizeAuditFilterValue(requestUrl.searchParams.get('actorRole'), 64);
+  const result = normalizeAuditResult(requestUrl.searchParams.get('result'));
+  if (requestUrl.searchParams.has('result') && !result) return null;
+
+  const role = callerRole(request, session);
+  const requestedTenantId = sanitizeAuditFilterValue(requestUrl.searchParams.get('tenantId'), 64);
+  const tenantId = role === 'platform_admin' ? requestedTenantId : callerTenant(request, session);
+  const fromIso = new Date(Date.now() - (days * 24 * 60 * 60 * 1000)).toISOString();
+
+  const where = ['occurred_at >= ?'];
+  const whereArgs = [new Date(fromIso)];
+
+  if (tenantId) {
+    where.push('tenant_id = ?');
+    whereArgs.push(tenantId);
+  }
+
+  if (action) {
+    where.push('action = ?');
+    whereArgs.push(action);
+  }
+
+  if (actorRole) {
+    where.push('actor_role = ?');
+    whereArgs.push(actorRole);
+  }
+
+  if (result) {
+    if (result === 'denied') {
+      where.push("action LIKE '%.denied%'");
+    } else if (result === 'error') {
+      where.push("(action LIKE '%.failed%' OR action LIKE '%.error%')");
+    } else if (result === 'success') {
+      where.push("action NOT LIKE '%.denied%' AND action NOT LIKE '%.failed%' AND action NOT LIKE '%.error%'");
+    }
+  }
+
+  return {
+    days,
+    fromIso,
+    action,
+    actorRole,
+    result,
+    tenantId,
+    recentLimit,
+    whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '',
+    whereArgs,
+  };
+}
+
+function sanitizeAuditFilterValue(raw, maxLen) {
+  const value = sanitizeStr(raw ?? '', maxLen);
+  if (!value) return null;
+  return value.toLowerCase();
+}
+
+function normalizeAuditResult(raw) {
+  if (typeof raw !== 'string') return null;
+  const value = raw.trim().toLowerCase();
+  if (!value) return null;
+  if (value === 'success' || value === 'denied' || value === 'error') return value;
+  return null;
+}
+
+function inferAuditResultFromAction(action) {
+  const normalized = String(action ?? '').toLowerCase();
+  if (normalized.includes('.denied')) return 'denied';
+  if (normalized.includes('.failed') || normalized.includes('.error')) return 'error';
+  return 'success';
+}
+
+function inferAuditReasonCodeFromAction(action) {
+  const normalized = String(action ?? '').toLowerCase();
+  if (normalized.includes('.denied')) return 'rbac_denied';
+  if (normalized.includes('.failed')) return 'operation_failed';
+  if (normalized.includes('.error')) return 'operation_error';
+  return 'ok';
+}
+
+function inferAuditActorType(actorRole, actorId) {
+  if (actorRole === 'client') return 'user';
+  if (actorRole === 'unknown' || actorId === 'anonymous') return 'anonymous';
+  if (String(actorId ?? '').startsWith('system') || String(actorRole ?? '').startsWith('system')) return 'system';
+  return 'user';
+}
+
+function mapToTopEntries(counter, keyName) {
+  return [...counter.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 12)
+    .map(([key, total]) => ({ [keyName]: key, total }));
 }
 
 function normalizeProgressNoteType(value) {
@@ -8260,6 +8595,7 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/faith/referral-coordination') return '/v1/faith/referral-coordination';
   if (pathname === '/v1/faith/language-preferences') return '/v1/faith/language-preferences';
   if (pathname === '/v1/reporting/overview') return '/v1/reporting/overview';
+  if (pathname === '/v1/audit/intelligence') return '/v1/audit/intelligence';
   if (pathname === '/v1/platform/overview') return '/v1/platform/overview';
   if (pathname === '/v1/platform/tenant-provisioning') return '/v1/platform/tenant-provisioning';
   if (pathname === '/v1/platform/impersonation-sessions') return '/v1/platform/impersonation-sessions';
@@ -8457,6 +8793,11 @@ async function emitAudit(request, action, targetType, targetId, session = null) 
       actorId,
       requestId: requestId || undefined,
     });
+
+    runtimeAuditEvents.push(event);
+    if (runtimeAuditEvents.length > MAX_RUNTIME_AUDIT_EVENTS) {
+      runtimeAuditEvents.splice(0, runtimeAuditEvents.length - MAX_RUNTIME_AUDIT_EVENTS);
+    }
 
     // Always emit to console for structured log aggregation.
     console.log('[AUDIT]', JSON.stringify(event));

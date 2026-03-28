@@ -35,6 +35,8 @@ import {
   patchWaitlistEntry,
   updateAppointmentRecord,
 } from '../lib/clientApi.js';
+import { frontendTelemetry } from '../lib/frontendTelemetry.js';
+import { useSurfaceTelemetry } from '../lib/useSurfaceTelemetry.js';
 import {
   createAvailabilityOverride,
   createSeries,
@@ -1252,8 +1254,14 @@ export default function SchedulingPage({
   };
 
   const handleStatusChange = async (appointment, status) => {
+    const startedAt = performance.now();
     try {
       await updateAppointmentRecord(appointment.id, { status });
+      frontendTelemetry.trackInteraction(activeSchedulingSurface, 'appointment.status_change', performance.now() - startedAt, {
+        workflow: 'scheduling',
+        result: 'success',
+      });
+      frontendTelemetry.trackAction(activeSchedulingSurface, 'appointment.status_change', 'success', { workflow: 'scheduling' });
       notifications.show({
         title: 'Appointment updated',
         message: `Appointment marked ${status}.`,
@@ -1261,6 +1269,15 @@ export default function SchedulingPage({
       });
       await loadScheduling();
     } catch (updateError) {
+      frontendTelemetry.trackInteraction(activeSchedulingSurface, 'appointment.status_change', performance.now() - startedAt, {
+        workflow: 'scheduling',
+        result: 'failure',
+        statusClass: updateError?.statusClass,
+      });
+      frontendTelemetry.trackAction(activeSchedulingSurface, 'appointment.status_change', 'failure', {
+        workflow: 'scheduling',
+        statusClass: updateError?.statusClass,
+      });
       notifications.show({
         title: 'Unable to update appointment',
         message: updateError.message || 'Status change failed.',
@@ -1271,8 +1288,14 @@ export default function SchedulingPage({
 
   const handleDelete = async (appointment) => {
     if (!window.confirm(`Delete appointment for ${appointment.clientName}?`)) return;
+    const startedAt = performance.now();
     try {
       await deleteAppointmentRecord(appointment.id);
+      frontendTelemetry.trackInteraction(activeSchedulingSurface, 'appointment.delete', performance.now() - startedAt, {
+        workflow: 'scheduling',
+        result: 'success',
+      });
+      frontendTelemetry.trackAction(activeSchedulingSurface, 'appointment.delete', 'success', { workflow: 'scheduling' });
       notifications.show({
         title: 'Appointment deleted',
         message: 'The appointment was removed.',
@@ -1280,6 +1303,15 @@ export default function SchedulingPage({
       });
       await loadScheduling();
     } catch (deleteError) {
+      frontendTelemetry.trackInteraction(activeSchedulingSurface, 'appointment.delete', performance.now() - startedAt, {
+        workflow: 'scheduling',
+        result: 'failure',
+        statusClass: deleteError?.statusClass,
+      });
+      frontendTelemetry.trackAction(activeSchedulingSurface, 'appointment.delete', 'failure', {
+        workflow: 'scheduling',
+        statusClass: deleteError?.statusClass,
+      });
       notifications.show({
         title: 'Unable to delete appointment',
         message: deleteError.message || 'Delete failed.',
@@ -1330,6 +1362,25 @@ export default function SchedulingPage({
     if (!selectedCounselorName || view !== 'counselor') return null;
     return calendarPayload.availability.find((entry) => entry.counselorName === selectedCounselorName) || null;
   }, [calendarPayload.availability, selectedCounselorName, view]);
+
+  const activeSchedulingSurface = activeTab === 'appointments'
+    ? `scheduling.${view}`
+    : `scheduling.${activeTab}`;
+  const emptyState = activeTab !== 'appointments'
+    ? null
+    : loading
+      ? null
+      : error
+        ? null
+        : dayAppointments.length === 0
+          ? 'empty'
+          : null;
+
+  useSurfaceTelemetry(activeSchedulingSurface, {
+    surfaceKind: activeTab === 'appointments' ? 'subview' : 'tab',
+    workflow: 'scheduling',
+    emptyState,
+  });
 
   return (
     <Stack gap="md" p="md">

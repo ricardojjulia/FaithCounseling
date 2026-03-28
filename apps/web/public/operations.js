@@ -1,6 +1,8 @@
 /* Operations Studio — all button handlers */
 'use strict';
 
+window.faithTelemetry?.start({ surfaceId: 'operations', surfaceKind: 'page' });
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function el(id) { return document.getElementById(id); }
@@ -37,46 +39,74 @@ function setBusy(btn, busy) {
 }
 
 async function apiGet(path) {
-  const res = await fetch(`/api${path}`, { credentials: 'include' });
-  const payload = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(payload.error || `${res.status} ${res.statusText}`);
-  return payload;
+  return window.faithTelemetry?.instrumentRequest(`/api${path}`, 'GET', async () => {
+    const res = await fetch(`/api${path}`, { credentials: 'include' });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const error = new Error(payload.error || `${res.status} ${res.statusText}`);
+      error.status = res.status;
+      error.statusClass = `${Math.floor(res.status / 100)}xx`;
+      throw error;
+    }
+    return payload;
+  }, { workflow: 'operations' }) ?? Promise.resolve({});
 }
 
 async function apiPost(path, body) {
-  const res = await fetch(`/api${path}`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const payload = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(payload.error || `${res.status} ${res.statusText}`);
-  return payload;
+  return window.faithTelemetry?.instrumentRequest(`/api${path}`, 'POST', async () => {
+    const res = await fetch(`/api${path}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const error = new Error(payload.error || `${res.status} ${res.statusText}`);
+      error.status = res.status;
+      error.statusClass = `${Math.floor(res.status / 100)}xx`;
+      throw error;
+    }
+    return payload;
+  }, { workflow: 'operations' }) ?? Promise.resolve({});
 }
 
 async function apiPatch(path, body) {
-  const res = await fetch(`/api${path}`, {
-    method: 'PATCH',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const payload = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(payload.error || `${res.status} ${res.statusText}`);
-  return payload;
+  return window.faithTelemetry?.instrumentRequest(`/api${path}`, 'PATCH', async () => {
+    const res = await fetch(`/api${path}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const error = new Error(payload.error || `${res.status} ${res.statusText}`);
+      error.status = res.status;
+      error.statusClass = `${Math.floor(res.status / 100)}xx`;
+      throw error;
+    }
+    return payload;
+  }, { workflow: 'operations' }) ?? Promise.resolve({});
 }
 
 async function apiPut(path, body) {
-  const res = await fetch(`/api${path}`, {
-    method: 'PUT',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const payload = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(payload.error || `${res.status} ${res.statusText}`);
-  return payload;
+  return window.faithTelemetry?.instrumentRequest(`/api${path}`, 'PUT', async () => {
+    const res = await fetch(`/api${path}`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const error = new Error(payload.error || `${res.status} ${res.statusText}`);
+      error.status = res.status;
+      error.statusClass = `${Math.floor(res.status / 100)}xx`;
+      throw error;
+    }
+    return payload;
+  }, { workflow: 'operations' }) ?? Promise.resolve({});
 }
 
 function pretty(obj) { return JSON.stringify(obj, null, 2); }
@@ -102,6 +132,7 @@ async function checkConnection() {
 function initTabs() {
   document.querySelectorAll('.tab-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
+      const startedAt = performance.now();
       document.querySelectorAll('.tab-btn').forEach((b) => {
         b.classList.remove('active');
         b.setAttribute('aria-selected', 'false');
@@ -111,6 +142,10 @@ function initTabs() {
       btn.setAttribute('aria-selected', 'true');
       const panel = el(`tab-${btn.dataset.tab}`);
       if (panel) panel.classList.add('active');
+      window.faithTelemetry?.trackInteraction('tab.switch', performance.now() - startedAt, {
+        workflow: 'operations',
+        result: 'success',
+      });
     });
   });
 }
@@ -465,6 +500,38 @@ function initLanguage() {
   });
 }
 
+function initAuditIntelligence() {
+  el('refreshAuditBtn')?.addEventListener('click', async () => {
+    const btn = el('refreshAuditBtn');
+    setBusy(btn, true);
+    clearStatus('auditStatus');
+
+    const params = new URLSearchParams();
+    const days = String(el('auditWindowDays')?.value || '7').trim();
+    const result = String(el('auditResultFilter')?.value || '').trim();
+    const actorRole = String(el('auditRoleFilter')?.value || '').trim();
+    const action = String(el('auditActionFilter')?.value || '').trim();
+
+    if (days) params.set('days', days);
+    if (result) params.set('result', result);
+    if (actorRole) params.set('actorRole', actorRole);
+    if (action) params.set('action', action);
+    params.set('limit', '50');
+
+    try {
+      const data = await apiGet(`/v1/audit/intelligence?${params.toString()}`);
+      el('auditSummary').value = pretty(data.summary ?? {});
+      el('auditEvents').value = pretty(data.events ?? []);
+      const count = Array.isArray(data.events) ? data.events.length : 0;
+      setStatus('auditStatus', `Loaded ${count} event(s) for investigation.`, 'success');
+    } catch (err) {
+      setStatus('auditStatus', `Error: ${err.message}`, 'error');
+    } finally {
+      setBusy(btn, false);
+    }
+  });
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -474,4 +541,5 @@ document.addEventListener('DOMContentLoaded', () => {
   initPlatform();
   initData();
   initLanguage();
+  initAuditIntelligence();
 });

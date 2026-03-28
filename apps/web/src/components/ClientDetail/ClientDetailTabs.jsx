@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Tabs, Box } from '@mantine/core';
 import DemographicsTab    from './tabs/DemographicsTab.jsx';
 import ContactsTab        from './tabs/ContactsTab.jsx';
@@ -6,6 +7,7 @@ import ClinicalHistoryTab from './tabs/ClinicalHistoryTab.jsx';
 import DiagnosesTab       from './tabs/DiagnosesTab.jsx';
 import FaithProfileTab    from './tabs/FaithProfileTab.jsx';
 import LegalAdminTab      from './tabs/LegalAdminTab.jsx';
+import { useSurfaceTelemetry } from '../../lib/useSurfaceTelemetry.js';
 
 const TABS = [
   { id: 'demographics', label: 'Demographics' },
@@ -18,8 +20,21 @@ const TABS = [
 ];
 
 export default function ClientDetailTabs({ client, clientId, currentUser }) {
+  const [activeTab, setActiveTab] = useState('demographics');
+  const activeSurfaceId = {
+    demographics: 'client.demographics',
+    insurance: 'client.insurance',
+    contacts: 'client.contacts',
+    clinical: 'client.clinical',
+    diagnoses: 'client.diagnoses',
+    faith: 'client.faith',
+    legal: 'client.legal',
+  }[activeTab] ?? 'client.demographics';
+
+  useSurfaceTelemetry(activeSurfaceId, { surfaceKind: 'tab', workflow: 'client_detail' });
+
   return (
-    <Tabs defaultValue="demographics" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+    <Tabs value={activeTab} onChange={(value) => setActiveTab(value || 'demographics')} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <Tabs.List style={{ borderBottom: '1px solid var(--mantine-color-default-border)', flexShrink: 0, overflowX: 'auto', flexWrap: 'nowrap' }}>
         {TABS.map((t) => <Tabs.Tab key={t.id} value={t.id} style={{ whiteSpace: 'nowrap' }}>{t.label}</Tabs.Tab>)}
       </Tabs.List>
