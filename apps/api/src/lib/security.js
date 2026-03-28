@@ -202,6 +202,7 @@ export function enforceRbac(request, response, route, session = null) {
   if (route === '/v1/telemetry/events') return false;
   if (route === '/v1/telemetry/vitals') return false;
   if (route === '/v1/telemetry/summary') return false;
+  if (route === '/v1/monitoring/db') return false;
 
   // Derive role: prefer verified session; fall back to header in dev only.
   let role;

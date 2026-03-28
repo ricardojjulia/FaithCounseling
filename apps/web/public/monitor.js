@@ -38,6 +38,23 @@ function fmtPercent(value) {
   const num = Number(value);
   return Number.isFinite(num) ? `${Math.round(num)}%` : '—';
 }
+function fmtBytes(bytes) {
+  if (bytes == null || !Number.isFinite(Number(bytes))) return '—';
+  const n = Number(bytes);
+  if (n >= 1073741824) return `${(n / 1073741824).toFixed(1)} GB`;
+  if (n >= 1048576)    return `${(n / 1048576).toFixed(1)} MB`;
+  if (n >= 1024)       return `${(n / 1024).toFixed(1)} KB`;
+  return `${n} B`;
+}
+function fmtUptimeLong(sec) {
+  if (!sec) return '—';
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
 function methodBadge(method) {
   const cls = { GET: 'badge-get', POST: 'badge-post', PATCH: 'badge-patch', DELETE: 'badge-delete' };
   return `<span class="badge ${cls[method?.toUpperCase()] ?? ''}">${method ?? '?'}</span>`;
@@ -447,6 +464,72 @@ function initOtelSettings() {
   });
 }
 
+// ─── DB panel ─────────────────────────────────────────────────────────────────
+function updateDbPanel(data) {
+  if (!data || data.mode === 'unavailable') {
+    const label = $('dbEngineLabel');
+    if (label) label.textContent = 'MySQL 8 · NOT CONFIGURED';
+    setText('dbUptime', '—');
+    setText('dbConns',  '—');
+    setText('dbBufHit', '—');
+    setText('dbQryTotal', '—');
+    setText('dbSlowQry', '—');
+    setText('dbThroughput', '—');
+    const grid = $('dbTableGrid');
+    if (grid) grid.innerHTML = '<div class="empty-state">DB not configured</div>';
+    return;
+  }
+
+  // Uptime
+  setText('dbUptime', fmtUptimeLong(data.uptime?.seconds));
+
+  // Connections
+  const { current = 0, running = 0, maxUsed = 0, maxAllowed = 0 } = data.connections ?? {};
+  setText('dbConns', current);
+  setText('dbConnsSub', `${running} running · max used ${maxUsed}${maxAllowed ? ` / ${maxAllowed}` : ''}`);
+
+  // Buffer pool
+  const { hitRatio = 0, pagesUsed = 0, pagesTotal = 0 } = data.bufferPool ?? {};
+  setText('dbBufHit', `${hitRatio.toFixed(1)}%`);
+  setText('dbBufSub', `${pagesUsed.toLocaleString()} / ${pagesTotal.toLocaleString()} pages`);
+
+  // Queries
+  const { total = 0, slow = 0, selects = 0, inserts = 0, updates = 0, deletes = 0 } = data.queries ?? {};
+  setText('dbQryTotal', total.toLocaleString());
+  setText('dbQrySub', `${selects.toLocaleString()} S / ${inserts.toLocaleString()} I / ${updates.toLocaleString()} U / ${deletes.toLocaleString()} D`);
+
+  // Slow queries (highlight if non-zero)
+  const slowEl = $('dbSlowQry');
+  if (slowEl) {
+    slowEl.textContent = slow.toLocaleString();
+    slowEl.style.color = slow > 0 ? 'var(--amber)' : '#fff';
+  }
+
+  // Throughput
+  const { bytesReceived = 0, bytesSent = 0 } = data.throughput ?? {};
+  setText('dbThroughput', fmtBytes(bytesReceived + bytesSent));
+  // keep sub-line static ("received / sent") — already in HTML
+
+  // Table grid
+  const tableGrid = $('dbTableGrid');
+  const tables = data.tables ?? [];
+  const dbTableNote = $('dbTableNote');
+  if (dbTableNote) dbTableNote.textContent = `${tables.length} table${tables.length !== 1 ? 's' : ''}`;
+
+  if (tableGrid) {
+    if (!tables.length) {
+      tableGrid.innerHTML = '<div class="empty-state">No tables found</div>';
+    } else {
+      tableGrid.innerHTML = tables.map((t) => `
+        <div class="db-table-pill">
+          <div class="db-table-pill-name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</div>
+          <div class="db-table-pill-rows">${(t.rows ?? 0).toLocaleString()}</div>
+          <div class="db-table-pill-size">${t.sizeKb >= 1024 ? `${(t.sizeKb / 1024).toFixed(1)} MB` : `${t.sizeKb} KB`}</div>
+        </div>`).join('');
+    }
+  }
+}
+
 // ─── Main refresh ─────────────────────────────────────────────────────────────
 async function doRefresh() {
   const chip = $('healthChip');
@@ -454,15 +537,17 @@ async function doRefresh() {
   const startedAt = performance.now();
 
   try {
-    const [apiHealth, apiSummaryResp, webSummaryResp] = await Promise.allSettled([
+    const [apiHealth, apiSummaryResp, webSummaryResp, dbStatsResp] = await Promise.allSettled([
       fetch('/api/health', { credentials: 'include' }).then((r) => r.json()),
       fetch('/api/v1/telemetry/summary', { credentials: 'include' }).then((r) => r.json()),
       fetch('/telemetry/summary', { credentials: 'include' }).then((r) => r.json()).catch(() => ({})),
+      fetch('/api/v1/monitoring/db', { credentials: 'include' }).then((r) => r.json()).catch(() => null),
     ]);
 
     const health = apiHealth.status === 'fulfilled' ? apiHealth.value : null;
     const apiData = apiSummaryResp.status === 'fulfilled' ? apiSummaryResp.value : null;
     const webData = webSummaryResp.status === 'fulfilled' ? webSummaryResp.value : null;
+    const dbStats = dbStatsResp.status === 'fulfilled' ? dbStatsResp.value : null;
     const sum = apiData?.summary ?? {};
 
     // Health chip
@@ -507,6 +592,7 @@ async function doRefresh() {
     updateUiSummary(sum.overall ?? {}, sum.frontend ?? {}, sum.surfaces ?? [], apiData?.exportedViaOtel ?? false);
     updateHealthChecks(sum.health ?? {});
     renderSurfaceTable(sum.surfaces ?? []);
+    updateDbPanel(dbStats);
 
     // Errors drill-down
     lastErrors = sum.recentErrors ?? [];

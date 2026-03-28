@@ -47,6 +47,7 @@ function rowToLifecycle(row) {
 }
 
 function rowToAppointment(row) {
+  const startsAt = row.starts_at ?? row.scheduled_at ?? null;
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -56,7 +57,7 @@ function rowToAppointment(row) {
     counselorName: decrypt(row.counselor_name_enc),
     appointmentType: row.appointment_type,
     status: row.status,
-    scheduledAt: row.scheduled_at,
+    scheduledAt: startsAt,
     durationMinutes: row.duration_minutes,
     locationId: row.location_id ?? null,
     remoteSession: Boolean(row.remote_session),
@@ -349,12 +350,13 @@ export async function createAppointment({
   locationId = null,
   remoteSession = false,
 }) {
+  const scheduledAtSql = toSqlTimestamp(scheduledAt);
   await pool.query(
     `INSERT INTO appointments
        (id, tenant_id, client_id, counselor_id, client_name_enc, counselor_name_enc,
-        appointment_type, status, scheduled_at, duration_minutes,
+        appointment_type, status, starts_at, scheduled_at, duration_minutes,
         location_id, remote_session)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       tenantId,
@@ -364,7 +366,8 @@ export async function createAppointment({
       encrypt(counselorName),
       appointmentType,
       status,
-      scheduledAt,
+      scheduledAtSql,
+      scheduledAtSql,
       durationMinutes,
       locationId,
       remoteSession ? 1 : 0,
@@ -409,8 +412,11 @@ export async function updateAppointment(id, tenantId, fields) {
     values.push(fields.status);
   }
   if (fields.scheduledAt !== undefined) {
+    const scheduledAtSql = toSqlTimestamp(fields.scheduledAt);
+    setClauses.push('starts_at = ?');
+    values.push(scheduledAtSql);
     setClauses.push('scheduled_at = ?');
-    values.push(fields.scheduledAt);
+    values.push(scheduledAtSql);
   }
   if (fields.durationMinutes !== undefined) {
     setClauses.push('duration_minutes = ?');
@@ -447,4 +453,16 @@ export async function deleteAppointment(id, tenantId) {
     [id, tenantId],
   );
   return { deleted: true };
+}
+
+function toSqlTimestamp(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const hours = String(date.getUTCHours()).padStart(2, '0');
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }

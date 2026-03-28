@@ -1354,6 +1354,11 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/monitoring/db' && request.method === 'GET') {
+      await handleMonitoringDb(response);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/telemetry/summary' && request.method === 'GET') {
       writeJson(response, 200, {
         service: 'api',
@@ -8547,6 +8552,84 @@ function sanitizeStr(raw, maxLen = 200) {
   return cleaned.slice(0, maxLen);
 }
 
+async function handleMonitoringDb(response) {
+  if (!process.env.DB_NAME) {
+    writeJson(response, 200, { collectedAt: new Date().toISOString(), mode: 'unavailable', reason: 'DB_NAME not configured' });
+    return;
+  }
+
+  const [allStatusRows] = await pool.query('SHOW GLOBAL STATUS');
+  const [allVarRows]    = await pool.query('SHOW GLOBAL VARIABLES');
+
+  const WANTED_STATUS = new Set([
+    'Uptime','Threads_connected','Threads_running','Max_used_connections',
+    'Questions','Slow_queries','Com_select','Com_insert','Com_update','Com_delete',
+    'Innodb_buffer_pool_pages_total','Innodb_buffer_pool_pages_free',
+    'Innodb_buffer_pool_read_requests','Innodb_buffer_pool_reads',
+    'Bytes_received','Bytes_sent',
+  ]);
+  const WANTED_VARS = new Set(['max_connections','innodb_buffer_pool_size']);
+
+  const statusRows = allStatusRows.filter((r) => WANTED_STATUS.has(r.Variable_name))
+    .map((r) => ({ name: r.Variable_name, value: r.Value }));
+  const varRows = allVarRows.filter((r) => WANTED_VARS.has(r.Variable_name))
+    .map((r) => ({ name: r.Variable_name, value: r.Value }));
+
+  const [tableRows] = await pool.query(
+    `SELECT table_name AS name,
+            COALESCE(table_rows, 0) AS row_count,
+            ROUND((COALESCE(data_length,0) + COALESCE(index_length,0)) / 1024, 1) AS size_kb
+     FROM information_schema.TABLES
+     WHERE table_schema = ? AND table_type = 'BASE TABLE'
+     ORDER BY (COALESCE(data_length,0) + COALESCE(index_length,0)) DESC`,
+    [process.env.DB_NAME]
+  );
+
+  const stat = Object.fromEntries(statusRows.map((r) => [r.name, Number(r.value)]));
+  const vars = Object.fromEntries(varRows.map((r) => [r.name, Number(r.value)]));
+
+  const bpTotal = stat.Innodb_buffer_pool_pages_total || 1;
+  const bpFree  = stat.Innodb_buffer_pool_pages_free  || 0;
+  const bpReads = stat.Innodb_buffer_pool_reads        || 0;
+  const bpReqs  = stat.Innodb_buffer_pool_read_requests || 1;
+
+  writeJson(response, 200, {
+    collectedAt: new Date().toISOString(),
+    mode: 'live',
+    uptime: { seconds: stat.Uptime || 0 },
+    connections: {
+      current:    stat.Threads_connected    || 0,
+      running:    stat.Threads_running      || 0,
+      maxUsed:    stat.Max_used_connections || 0,
+      maxAllowed: vars.max_connections      || 0,
+    },
+    queries: {
+      total:   stat.Questions    || 0,
+      slow:    stat.Slow_queries || 0,
+      selects: stat.Com_select   || 0,
+      inserts: stat.Com_insert   || 0,
+      updates: stat.Com_update   || 0,
+      deletes: stat.Com_delete   || 0,
+    },
+    bufferPool: {
+      pagesTotal: bpTotal,
+      pagesFree:  bpFree,
+      pagesUsed:  bpTotal - bpFree,
+      hitRatio:   bpReqs > 0 ? Number(((1 - bpReads / bpReqs) * 100).toFixed(2)) : 100,
+      sizeBytes:  vars.innodb_buffer_pool_size || 0,
+    },
+    throughput: {
+      bytesReceived: stat.Bytes_received || 0,
+      bytesSent:     stat.Bytes_sent     || 0,
+    },
+    tables: tableRows.map((r) => ({
+      name:   r.name,
+      rows:   Number(r.row_count) || 0,
+      sizeKb: Number(r.size_kb)   || 0,
+    })),
+  });
+}
+
 function resolveRoute(pathname) {
   if (pathname === '/health' || pathname === '/health/live') return '/health/live';
   if (pathname === '/health/ready') return '/health/ready';
@@ -8572,6 +8655,7 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/reminders') return '/v1/reminders';
   if (pathname === '/v1/waitlist') return '/v1/waitlist';
   if (pathname === '/v1/operations/summary') return '/v1/operations/summary';
+  if (pathname === '/v1/monitoring/db') return '/v1/monitoring/db';
   if (pathname === '/v1/billing/service-codes') return '/v1/billing/service-codes';
   if (pathname === '/v1/billing/fee-schedules') return '/v1/billing/fee-schedules';
   if (pathname === '/v1/billing/invoices') return '/v1/billing/invoices';

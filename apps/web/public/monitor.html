@@ -409,6 +409,27 @@
       color: var(--dim); margin: 24px 0 10px; display: flex; align-items: center; gap: 8px;
     }
     .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* ── DB Engine panel ─────────────────────────────────────── */
+    .db-engine-layout { display: flex; gap: 28px; align-items: flex-start; }
+    .db-anim-wrap { flex: 0 0 180px; display: flex; justify-content: center; align-items: center; }
+    .db-anim-svg { width: 180px; height: 180px; overflow: visible; }
+    .db-metrics-grid { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    @media (max-width: 900px) {
+      .db-engine-layout { flex-direction: column; }
+      .db-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .db-metric-group {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;
+    }
+    .db-metric-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 6px; }
+    .db-metric-value { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -.01em; line-height: 1; font-variant-numeric: tabular-nums; }
+    .db-metric-sub { font-size: 11px; color: var(--muted); margin-top: 5px; }
+    .db-table-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-top: 10px; }
+    .db-table-pill { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; }
+    .db-table-pill-name { font-size: 11px; color: var(--indigo2); font-family: 'Menlo','Monaco',monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .db-table-pill-rows { font-size: 18px; font-weight: 700; color: #fff; margin-top: 2px; font-variant-numeric: tabular-nums; }
+    .db-table-pill-size { font-size: 10px; color: var(--muted); }
   </style>
 </head>
 <body>
@@ -575,6 +596,147 @@
           <tr><td colspan="8" class="empty-state">No surface telemetry recorded yet.</td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- Database Engine -->
+  <div class="section-label">Database Engine</div>
+  <div class="card" style="margin-bottom:20px">
+    <div class="db-engine-layout">
+      <!-- Animated SVG -->
+      <div class="db-anim-wrap">
+        <svg class="db-anim-svg" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="dbGlow" x="-80%" y="-80%" width="260%" height="260%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <linearGradient id="cylBody" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%"   stop-color="#0d2444"/>
+              <stop offset="45%"  stop-color="#163566"/>
+              <stop offset="100%" stop-color="#091829"/>
+            </linearGradient>
+            <radialGradient id="cylTop" cx="50%" cy="40%" r="60%">
+              <stop offset="0%"   stop-color="#60a5fa" stop-opacity="0.5"/>
+              <stop offset="100%" stop-color="#1d4ed8" stop-opacity="0.9"/>
+            </radialGradient>
+            <!-- Orbit ellipse traced as SVG path: cx=90 cy=108 rx=62 ry=22 -->
+            <path id="dbOrbit" d="M 28,108 A 62,22 0 0 1 152,108 A 62,22 0 0 1 28,108"/>
+          </defs>
+
+          <!-- Pulsing ground rings -->
+          <ellipse cx="90" cy="143" rx="44" ry="13" fill="none" stroke="#3b82f6" stroke-width="1">
+            <animate attributeName="rx" values="44;76;76" dur="2.8s" repeatCount="indefinite"/>
+            <animate attributeName="ry" values="13;24;24" dur="2.8s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.7;0;0" dur="2.8s" repeatCount="indefinite"/>
+          </ellipse>
+          <ellipse cx="90" cy="143" rx="44" ry="13" fill="none" stroke="#6366f1" stroke-width="0.8">
+            <animate attributeName="rx" values="44;76;76" dur="2.8s" begin="0.93s" repeatCount="indefinite"/>
+            <animate attributeName="ry" values="13;24;24" dur="2.8s" begin="0.93s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.55;0;0" dur="2.8s" begin="0.93s" repeatCount="indefinite"/>
+          </ellipse>
+          <ellipse cx="90" cy="143" rx="44" ry="13" fill="none" stroke="#22d3ee" stroke-width="0.6">
+            <animate attributeName="rx" values="44;76;76" dur="2.8s" begin="1.86s" repeatCount="indefinite"/>
+            <animate attributeName="ry" values="13;24;24" dur="2.8s" begin="1.86s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.4;0;0" dur="2.8s" begin="1.86s" repeatCount="indefinite"/>
+          </ellipse>
+
+          <!-- Cylinder body -->
+          <rect x="46" y="88" width="88" height="55" fill="url(#cylBody)" rx="3"/>
+
+          <!-- Scan lines -->
+          <line x1="46" y1="103" x2="134" y2="103" stroke="#3b82f6" stroke-width="0.5" opacity="0.22"/>
+          <line x1="46" y1="118" x2="134" y2="118" stroke="#3b82f6" stroke-width="0.5" opacity="0.22"/>
+          <line x1="46" y1="133" x2="134" y2="133" stroke="#3b82f6" stroke-width="0.5" opacity="0.22"/>
+
+          <!-- Cylinder internal disk rings (stacking effect) -->
+          <ellipse cx="90" cy="103" rx="44" ry="13" fill="none" stroke="#3b82f6" stroke-width="0.8" opacity="0.32"/>
+          <ellipse cx="90" cy="118" rx="44" ry="13" fill="none" stroke="#3b82f6" stroke-width="0.8" opacity="0.2"/>
+
+          <!-- Cylinder bottom ellipse -->
+          <ellipse cx="90" cy="143" rx="44" ry="13" fill="#091829" stroke="#1e40af" stroke-width="1.2"/>
+
+          <!-- Cylinder top ellipse (glowing cap) -->
+          <ellipse cx="90" cy="88" rx="44" ry="13" fill="url(#cylTop)" stroke="#60a5fa" stroke-width="1.5" filter="url(#dbGlow)">
+            <animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite"/>
+          </ellipse>
+
+          <!-- Top center pulse dot -->
+          <circle cx="90" cy="88" r="4.5" fill="#93c5fd" filter="url(#dbGlow)">
+            <animate attributeName="r" values="3;5.5;3" dur="1.8s" repeatCount="indefinite"/>
+            <animate attributeName="fill-opacity" values="0.7;1;0.7" dur="1.8s" repeatCount="indefinite"/>
+          </circle>
+
+          <!-- Data stream from above -->
+          <line x1="90" y1="35" x2="90" y2="75" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.7">
+            <animate attributeName="stroke-dashoffset" values="14;0" dur="0.65s" repeatCount="indefinite"/>
+          </line>
+          <circle cx="90" r="2.5" fill="#60a5fa" filter="url(#dbGlow)">
+            <animate attributeName="cy" values="37;75;75" dur="0.65s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="1;0.3;0" dur="0.65s" repeatCount="indefinite"/>
+          </circle>
+
+          <!-- Orbiting packet 1 — cyan -->
+          <circle r="4.5" fill="#22d3ee" filter="url(#dbGlow)">
+            <animateMotion dur="3.2s" repeatCount="indefinite"><mpath href="#dbOrbit"/></animateMotion>
+            <animate attributeName="opacity" values="1;0.4;1" dur="3.2s" repeatCount="indefinite"/>
+          </circle>
+
+          <!-- Orbiting packet 2 — indigo, half-cycle offset -->
+          <circle r="3.2" fill="#818cf8" filter="url(#dbGlow)">
+            <animateMotion dur="3.2s" begin="-1.6s" repeatCount="indefinite"><mpath href="#dbOrbit"/></animateMotion>
+            <animate attributeName="opacity" values="0.6;1;0.6" dur="3.2s" begin="-1.6s" repeatCount="indefinite"/>
+          </circle>
+
+          <!-- Orbiting packet 3 — amber, faster -->
+          <circle r="2.5" fill="#f59e0b" filter="url(#dbGlow)">
+            <animateMotion dur="2.1s" begin="-0.5s" repeatCount="indefinite"><mpath href="#dbOrbit"/></animateMotion>
+          </circle>
+
+          <!-- Status label -->
+          <text x="90" y="170" text-anchor="middle" font-family="monospace" font-size="9" fill="#60a5fa" opacity="0.9" id="dbEngineLabel">MySQL 8 · ONLINE</text>
+        </svg>
+      </div>
+
+      <!-- Metrics grid -->
+      <div class="db-metrics-grid">
+        <div class="db-metric-group">
+          <div class="db-metric-title">Uptime</div>
+          <div class="db-metric-value" id="dbUptime">—</div>
+        </div>
+        <div class="db-metric-group">
+          <div class="db-metric-title">Connections</div>
+          <div class="db-metric-value" id="dbConns">—</div>
+          <div class="db-metric-sub" id="dbConnsSub">active / running</div>
+        </div>
+        <div class="db-metric-group">
+          <div class="db-metric-title">Buffer Pool Hit</div>
+          <div class="db-metric-value" id="dbBufHit">—</div>
+          <div class="db-metric-sub" id="dbBufSub">pages used / total</div>
+        </div>
+        <div class="db-metric-group">
+          <div class="db-metric-title">Total Queries</div>
+          <div class="db-metric-value" id="dbQryTotal">—</div>
+          <div class="db-metric-sub" id="dbQrySub">— S / — I / — U / — D</div>
+        </div>
+        <div class="db-metric-group">
+          <div class="db-metric-title">Slow Queries</div>
+          <div class="db-metric-value" id="dbSlowQry">—</div>
+        </div>
+        <div class="db-metric-group">
+          <div class="db-metric-title">Throughput</div>
+          <div class="db-metric-value" id="dbThroughput">—</div>
+          <div class="db-metric-sub">received / sent</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table breakdown -->
+    <div style="margin-top:18px">
+      <div class="card-title">Table Storage &amp; Row Estimates <span id="dbTableNote">—</span></div>
+      <div class="db-table-grid" id="dbTableGrid">
+        <div class="empty-state">Loading…</div>
+      </div>
     </div>
   </div>
 

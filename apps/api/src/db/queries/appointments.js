@@ -12,10 +12,14 @@ const APPOINTMENT_SELECT = `
     a.counselor_name_enc,
     a.appointment_type,
     a.status,
+    a.starts_at,
+    a.ends_at,
+    a.location_name AS stored_location_name,
+    a.timezone,
     a.scheduled_at,
     a.duration_minutes,
     a.location_id,
-    l.name AS location_name,
+    l.name AS resolved_location_name,
     a.remote_session,
     a.created_at,
     a.updated_at
@@ -30,11 +34,15 @@ const APPOINTMENT_SELECT = `
 // ---------------------------------------------------------------------------
 
 function rowToAppointment(row) {
-  const startsAtIso = toIsoString(row.scheduled_at);
-  const durationMinutes = Number.isFinite(Number(row.duration_minutes)) ? Number(row.duration_minutes) : 50;
-  const endsAtIso = startsAtIso
-    ? new Date(new Date(startsAtIso).getTime() + (durationMinutes * 60_000)).toISOString()
-    : null;
+  const startsAtIso = toIsoString(row.starts_at ?? row.scheduled_at);
+  const storedEndsAtIso = toIsoString(row.ends_at);
+  const fallbackDurationMinutes = Number.isFinite(Number(row.duration_minutes)) ? Number(row.duration_minutes) : 50;
+  const endsAtIso = storedEndsAtIso ?? (
+    startsAtIso
+      ? new Date(new Date(startsAtIso).getTime() + (fallbackDurationMinutes * 60_000)).toISOString()
+      : null
+  );
+  const durationMinutes = computeDurationMinutes(startsAtIso, endsAtIso);
 
   return {
     id: row.id,
@@ -47,10 +55,10 @@ function rowToAppointment(row) {
     status: row.status,
     appointmentType: row.appointment_type,
     locationId: row.location_id,
-    locationName: row.location_name ?? (row.remote_session ? 'Remote Session' : null),
+    locationName: row.stored_location_name ?? row.resolved_location_name ?? (row.remote_session ? 'Remote Session' : null),
     remoteSession: Boolean(row.remote_session),
     durationMinutes,
-    timezone: 'UTC',
+    timezone: row.timezone ?? 'UTC',
     createdAt: row.created_at,
   };
 }
@@ -140,7 +148,7 @@ export async function listAppointments(tenantId) {
   const [rows] = await pool.query(
     `${APPOINTMENT_SELECT}
      WHERE a.tenant_id = ?
-     ORDER BY a.scheduled_at ASC`,
+     ORDER BY COALESCE(a.starts_at, a.scheduled_at) ASC`,
     [tenantId]
   );
   return rows.map(rowToAppointment);
@@ -169,28 +177,35 @@ export async function createAppointment({
   appointmentType,
   locationName,
   remoteSession,
+  timezone,
 }) {
-  const scheduledAt = toSqlTimestamp(startsAt);
+  const startsAtSql = toSqlTimestamp(startsAt);
+  const endsAtSql = toSqlTimestamp(endsAt);
   const durationMinutes = computeDurationMinutes(startsAt, endsAt);
   const locationId = remoteSession ? null : await resolveLocationId(tenantId, locationName);
+  const effectiveLocationName = remoteSession ? 'Remote Session' : (locationName?.trim() || 'Main Office');
 
   await pool.query(
     `INSERT INTO appointments
        (id, tenant_id, client_id, client_name_enc, counselor_name_enc,
-        scheduled_at, duration_minutes, status, appointment_type, location_id,
-        remote_session)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        starts_at, ends_at, scheduled_at, duration_minutes, status, appointment_type,
+        location_id, location_name, timezone, remote_session)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       tenantId,
       clientId,
       encrypt(clientName),
       encrypt(counselorName),
-      scheduledAt,
+      startsAtSql,
+      endsAtSql,
+      startsAtSql,
       durationMinutes,
       status,
       appointmentType,
       locationId,
+      effectiveLocationName,
+      timezone ?? 'UTC',
       remoteSession ? 1 : 0,
     ]
   );
@@ -213,7 +228,17 @@ export async function updateAppointment(id, tenantId, fields) {
     values.push(encrypt(fields.counselorName));
   }
   if (fields.clientId !== undefined) { setClauses.push('client_id = ?'); values.push(fields.clientId); }
-  if (fields.startsAt !== undefined) { setClauses.push('scheduled_at = ?'); values.push(toSqlTimestamp(fields.startsAt)); }
+  if (fields.startsAt !== undefined) {
+    const startsAtSql = toSqlTimestamp(fields.startsAt);
+    setClauses.push('starts_at = ?');
+    values.push(startsAtSql);
+    setClauses.push('scheduled_at = ?');
+    values.push(startsAtSql);
+  }
+  if (fields.endsAt !== undefined) {
+    setClauses.push('ends_at = ?');
+    values.push(toSqlTimestamp(fields.endsAt));
+  }
   if (fields.status !== undefined) { setClauses.push('status = ?'); values.push(fields.status); }
   if (fields.appointmentType !== undefined) { setClauses.push('appointment_type = ?'); values.push(fields.appointmentType); }
   if (fields.locationName !== undefined) {
@@ -222,11 +247,19 @@ export async function updateAppointment(id, tenantId, fields) {
       : await resolveLocationId(tenantId, fields.locationName);
     setClauses.push('location_id = ?');
     values.push(locationId);
+    setClauses.push('location_name = ?');
+    values.push(fields.remoteSession === true ? 'Remote Session' : (fields.locationName?.trim() || 'Main Office'));
   }
   if (fields.remoteSession !== undefined) { setClauses.push('remote_session = ?'); values.push(fields.remoteSession ? 1 : 0); }
   if (fields.remoteSession === true && fields.locationName === undefined) {
     setClauses.push('location_id = ?');
     values.push(null);
+    setClauses.push('location_name = ?');
+    values.push('Remote Session');
+  }
+  if (fields.timezone !== undefined) {
+    setClauses.push('timezone = ?');
+    values.push(fields.timezone);
   }
 
   if (fields.startsAt !== undefined || fields.endsAt !== undefined) {
@@ -260,8 +293,8 @@ export async function listAppointmentsByDateRange(tenantId, startDate, endDate) 
   const [rows] = await pool.query(
     `${APPOINTMENT_SELECT}
      WHERE a.tenant_id = ?
-       AND a.scheduled_at BETWEEN ? AND ?
-     ORDER BY a.scheduled_at ASC`,
+       AND COALESCE(a.starts_at, a.scheduled_at) BETWEEN ? AND ?
+     ORDER BY COALESCE(a.starts_at, a.scheduled_at) ASC`,
     [tenantId, sqlStart, sqlEnd]
   );
   return rows.map(rowToAppointment);
@@ -586,8 +619,8 @@ export async function updateSeries(id, tenantId, fields) {
 export async function getUtilizationSummary(tenantId, from, to, counselorId) {
   const conditions = ['a.tenant_id = ?'];
   const values = [tenantId];
-  if (from) { conditions.push('a.scheduled_at >= ?'); values.push(toSqlTimestamp(from + 'T00:00:00Z')); }
-  if (to) { conditions.push('a.scheduled_at <= ?'); values.push(toSqlTimestamp(to + 'T23:59:59Z')); }
+  if (from) { conditions.push('COALESCE(a.starts_at, a.scheduled_at) >= ?'); values.push(toSqlTimestamp(from + 'T00:00:00Z')); }
+  if (to) { conditions.push('COALESCE(a.starts_at, a.scheduled_at) <= ?'); values.push(toSqlTimestamp(to + 'T23:59:59Z')); }
   if (counselorId) { conditions.push('a.counselor_id = ?'); values.push(counselorId); }
 
   const where = conditions.join(' AND ');
@@ -610,7 +643,7 @@ export async function getUtilizationSummary(tenantId, from, to, counselorId) {
   );
 
   const [locationRows] = await pool.query(
-    `SELECT COALESCE(l.name, 'Remote') AS location_name, COUNT(*) AS cnt
+    `SELECT COALESCE(a.location_name, l.name, 'Remote') AS location_name, COUNT(*) AS cnt
      FROM appointments a
      LEFT JOIN locations l ON l.id = a.location_id AND l.tenant_id = a.tenant_id
      WHERE ${where}
