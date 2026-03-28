@@ -395,6 +395,26 @@ CREATE TABLE IF NOT EXISTS availability_templates (
   INDEX idx_avail_tenant (tenant_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ─── Availability overrides ───────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS availability_overrides (
+  id              VARCHAR(64)  NOT NULL,
+  tenant_id       VARCHAR(64)  NOT NULL,
+  staff_id        VARCHAR(64)  NOT NULL,
+  override_date   DATE         NOT NULL,
+  override_type   VARCHAR(32)  NOT NULL DEFAULT 'block',  -- 'block' | 'custom_hours' | 'vacation'
+  reason          VARCHAR(255),
+  start_time      VARCHAR(8),   -- 'HH:MM' when override_type = 'custom_hours'
+  end_time        VARCHAR(8),
+  all_day         TINYINT(1)   NOT NULL DEFAULT 1,
+  created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_avail_override_tenant  (tenant_id),
+  INDEX idx_avail_override_staff   (staff_id, override_date),
+  INDEX idx_avail_override_date    (tenant_id, override_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ─── Service codes ────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS service_codes (
