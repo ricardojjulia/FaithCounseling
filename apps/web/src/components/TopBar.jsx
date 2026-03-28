@@ -15,7 +15,12 @@ export default function TopBar({ opened, onMenuToggle }) {
     <Group className="workspace-topbar" h="100%" px="md" justify="space-between" wrap="nowrap">
       <Group gap="md" wrap="nowrap" className="workspace-topbar-main">
         <Burger opened={opened} onClick={onMenuToggle} aria-label="Toggle navigation" size="sm" />
-        <Box className="topbar-counseling-scene" aria-hidden="true">
+        <Box
+          className="topbar-counseling-scene"
+          aria-hidden="true"
+          style={{ cursor: 'default' }}
+          onClick={(e) => { if (e.shiftKey) window.location.href = '/monitor'; }}
+        >
           <span className="topbar-scene-glow"></span>
           <span className="topbar-person topbar-person--left"></span>
           <span className="topbar-person topbar-person--right"></span>

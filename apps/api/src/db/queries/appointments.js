@@ -10,6 +10,10 @@ const APPOINTMENT_SELECT = `
     a.counselor_id,
     a.client_name_enc,
     a.counselor_name_enc,
+    c.first_name_enc AS client_first_name_enc,
+    c.last_name_enc AS client_last_name_enc,
+    s.first_name_enc AS counselor_first_name_enc,
+    s.last_name_enc AS counselor_last_name_enc,
     a.appointment_type,
     a.status,
     a.starts_at,
@@ -24,6 +28,12 @@ const APPOINTMENT_SELECT = `
     a.created_at,
     a.updated_at
   FROM appointments a
+  LEFT JOIN clients c
+    ON c.id = a.client_id
+   AND c.tenant_id = a.tenant_id
+  LEFT JOIN staff_members s
+    ON s.id = a.counselor_id
+   AND s.tenant_id = a.tenant_id
   LEFT JOIN locations l
     ON l.id = a.location_id
    AND l.tenant_id = a.tenant_id
@@ -48,8 +58,17 @@ function rowToAppointment(row) {
     id: row.id,
     tenantId: row.tenant_id,
     clientId: row.client_id,
-    clientName: decrypt(row.client_name_enc),
-    counselorName: decrypt(row.counselor_name_enc),
+    counselorId: row.counselor_id ?? null,
+    clientName: resolveDisplayName({
+      firstNameEnc: row.client_first_name_enc,
+      lastNameEnc: row.client_last_name_enc,
+      fallbackEnc: row.client_name_enc,
+    }),
+    counselorName: resolveDisplayName({
+      firstNameEnc: row.counselor_first_name_enc,
+      lastNameEnc: row.counselor_last_name_enc,
+      fallbackEnc: row.counselor_name_enc,
+    }),
     startsAt: startsAtIso,
     endsAt: endsAtIso,
     status: row.status,
@@ -169,6 +188,7 @@ export async function createAppointment({
   id,
   tenantId,
   clientId,
+  counselorId = null,
   clientName,
   counselorName,
   startsAt,
@@ -187,14 +207,15 @@ export async function createAppointment({
 
   await pool.query(
     `INSERT INTO appointments
-       (id, tenant_id, client_id, client_name_enc, counselor_name_enc,
+       (id, tenant_id, client_id, counselor_id, client_name_enc, counselor_name_enc,
         starts_at, ends_at, scheduled_at, duration_minutes, status, appointment_type,
         location_id, location_name, timezone, remote_session)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       tenantId,
       clientId,
+      counselorId,
       encrypt(clientName),
       encrypt(counselorName),
       startsAtSql,
@@ -222,6 +243,10 @@ export async function updateAppointment(id, tenantId, fields) {
   if (fields.clientName !== undefined) {
     setClauses.push('client_name_enc = ?');
     values.push(encrypt(fields.clientName));
+  }
+  if (fields.counselorId !== undefined) {
+    setClauses.push('counselor_id = ?');
+    values.push(fields.counselorId);
   }
   if (fields.counselorName !== undefined) {
     setClauses.push('counselor_name_enc = ?');
@@ -678,6 +703,14 @@ function toIsoString(value) {
   if (value instanceof Date) return value.toISOString();
   if (typeof value === 'string') return value;
   return null;
+}
+
+function resolveDisplayName({ firstNameEnc, lastNameEnc, fallbackEnc }) {
+  const firstName = firstNameEnc ? decrypt(firstNameEnc) : '';
+  const lastName = lastNameEnc ? decrypt(lastNameEnc) : '';
+  const joined = [firstName, lastName].filter(Boolean).join(' ').trim();
+  if (joined) return joined;
+  return fallbackEnc ? decrypt(fallbackEnc) : null;
 }
 
 function computeDurationMinutes(startsAt, endsAt) {
