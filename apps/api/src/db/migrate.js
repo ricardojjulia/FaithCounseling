@@ -53,6 +53,7 @@ try {
   // Column migrations — add new columns to existing tables when the schema
   // has already been created. Each check is idempotent via INFORMATION_SCHEMA.
   await applyColumnMigrations(connection);
+  await backfillAppointmentCounselorLinks(connection);
 
   // Seed a default tenant + system practice for local dev
   await seedDevData(connection);
@@ -94,13 +95,65 @@ async function applyColumnMigrations(conn) {
   await addIndexIfMissing('clients', 'idx_clients_counselor', '(primary_counselor_id)');
 
   // Appointments: rename scheduled_at → starts_at, add ends_at / location_name / timezone
+  await addColumnIfMissing('appointments', 'counselor_id', 'VARCHAR(64) NULL AFTER client_id');
   await addColumnIfMissing('appointments', 'starts_at',     'TIMESTAMP NULL AFTER status');
   await addColumnIfMissing('appointments', 'ends_at',       'TIMESTAMP NULL AFTER starts_at');
   await addColumnIfMissing('appointments', 'location_name', 'VARCHAR(200) NULL AFTER ends_at');
   await addColumnIfMissing('appointments', 'timezone',      'VARCHAR(64) NULL AFTER location_name');
+  await addIndexIfMissing('appointments', 'idx_appointments_counselor', '(tenant_id, counselor_id)');
   await addIndexIfMissing('appointments', 'idx_appointments_starts_at', '(tenant_id, starts_at)');
 
   console.log('Column migrations done.');
+}
+
+async function backfillAppointmentCounselorLinks(conn) {
+  let decrypt;
+  try {
+    const mod = await import('../lib/encrypt.js');
+    decrypt = mod.decrypt;
+  } catch {
+    console.warn('Warning: encrypt module not available; appointment counselor backfill skipped.');
+    return;
+  }
+
+  const [staffRows] = await conn.query(
+    'SELECT id, tenant_id, first_name_enc, last_name_enc FROM staff_members',
+  );
+  if (!staffRows.length) return;
+
+  const staffNameIndex = new Map();
+  for (const row of staffRows) {
+    const fullName = `${decrypt(row.first_name_enc)} ${decrypt(row.last_name_enc)}`.trim();
+    if (!fullName) continue;
+    const key = `${row.tenant_id}:${fullName}`;
+    const matches = staffNameIndex.get(key) ?? [];
+    matches.push(row.id);
+    staffNameIndex.set(key, matches);
+  }
+
+  const [appointmentRows] = await conn.query(
+    `SELECT id, tenant_id, counselor_name_enc
+       FROM appointments
+      WHERE counselor_id IS NULL
+        AND counselor_name_enc IS NOT NULL`,
+  );
+
+  let updated = 0;
+  for (const row of appointmentRows) {
+    const counselorName = decrypt(row.counselor_name_enc).trim();
+    if (!counselorName) continue;
+    const matches = staffNameIndex.get(`${row.tenant_id}:${counselorName}`) ?? [];
+    if (matches.length !== 1) continue;
+    await conn.query(
+      'UPDATE appointments SET counselor_id = ? WHERE id = ? AND tenant_id = ?',
+      [matches[0], row.id, row.tenant_id],
+    );
+    updated += 1;
+  }
+
+  if (updated > 0) {
+    console.log(`  + linked ${updated} legacy appointments to counselor IDs`);
+  }
 }
 
 async function seedDevData(conn) {

@@ -13,6 +13,7 @@ import CounselorMaintenance from './components/CounselorMaintenance.jsx';
 import ClientPickerModal from './components/ClientPickerModal.jsx';
 import WorkspaceStudioPage from './components/WorkspaceStudio/WorkspaceStudioPage.jsx';
 import SchedulingPage from './components/SchedulingPage.jsx';
+import DocumentsPage from './components/Documents/DocumentsPage.jsx';
 import { csrfHeaders } from './lib/csrf.js';
 import { frontendTelemetry } from './lib/frontendTelemetry.js';
 import { useSurfaceTelemetry } from './lib/useSurfaceTelemetry.js';
@@ -259,7 +260,8 @@ export default function App() {
   const showCounselors       = currentView === 'counselors';
   const showScheduling       = currentView === 'scheduling';
   const showWorkspaceStudio  = currentView === 'workspace-studio';
-  const showClientsWorkspace = currentView === 'clients' || (!showDashboard && !showUsers && !showCounselors && !showScheduling && !showWorkspaceStudio);
+  const showDocuments        = currentView === 'documents';
+  const showClientsWorkspace = currentView === 'clients' || (!showDashboard && !showUsers && !showCounselors && !showScheduling && !showWorkspaceStudio && !showDocuments);
   const topLevelSurfaceId = !isAuthenticated
     ? 'auth'
     : selectedClientId || selectedCounselorId
@@ -283,7 +285,7 @@ export default function App() {
   useSurfaceTelemetry(topLevelSurfaceId, {
     surfaceKind: 'view',
     workflow: 'navigation',
-    emptyState: ['clinical', 'documents', 'billing', 'portal', 'faith'].includes(topLevelSurfaceId) ? 'placeholder' : null,
+    emptyState: ['clinical', 'billing', 'portal', 'faith'].includes(topLevelSurfaceId) ? 'placeholder' : null,
   });
 
   useEffect(() => {
@@ -382,6 +384,8 @@ export default function App() {
               initialPortalRequest: portalRequest,
             })}
           />
+        ) : showDocuments ? (
+          <DocumentsPage />
         ) : (
           <>
             {showDashboard ? <Metrics data={metricsData} currentUser={currentUser} /> : null}

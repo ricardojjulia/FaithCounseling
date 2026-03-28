@@ -1,6 +1,6 @@
 {
   "name": "@faith/i18n",
-  "version": "2.1.19",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
   "main": "src/index.js",

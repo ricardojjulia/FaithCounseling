@@ -509,10 +509,11 @@ export function fetchAppointments() {
   return apiFetch('/api/v1/appointments');
 }
 
-export function fetchSchedulingCalendar({ day, timezone, counselorName, locationName } = {}) {
+export function fetchSchedulingCalendar({ day, timezone, counselorId, counselorName, locationName } = {}) {
   const params = new URLSearchParams();
   if (day) params.set('day', day);
   if (timezone) params.set('timezone', timezone);
+  if (counselorId) params.set('counselorId', counselorId);
   if (counselorName) params.set('counselorName', counselorName);
   if (locationName) params.set('locationName', locationName);
   const query = params.toString();

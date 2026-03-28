@@ -4,8 +4,338 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `2.1.19`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh + versioned web asset delivery + UI enhancements across main shell, monitoring, and operations surfaces + desktop sidebar toggle fix + sidebar options icon refresh + schema fixes for availability_overrides and appointment_series + utilization GROUP BY fix)
+- Current release: `2.2.0`
+- Current release: `3.0.0`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh + versioned web asset delivery + UI enhancements across main shell, monitoring, and operations surfaces + desktop sidebar toggle fix + sidebar options icon refresh + schema fixes for availability_overrides and appointment_series + utilization GROUP BY fix + appointment identity integrity for renamed counselors and clients + **full Electronic Documents module with four clinical forms, GAD-7 auto-scoring, C-SSRS risk stratification, Christian counseling faith dimensions, and a generic form renderer**)
+
+## v3.0.0 — Expanded Clinical Forms Library (March 2026)
+
+### v3.0.0 Overview
+
+This major release expands the FaithCounseling clinical forms library from **4 instruments** to **19 instruments**, adding 15 new validated clinical assessments and custom faith-based counseling tools. The Documents UI has been redesigned from a flat grid to a **category-grouped library** organized across 14 clinical domains.
+
+All new forms follow the form definition schema established in v2.2.0. The generic `FormRunner` renderer required **zero changes** — every new instrument is delivered as a standalone data definition file, validating the extensibility of the v2.2.0 architecture. Every form includes a **Faith Dimension** section with Scripture references and questions about how the presenting concern intersects with the client's relationship with God.
+
+---
+
+### v3.0.0 — Validated Clinical Instruments (10 new forms)
+
+#### PHQ-9 — Patient Health Questionnaire-9
+**File:** `apps/web/src/components/Documents/forms/PHQ9.js` · **Scoring:** 0–27 · **Time:** ~5 min
+**Reference:** Kroenke K, Spitzer RL, Williams JBW. *J Gen Intern Med* 2001;16:606–13.
+Gold-standard 9-item depression screener. Nine frequency items (0–3 each). Bands: 0–4 Minimal, 5–9 Mild, 10–14 Moderate, 15–19 Moderately Severe, 20–27 Severe. Item 9 (thoughts of self-harm) triggers a counselor follow-up alert at any non-zero response. Faith Dimension explores connection with God, impact of depression on prayer and worship, hope anchored in faith, and comforting Scriptures.
+
+#### Beck Anxiety Inventory (BAI)
+**File:** `apps/web/src/components/Documents/forms/BeckAnxietyInventory.js` · **Scoring:** 0–63 · **Time:** ~7 min
+**Reference:** Beck AT, Epstein N, Brown G, Steer RA. *J Consult Clin Psychol* 1988;56:893–897.
+21 somatic and cognitive anxiety symptoms rated 0–3 over the past week. Bands: 0–7 Minimal, 8–15 Mild, 16–25 Moderate, 26–63 Severe. Faith Dimension grounded in Philippians 4:6–7 and 1 Peter 5:7.
+
+#### PCL-5 — PTSD Checklist for DSM-5
+**File:** `apps/web/src/components/Documents/forms/PCL5.js` · **Scoring:** 0–80 · **Time:** ~10 min
+**Reference:** Weathers FW, et al. (2013). National Center for PTSD.
+20-item PTSD symptom checklist anchored to a client-identified stressful event. Items rated 0–4. Cutpoint ≥ 33 suggests probable PTSD. Faith Dimension covers lament theology (Psalms 22, 88; Lamentations; Job), anger at God, and integration of Christian hope in trauma recovery.
+
+#### Rosenberg Self-Esteem Scale (RSES)
+**File:** `apps/web/src/components/Documents/forms/RosenbergSelfEsteem.js` · **Scoring:** 0–30 · **Time:** ~5 min
+**Reference:** Rosenberg M. Princeton University Press, 1965.
+10-item global self-esteem measure. Five items are reverse-scored — reversal is encoded in option values (RSES\_NEG uses SA=0, A=1, D=2, SD=3) so the standard `scoreFields` sum works without post-processing. Bands: < 15 Low, 15–24 Normal, 25–30 High. Faith Dimension anchored in *imago Dei* (Gen. 1:27) and identity as a beloved child of God (1 John 3:1).
+
+#### ASRS v1.1 — Adult ADHD Self-Report Scale
+**File:** `apps/web/src/components/Documents/forms/ASRSv1.js` · **Scoring:** threshold-based · **Time:** ~8 min
+**Reference:** World Health Organization / Kessler RC, et al. (2003).
+18-item ADHD screener. Part A (6 items) is the primary screen; positive if ≥ 2 for items 1–4, ≥ 3 for items 5–6. Four or more Part A positives suggests likely ADHD. Uses `scoreInterpretation(answers)` pattern. Faith Dimension explores ADHD-related shame in faith contexts and God-given cognitive design.
+
+#### OCI-R — Obsessive-Compulsive Inventory Revised
+**File:** `apps/web/src/components/Documents/forms/OCIRevised.js` · **Scoring:** 0–72 · **Time:** ~7 min
+**Reference:** Foa EB, et al. *Psychol Assess* 2002;14(4):485–96.
+18-item OCD measure across six subscales (washing, checking, ordering, obsessing, hoarding, neutralizing). Items rated 0–4. Clinical cutpoint ≥ 21. Faith Dimension includes dedicated coverage of **scrupulosity** — religious OCD involving obsessive guilt, compulsive confession, and inability to receive God's grace.
+
+#### AUDIT — Alcohol Use Disorders Identification Test
+**File:** `apps/web/src/components/Documents/forms/AUDIT.js` · **Scoring:** 0–40 · **Time:** ~5 min
+**Reference:** Babor TF, et al. WHO Publication No. 01.6a, 2001.
+10-item WHO alcohol screening. Items 1–8 use 0–4 scale; items 9–10 use 0/2/4 scale and use `gad_scale` type with values `'0'`, `'2'`, `'4'` so standard `parseInt()` summation works correctly. Bands: 0–7 Low Risk, 8–15 Hazardous, 16–19 Harmful, ≥ 20 Likely Dependence. Faith Dimension references Ephesians 5:18 and 1 Corinthians 6:19–20.
+
+#### DASS-21 — Depression Anxiety Stress Scales
+**File:** `apps/web/src/components/Documents/forms/DASS21.js` · **Scoring:** 3 subscales · **Time:** ~8 min
+**Reference:** Lovibond PF, Lovibond SH. *Behav Res Ther* 1995;33(3):335–43.
+21-item tripartite measure yielding Depression, Anxiety, and Stress subscores. Uses `scoreInterpretation(answers)` pattern with dedicated subscale item arrays. ScoreBanner displays all three severity levels; banner color reflects the most elevated subscale.
+
+#### ACE Questionnaire — Adverse Childhood Experiences
+**File:** `apps/web/src/components/Documents/forms/ACEQuestionnaire.js` · **Scoring:** 0–10 count · **Time:** ~10 min
+**Reference:** Felitti VJ, Anda RF, et al. *Am J Prev Med* 1998;14(4):245–258.
+10-category childhood adversity screener (yes/no). Uses `scoreInterpretation(answers)` counting `'Yes'` values. Bands: 0 None, 1 Low-Moderate, 2–3 Moderate, 4–5 High, ≥ 6 Very High Risk. Covers physical, emotional, and sexual abuse; physical and emotional neglect; and five household dysfunction categories. Faith Dimension covers healing from childhood wounds and the role of the "Father to the fatherless" (Psalm 68:5).
+
+#### Insomnia Severity Index (ISI)
+**File:** `apps/web/src/components/Documents/forms/InsomniaSeverityIndex.js` · **Scoring:** 0–28 · **Time:** ~5 min
+**Reference:** Morin CM. Guilford Press, 1993. Morin CM, et al. *Sleep* 2011;34(5):601–608.
+7-item validated insomnia screener. Item 2 is reverse-scored (satisfaction → dissatisfaction). Bands: 0–7 None, 8–14 Subthreshold, 15–21 Moderate Clinical, 22–28 Severe Clinical. Faith Dimension grounded in Psalm 127:2 and explores Sabbath rhythms, surrender to God, and nighttime prayer practices.
+
+---
+
+### v3.0.0 — Custom Faith-Based Assessments (5 new forms)
+
+#### Couples & Relationship Assessment
+**File:** `apps/web/src/components/Documents/forms/CouplesAssessment.js` · **Unscored** · **Time:** ~20 min
+Five-section couples counseling assessment. Covers relationship duration and history, Gottman-informed communication patterns (the Four Horsemen), conflict intensity and repair capacity, trust and safety, physical and emotional intimacy, love languages, and a Faith & Marriage section covering shared practice, marital theology (Eph. 5:21–33), and vision for a Kingdom-centered marriage.
+
+#### Grief & Loss Assessment
+**File:** `apps/web/src/components/Documents/forms/GriefAssessment.js` · **Unscored** · **Time:** ~20 min
+Four-section grief assessment grounded in Worden's Tasks of Mourning and biblical lament theology. Covers all loss types (death, divorce, health loss, miscarriage, estrangement, career). Includes DSM-5-informed complicated grief indicators. Faith & Lament section covers anger at God, the practice of lament (Ps. 22, 88; Lamentations; Job), resurrection hope, and faith community support.
+
+#### Ministry & Caregiver Burnout Assessment
+**File:** `apps/web/src/components/Documents/forms/BurnoutAssessment.js` · **Unscored** · **Time:** ~15 min
+Five-section burnout assessment for pastors, missionaries, counselors, healthcare workers, and family caregivers. Based on Maslach Burnout Inventory dimensions: Emotional Exhaustion, Depersonalization/Cynicism, Reduced Personal Accomplishment. Faith & Sustainability section explores calling, spiritual intimacy vs. duty-driven ministry, rest theology, Sabbath rhythms, and experiencing God's acceptance apart from performance. Rooted in Matthew 11:28.
+
+#### Spiritual Wellness Inventory
+**File:** `apps/web/src/components/Documents/forms/SpiritualWellnessInventory.js` · **Unscored** · **Time:** ~20 min
+Four-section comprehensive spiritual health inventory spanning spiritual practices (prayer quality, Bible engagement, disciplines, personal barriers), core beliefs and theology (God's character and nearness, grace reception, theological doubts), community and accountability (church belonging, small group, spiritual direction, church wounds/spiritual abuse), and spiritual growth (current season, areas of struggle, habitual sin patterns, identity in Christ, and what God may be inviting the client into).
+
+#### Family Systems Assessment
+**File:** `apps/web/src/components/Documents/forms/FamilySystemsAssessment.js` · **Unscored** · **Time:** ~25 min
+Four-section family systems assessment grounded in Bowen Family Systems Theory and biblical family theology. Covers family composition and genogram patterns, emotional climate and attachment style (secure, anxious, avoidant, disorganized), family roles (scapegoat, peacemaker, parentified child, hero, mascot, etc.), triangulation and differentiation of self, significant cut-offs, faith transmission, and identifying generational redemption.
+
+---
+
+### v3.0.0 — Documents Library UI
+
+`DocumentsPage.jsx` redesigned from a flat card grid to a **category-grouped library**:
+
+| Icon | Category | Forms |
+|------|----------|-------|
+| 📋 | Intake Forms | Short Intake, Long Intake |
+| 🌧️ | Depression | PHQ-9, DASS-21 |
+| 💨 | Anxiety & OCD | GAD-7, Beck Anxiety Inventory, OCI-R |
+| 🛡️ | Trauma & PTSD | PCL-5, ACE Questionnaire |
+| 🌱 | Self & Identity | Rosenberg Self-Esteem Scale |
+| ⚡ | Attention (ADHD) | ASRS v1.1 |
+| 🍂 | Substance Use | AUDIT |
+| 🌙 | Sleep | Insomnia Severity Index |
+| ⚠️ | Clinical Safety | C-SSRS Self-Harm Assessment |
+| 💑 | Relationships | Couples Assessment |
+| 🕊️ | Grief & Loss | Grief Assessment |
+| 🕯️ | Burnout & Wellness | Ministry Burnout Assessment |
+| ✝️ | Faith & Spirituality | Spiritual Wellness Inventory |
+| 🏠 | Family Systems | Family Systems Assessment |
+
+A `CATEGORIES` array drives display order, decoupled from `FORM_CATALOG`. New forms can be added to any category without reordering the catalog.
+
+### v3.0.0 — Files Changed
+
+**New files (15):** PHQ9.js, BeckAnxietyInventory.js, PCL5.js, RosenbergSelfEsteem.js, ASRSv1.js, OCIRevised.js, AUDIT.js, DASS21.js, ACEQuestionnaire.js, CouplesAssessment.js, GriefAssessment.js, BurnoutAssessment.js, SpiritualWellnessInventory.js, FamilySystemsAssessment.js, InsomniaSeverityIndex.js — all in `apps/web/src/components/Documents/forms/`
+
+**Modified:** `apps/web/src/components/Documents/DocumentsPage.jsx` (category grouping, 15 new imports, 19-entry FORM_CATALOG)
+
+**Version bumped (7 files):** root `package.json`, `apps/api/package.json`, `apps/web/package.json`, `apps/worker/package.json`, `packages/domain/package.json`, `packages/i18n/package.json`, `packages/telemetry/package.json`
+
+### v3.0.0 Breaking Changes
+
+None. FormRunner, FormDefinition schema, App.jsx routing, and existing form definitions are all unchanged.
+
+---
+
+## v2.2.0 — Electronic Documents & Clinical Form Library (March 2026)
+
+### v2.2.0 Overview
+
+This release delivers the **Documents** area as a complete, production-ready feature of the FaithCounseling platform. Prior to this release, the Documents navigation item was a registered placeholder that rendered no document-specific content. Documents is now a fully operational electronic forms module: counselors can open interactive multi-section forms, complete or guide clients through them in-session, view real-time clinical scores, and print or save as PDF directly from the browser.
+
+The module is purpose-built for Christian counseling. Every form in the library contains a **Faith & Spiritual Profile** or **Faith Dimension** section that invites clients to authentically share how their faith shapes their experience and healing. Scripture references (Philippians 4:6–7, Jeremiah 29:11, Psalm 34:18, Psalm 147:3) are embedded contextually throughout the forms as pastoral anchors — not decorative elements.
+
+The form architecture is intentionally generic and data-driven. A single shared `FormRunner` renderer can display any form definition written as a JavaScript configuration object. Adding new form types to the library in the future requires only a new definition file; the renderer and the page shell require no modification.
+
+---
+
+### v2.2.0 — Electronic Forms Library
+
+Four clinical instruments are included in this release:
+
+#### Short Intake Form (~10 minutes)
+
+A focused pre-session intake covering personal information, the presenting concern and its severity, medical and mental health history, session goals, and a faith profile. Designed to be completed by the client in the waiting area or shared electronically in advance of the first appointment. Includes a required safety screening at the end.
+
+The **Faith & Spiritual Profile** section asks about religious tradition, how important faith is to the client (0–10 scale), church attendance, openness to integrating faith into sessions (five-level select), consent to prayer, spiritual goals, and pastor contact consent.
+
+#### Long Intake Form (~40 minutes)
+
+A comprehensive biopsychosocial and spiritual pre-counseling assessment structured across fourteen sections. Designed to give a counselor everything they need to begin treatment planning after the first session. Sections cover:
+
+- Full personal demographics
+- Presenting concerns in detail — triggers, duration, daily functioning impact
+- Mental health history including hospitalizations and prior self-harm (with conditional follow-up fields)
+- Medical history with medications and chronic conditions
+- Family-of-origin history and childhood description
+- Developmental, social, vocational, and legal history
+- Relationship history — current relationship satisfaction, children, relational strengths
+- Substance use screening across all major categories
+- Trauma history via a screening checklist covering ten trauma types
+- Current functioning — sleep, appetite, activity, coping, life stressors
+- Goals and expectations for the counseling relationship
+- An extensive **Faith & Spiritual Profile** section with questions on prayer life, Bible reading, spiritual disciplines (fasting, journaling, small groups, service, retreats, worship music), preferred level of faith integration, specific Christian counseling goals, and pastor contact consent
+- Safety assessment with ideation screening and conditional plan/intent follow-up
+
+#### Anxiety Assessment — GAD-7 (15 minutes)
+
+A clinically validated anxiety screening using the **Generalized Anxiety Disorder 7-Item (GAD-7)** scale (Spitzer, Kroenke, Williams & Löwe, 2006). Extended with physical symptom screening, anxiety pattern and trigger exploration, and a coping inventory.
+
+**Scoring:** The seven GAD-7 items produce a 0–21 total score. The `FormRunner` displays a live score banner with severity band and color:
+
+| Score | Band | Color |
+|-------|------|-------|
+| 0–4 | Minimal anxiety | Green |
+| 5–9 | Mild anxiety | Yellow |
+| 10–14 | Moderate anxiety | Orange |
+| 15–21 | Severe anxiety | Red |
+
+The **Faith Dimension** section opens with Philippians 4:6–7 as a pastoral framing. It asks whether anxiety affects the client's sense of God's presence or trust in God, which specific spiritual anxiety factors apply (spiritual disconnection, faith doubts, guilt/shame, etc.), the client's current level of trust and surrender to God (0–10 scale), and their faith-based counseling goals.
+
+#### Self-Harm & Suicide Risk Assessment — C-SSRS (20–30 minutes)
+
+A structured risk assessment based on the **Columbia Suicide Severity Rating Scale (C-SSRS)** (Posner et al., 2011), adapted to a clinician-guided self-report format. Combines C-SSRS ideation and behavior items with non-suicidal self-injury (NSSI) screening, protective factor documentation, and a Christian faith dimension.
+
+**Risk stratification:** The five C-SSRS ideation items produce a risk band based on answer pattern:
+
+| Band | Trigger |
+|------|---------|
+| Imminent | cssrs5 = Yes (plan + intent) |
+| High | cssrs4 = Yes (plan without intent) |
+| Moderate | cssrs3 = Yes (intent without plan) |
+| Low | cssrs2 = Yes (ideation, no plan or intent) |
+| Minimal | No active ideation (cssrs1–cssrs5 all No) |
+
+The NSSI section uses conditional rendering — method, frequency, and function questions appear only when the client confirms NSSI engagement in the last 90 days. Similarly, behavioral history follow-up questions (attempt dates, method) appear only when prior attempts are confirmed.
+
+**Clinician section** collects the assessed risk level, documenting actions taken (safety plan, means restriction, referral, hospitalization, pastoral contact, etc.), and free-text clinician notes.
+
+The **Faith Dimension** section opens with Jeremiah 29:11 and Psalm 34:18 as pastoral grounding. It asks whether the client believes God has a purpose and future for them, what is making that hard to see (conditional), current sense of God's presence (0–10), whether moral or religious beliefs serve as a protective factor against self-harm, consent to pastoral contact, scriptures that feel hopeful, and a free-text reflection on "For I know the plans I have for you" (Jer. 29:11).
+
+> **Clinical note:** This form is flagged on the library card with a red alert: "Clinical use — this form should be reviewed by a licensed clinician. In crisis? Call/text **988** or text HOME to **741741**."
+
+---
+
+### v2.2.0 — Technical Architecture
+
+#### Form Definition Schema
+
+Forms are pure JavaScript objects exported from files in `apps/web/src/components/Documents/forms/`. The schema:
+
+```
+FormDefinition {
+  id: string                        // unique identifier
+  title: string
+  description: string
+  icon: string                      // emoji
+  estimatedMinutes: number
+  scorable?: boolean                // enables score banner in FormRunner
+  scoreFields?: string[]            // field IDs to sum (GAD-7 style)
+  scoreMax?: number
+  scoreLabel?: string
+  scoreInterpretation: function     // (total) => { label, color, description }
+                                    // or (answers) => { label, color, description }
+  sections: Section[]
+}
+
+Section {
+  id: string
+  title: string
+  description?: string              // rendered as a brand-border callout
+  color?: 'red'                     // marks safety sections
+  fields: Field[]
+}
+
+Field {
+  id: string                        // used as the answer key
+  type: 'text'|'email'|'tel'|'date'|'number'|'textarea'|'select'|
+        'radio'|'checkboxes'|'scale'|'gad_scale'
+  label: string
+  placeholder?: string
+  required?: boolean
+  half?: boolean                    // renders in two-column grid
+  options?: string[] | { value, label }[]  // for select/radio/checkboxes
+  min?: number                      // for scale, number
+  max?: number
+  minLabel?: string                 // for scale end labels
+  maxLabel?: string
+  minRows?: number                  // for textarea
+  showIf?: { field: string, value: string }
+         | { field: string, values: string[] }
+}
+```
+
+#### FormRunner (`apps/web/src/components/Documents/FormRunner.jsx`)
+
+Stateless renderer: accepts `formDef` and `onClose` props. Manages `answers` and `activeStep` locally. Computes visible field counts and percent-complete in real time using `useMemo`. All `showIf` evaluation is purely derived from the current `answers` object — no side effects.
+
+Key implementation details:
+- `ScoreField`, `GadScaleField`, and `CheckboxesField` are isolated sub-components that receive `field`, `value`, and `onChange` props — no answer state leaks between fields
+- `ScoreBanner` reads from the exported `scoreInterpretation` function on the form definition; it handles both the numeric-sum pattern (GAD-7) and the answer-object pattern (C-SSRS risk)
+- Print CSS is injected as an inline `<style>` tag; `.no-print` elements (header, nav, buttons) are hidden; `.print-section` Paper blocks avoid page breaks with `break-inside: avoid`
+- Section navigation in the left column renders as `Button` elements (not tabs) so keyboard users can navigate without a roving focus trap
+
+#### DocumentsPage (`apps/web/src/components/Documents/DocumentsPage.jsx`)
+
+Thin page shell that maintains a single piece of state: `activeEntry | null`. When null, renders the form catalog grid. When set, renders `<FormRunner>`. The `onClose` callback resets `activeEntry` to null, returning to the grid. No routing changes are needed for the form runner view — it is mounted inline within the Documents route.
+
+---
+
+### v2.2.0 — App Routing and Telemetry Changes
+
+| File | Change |
+|------|--------|
+| `apps/web/src/App.jsx` | Added `DocumentsPage` import |
+| `apps/web/src/App.jsx` | Added `const showDocuments = currentView === 'documents'` |
+| `apps/web/src/App.jsx` | Added `!showDocuments` to the `showClientsWorkspace` fallback |
+| `apps/web/src/App.jsx` | Added `showDocuments ? <DocumentsPage />` routing branch |
+| `apps/web/src/App.jsx` | Removed `'documents'` from the placeholder `emptyState` telemetry list |
+
+---
+
+### v2.2.0 Validation
+
+```sh
+pnpm --filter @faith/web build
+# Expect: zero errors, DocumentsPage and FormRunner bundled
+```
+
+---
+
+### v2.2.0 Breaking Changes
+
+None.
+
+---
+
+## v2.1.20 — Appointment Identity Integrity (March 2026)
+
+### v2.1.20 Overview
+
+Hardens scheduling data so counselor workload, calendar views, and appointment lists stay correct when people are renamed. The underlying system already had generated primary keys for both clients and counselors, but parts of the scheduling flow were still behaving as if counselor names were the stable identifier. That created drift risk for workload summaries and edited appointments after counselor profile changes.
+
+This update makes linked IDs authoritative in the scheduling flow while still preserving readable display names for the UI. Appointment reads now resolve current counselor and client names from the linked records first, and the scheduling UI now creates and filters appointments by `counselorId` instead of relying on counselor names alone.
+
+### v2.1.20 Changes
+
+#### API and persistence (`apps/api/src/index.js`, `apps/api/src/db/queries/appointments.js`, `apps/api/src/db/migrate.js`)
+
+- Appointment reads now prefer the current linked client and counselor records when building `clientName` and `counselorName`
+- Appointment create and update flows now accept and resolve `counselorId`, then derive the human-readable counselor name from the linked staff record
+- Staff rename updates now backfill legacy appointment rows so old name-snapshot appointments are re-linked and refreshed when a counselor changes their name
+- Added migration coverage for `appointments.counselor_id` and the corresponding tenant/counselor index so older local databases are brought up to the current scheduling model
+- Added a safe migration-time backfill that links legacy name-only appointments to a counselor ID when the stored counselor name still matches exactly one current staff record
+- Client display names continue to follow the linked client record, so counselor and client rename behavior now follows the same identity model
+
+#### Scheduling UI (`apps/web/src/components/SchedulingPage.jsx`, `apps/web/src/lib/clientApi.js`)
+
+- Appointment composer now selects counselors by stable staff ID instead of counselor name text
+- Counselor calendar filtering now requests the schedule by `counselorId`, which avoids broken or empty filters after a counselor rename
+- Day-level metrics now count active counselors by stable ID when available instead of relying only on display names
+- Legacy appointments that still only carry a counselor display name remain visible and editable through a compatibility fallback
+
+### v2.1.20 Validation
+
+- `node --check apps/api/src/index.js`
+- `node --check apps/api/src/db/migrate.js`
+- `node --check apps/api/src/db/queries/appointments.js`
+- `pnpm --filter @faith/web build`
 
 ## v2.1.18 — Sidebar Options Icon Refresh (March 2026)
 

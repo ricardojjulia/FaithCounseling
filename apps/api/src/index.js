@@ -3475,6 +3475,7 @@ async function handleAppointmentsCollection(request, response, session) {
 
   const payload = await readJsonBody(request);
   const clientId = sanitizeStr(payload.clientId, 50) ?? '';
+  const counselorId = sanitizeStr(payload.counselorId, 64) ?? null;
 
   const startsAt = normalizeIsoDate(payload.startsAt);
   const endsAt = normalizeIsoDate(payload.endsAt);
@@ -3502,9 +3503,9 @@ async function handleAppointmentsCollection(request, response, session) {
     return;
   }
 
-  const counselorName = sanitizeStr(payload.counselorName, 200) ?? 'Unassigned Counselor';
   const locationName = sanitizeStr(payload.locationName, 200) ?? 'Main Office';
   const remoteSession = Boolean(payload.remoteSession);
+  let counselorName = sanitizeStr(payload.counselorName, 200) ?? 'Unassigned Counselor';
   const conflicts = detectAppointmentConflicts({
     startsAt,
     endsAt,
@@ -3528,10 +3529,20 @@ async function handleAppointmentsCollection(request, response, session) {
       writeJson(response, 400, { error: 'Valid clientId is required' });
       return;
     }
+    let counselor = null;
+    if (counselorId) {
+      counselor = await getStaffById(counselorId, tenantId);
+      if (!counselor) {
+        writeJson(response, 400, { error: 'Valid counselorId is required' });
+        return;
+      }
+      counselorName = `${counselor.firstName} ${counselor.lastName}`.trim() || counselorName;
+    }
     const appointment = await createAppointment({
       id: genId('a'),
       tenantId,
       clientId: client.id,
+      counselorId: counselor?.id ?? counselorId,
       clientName: `${client.firstName} ${client.lastName}`,
       counselorName,
       startsAt,
@@ -3551,10 +3562,20 @@ async function handleAppointmentsCollection(request, response, session) {
       writeJson(response, 400, { error: 'Valid clientId is required' });
       return;
     }
+    let counselor = null;
+    if (counselorId) {
+      counselor = staffMembers.find((item) => item.id === counselorId && item.tenantId === callerTenant(request));
+      if (!counselor) {
+        writeJson(response, 400, { error: 'Valid counselorId is required' });
+        return;
+      }
+      counselorName = `${counselor.firstName} ${counselor.lastName}`.trim() || counselorName;
+    }
     const appointment = {
       id: createId('a', appointments),
       tenantId: 'system',
       clientId: client.id,
+      counselorId: counselor?.id ?? counselorId,
       clientName: `${client.firstName} ${client.lastName}`,
       counselorName,
       startsAt,
@@ -3592,6 +3613,20 @@ async function handleAppointmentById(request, response, requestUrl, session) {
     const fields = {};
     if (typeof payload.status === 'string') { const s = normalizeAppointmentStatus(payload.status); if (!s) { writeJson(response, 400, { error: 'status must be valid' }); return; } fields.status = s; }
     if (typeof payload.appointmentType === 'string') { const t = normalizeAppointmentType(payload.appointmentType); if (!t) { writeJson(response, 400, { error: 'appointmentType must be valid' }); return; } fields.appointmentType = t; }
+    if (payload.counselorId !== undefined) {
+      const counselorId = sanitizeStr(payload.counselorId, 64);
+      if (!counselorId) {
+        fields.counselorId = null;
+      } else {
+        const counselor = await getStaffById(counselorId, tenantId);
+        if (!counselor) {
+          writeJson(response, 400, { error: 'Valid counselorId is required' });
+          return;
+        }
+        fields.counselorId = counselor.id;
+        fields.counselorName = `${counselor.firstName} ${counselor.lastName}`.trim();
+      }
+    }
     if (typeof payload.counselorName === 'string' && payload.counselorName.trim()) fields.counselorName = sanitizeStr(payload.counselorName, 200);
     if (typeof payload.locationName === 'string' && payload.locationName.trim()) fields.locationName = sanitizeStr(payload.locationName, 200);
     if (typeof payload.remoteSession === 'boolean') fields.remoteSession = payload.remoteSession;
@@ -3648,6 +3683,20 @@ async function handleAppointmentById(request, response, requestUrl, session) {
     appointment.appointmentType = appointmentType;
   }
 
+  if (payload.counselorId !== undefined) {
+    const counselorId = sanitizeStr(payload.counselorId, 64);
+    if (!counselorId) {
+      appointment.counselorId = null;
+    } else {
+      const counselor = staffMembers.find((item) => item.id === counselorId && item.tenantId === appointment.tenantId);
+      if (!counselor) {
+        writeJson(response, 400, { error: 'Valid counselorId is required' });
+        return;
+      }
+      appointment.counselorId = counselor.id;
+      appointment.counselorName = `${counselor.firstName} ${counselor.lastName}`.trim();
+    }
+  }
   if (typeof payload.counselorName === 'string' && payload.counselorName.trim()) appointment.counselorName = sanitizeStr(payload.counselorName, 200) ?? appointment.counselorName;
   if (typeof payload.locationName === 'string' && payload.locationName.trim()) appointment.locationName = sanitizeStr(payload.locationName, 200) ?? appointment.locationName;
   if (typeof payload.remoteSession === 'boolean') appointment.remoteSession = payload.remoteSession;
@@ -3727,6 +3776,7 @@ async function handleSchedulingCalendar(request, response, requestUrl, session) 
   }
 
   const day = sanitizeStr(requestUrl.searchParams.get('day') ?? '', 20) || dateKeyInTimezone(new Date().toISOString(), timezone);
+  const counselorIdFilter = sanitizeStr(requestUrl.searchParams.get('counselorId') ?? '', 64);
   const counselorFilter = sanitizeStr(requestUrl.searchParams.get('counselorName') ?? '', 200);
   const locationFilter = sanitizeStr(requestUrl.searchParams.get('locationName') ?? '', 200);
 
@@ -3735,6 +3785,7 @@ async function handleSchedulingCalendar(request, response, requestUrl, session) 
     const dayStart = `${day}T00:00:00.000Z`;
     const dayEnd = `${day}T23:59:59.999Z`;
     let allItems = await listAppointmentsByDateRange(tenantId, dayStart, dayEnd);
+    if (counselorIdFilter) allItems = allItems.filter((a) => a.counselorId === counselorIdFilter);
     if (counselorFilter) allItems = allItems.filter((a) => a.counselorName === counselorFilter);
     if (locationFilter) allItems = allItems.filter((a) => a.locationName === locationFilter);
     allItems.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
@@ -3755,6 +3806,7 @@ async function handleSchedulingCalendar(request, response, requestUrl, session) 
 
   const items = filterByTenant(appointments, request)
     .filter((appointment) => dateKeyInTimezone(appointment.startsAt, timezone) === day)
+    .filter((appointment) => !counselorIdFilter || appointment.counselorId === counselorIdFilter)
     .filter((appointment) => !counselorFilter || appointment.counselorName === counselorFilter)
     .filter((appointment) => !locationFilter || appointment.locationName === locationFilter)
     .sort((left, right) => left.startsAt.localeCompare(right.startsAt));
@@ -7029,6 +7081,7 @@ async function handleStaffById(request, response, requestUrl, session) {
     if (request.method !== 'PATCH') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
     if (requirePracticeAdmin(request, response, session)) return;
     const payload = await readJsonBody(request);
+    const priorFullName = `${item.firstName} ${item.lastName}`.trim();
     const fields = {};
     if (typeof payload.firstName === 'string') fields.firstName = sanitizeStr(payload.firstName) ?? item.firstName;
     if (typeof payload.lastName === 'string') fields.lastName = sanitizeStr(payload.lastName) ?? item.lastName;
@@ -7052,6 +7105,15 @@ async function handleStaffById(request, response, requestUrl, session) {
     if (typeof payload.bio === 'string') fields.bio = sanitizeStr(payload.bio, 500) ?? '';
     if (Array.isArray(payload.locationIds)) fields.locationIds = payload.locationIds.map((v) => sanitizeStr(String(v), 50)).filter(Boolean);
     const updated = await updateStaff(staffId, tenantId, fields);
+    const updatedFullName = `${updated.firstName} ${updated.lastName}`.trim();
+    if (priorFullName && updatedFullName && priorFullName !== updatedFullName) {
+      await syncCounselorNameAcrossAppointments({
+        tenantId,
+        staffId,
+        priorFullName,
+        updatedFullName,
+      });
+    }
     telemetry.recordMutation('staff.update');
     emitAudit(request, 'staff.update', 'staff', staffId, session);
     writeJson(response, 200, { item: updated });
@@ -7080,6 +7142,7 @@ async function handleStaffById(request, response, requestUrl, session) {
   if (requirePracticeAdmin(request, response, session)) return;
 
   const payload = await readJsonBody(request);
+  const priorFullName = `${item.firstName} ${item.lastName}`.trim();
   if (typeof payload.firstName === 'string') item.firstName = sanitizeStr(payload.firstName) ?? item.firstName;
   if (typeof payload.lastName === 'string') item.lastName = sanitizeStr(payload.lastName) ?? item.lastName;
   if (typeof payload.role === 'string') {
@@ -7113,10 +7176,44 @@ async function handleStaffById(request, response, requestUrl, session) {
   if (Array.isArray(payload.locationIds)) {
     item.locationIds = payload.locationIds.map((value) => sanitizeStr(String(value), 50)).filter(Boolean);
   }
+  const updatedFullName = `${item.firstName} ${item.lastName}`.trim();
+  if (priorFullName && updatedFullName && priorFullName !== updatedFullName) {
+    appointments.forEach((appointment) => {
+      if (appointment.tenantId !== item.tenantId) return;
+      if (appointment.counselorId === staffId || appointment.counselorName === priorFullName) {
+        appointment.counselorId = staffId;
+        appointment.counselorName = updatedFullName;
+      }
+    });
+  }
 
   telemetry.recordMutation('staff.update');
   emitAudit(request, 'staff.update', 'staff', item.id);
   writeJson(response, 200, { item });
+}
+
+async function syncCounselorNameAcrossAppointments({ tenantId, staffId, priorFullName, updatedFullName }) {
+  const [rows] = await pool.query(
+    `SELECT id, counselor_id, counselor_name_enc
+       FROM appointments
+      WHERE tenant_id = ?
+        AND (counselor_id = ? OR counselor_name_enc IS NOT NULL)`,
+    [tenantId, staffId],
+  );
+
+  const updates = rows
+    .filter((row) => {
+      const storedName = row.counselor_name_enc ? decrypt(row.counselor_name_enc) : '';
+      return row.counselor_id === staffId || storedName === priorFullName;
+    })
+    .map((row) => pool.query(
+      'UPDATE appointments SET counselor_id = ?, counselor_name_enc = ? WHERE id = ? AND tenant_id = ?',
+      [staffId, encrypt(updatedFullName), row.id, tenantId],
+    ));
+
+  if (updates.length) {
+    await Promise.all(updates);
+  }
 }
 
 async function handleStaffAvailability(request, response, requestUrl, session) {

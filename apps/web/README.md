@@ -29,6 +29,7 @@ Default URL: `http://localhost:3000`
 - sidebar heading now uses an animated counseling icon with a simplified `Options` label
 - sidebar identity block now carries both the signed-in user pill and the live API connection status
 - the hamburger menu now collapses and restores the sidebar on both desktop and mobile
+- scheduling appointment creation and counselor-calendar filtering now use stable counselor IDs instead of counselor display names
 - key metric cards for today's sessions, future appointments, audit-event visibility, and current session identity/state
 - operations panels for schedule, priority queue, and compliance watch
 - care flow progress indicators
@@ -49,6 +50,7 @@ Default URL: `http://localhost:3000`
 - Dashboard audit visibility consumes `/api/v1/audit/intelligence?days=7&limit=1` for admin-capable roles and degrades to an explicit admin-visibility message for other roles
 - The active session identity is intentionally rendered in the metric band, not in the top bar, so the header stays focused on navigation and workspace context
 - The live API connection status is intentionally rendered in the sidebar identity area, directly below the user pill, instead of in the top bar
+- Scheduling views now submit and filter by `counselorId`, while the API resolves current counselor/client display names from the linked records so workload surfaces stay accurate after profile renames
 - `/api/docs` uses a docs-specific CSP/COEP profile so proxied Swagger UI can load its required assets without weakening the rest of the application
 - The monitoring OTEL status banner follows the API `exportedViaOtel` flag, which now treats `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` as a valid OTEL export configuration
 - React app views, detail tabs, scheduling subviews, Workspace Studio tabs, and standalone pages now participate in the shared surface-monitoring baseline

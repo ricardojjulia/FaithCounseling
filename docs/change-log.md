@@ -1,5 +1,325 @@
 # Change Log
 
+## v3.0.0 — Expanded Clinical Forms Library (19 Instruments)
+
+**Date:** March 2026
+**Type:** Major — major feature expansion
+
+### Summary
+
+Expands the clinical forms library from 4 to **19 instruments** and redesigns the Documents UI with category-grouped sections. Adds 10 validated clinical assessments and 5 custom faith-based counseling tools. All versions bumped from 2.2.0 → 3.0.0 across the monorepo.
+
+---
+
+### New Form Files (15)
+
+All new files located in `apps/web/src/components/Documents/forms/`.
+
+#### `PHQ9.js` — Patient Health Questionnaire-9 (Depression Screener)
+- **Reference:** Kroenke K, Spitzer RL, Williams JBW. *J Gen Intern Med* 2001;16:606–13
+- **Scoring:** `scoreFields` (9 items, 0–3 each) → `phq9ScoreInterpretation(total)` — max 27
+- **Exports:** `PHQ9_SCORE_IDS`, `phq9ScoreInterpretation`, `PHQ9`
+- **Sections:** Depression Symptoms (9 items), Daily Functioning, Faith Dimension
+- **Bands:** Minimal (0–4), Mild (5–9), Moderate (10–14), Moderately Severe (15–19), Severe (20–27)
+- **Clinical note:** Item 9 (self-harm ideation) triggers inline counselor alert at any non-zero response
+
+#### `BeckAnxietyInventory.js` — Beck Anxiety Inventory
+- **Reference:** Beck AT, et al. *J Consult Clin Psychol* 1988;56:893–897
+- **Scoring:** `scoreFields` (21 items, 0–3 each) → `baiScoreInterpretation(total)` — max 63
+- **Exports:** `BAI_SCORE_IDS`, `baiScoreInterpretation`, `BeckAnxietyInventory`
+- **Sections:** Anxiety Symptoms (21 items, gad_scale), Context & History, Faith Dimension
+- **Bands:** Minimal (0–7), Mild (8–15), Moderate (16–25), Severe (26–63)
+
+#### `PCL5.js` — PTSD Checklist for DSM-5
+- **Reference:** Weathers FW, et al. (2013). National Center for PTSD
+- **Scoring:** `scoreFields` (20 items, 0–4 each) → `pcl5ScoreInterpretation(total)` — max 80; cutpoint ≥ 33
+- **Exports:** `PCL5_SCORE_IDS`, `pcl5ScoreInterpretation`, `PCL5`
+- **Sections:** Identifying the Stressful Event, PTSD Symptom Checklist (20 items), Faith & Trauma
+- **Bands:** Minimal (0–9), Significant Symptoms (10–32), Probable PTSD (≥ 33)
+
+#### `RosenbergSelfEsteem.js` — Rosenberg Self-Esteem Scale
+- **Reference:** Rosenberg M. Princeton University Press, 1965
+- **Scoring:** `scoreFields` (10 items) → `rsesScoreInterpretation(total)` — max 30
+- **Implementation note:** Reverse-scored items use `RSES_OPTIONS_REVERSED` (SA=0, A=1, D=2, SD=3) so the standard sum is correct without a custom reversal function
+- **Exports:** `RSES_SCORE_IDS`, `rsesScoreInterpretation`, `RosenbergSelfEsteem`
+- **Sections:** Self-Esteem Statements (10 items), Self-Image Context, Faith & Identity in Christ
+- **Bands:** Low (< 15), Normal (15–24), High (25–30)
+
+#### `ASRSv1.js` — Adult ADHD Self-Report Scale v1.1
+- **Reference:** WHO / Kessler RC, et al. (2003)
+- **Scoring:** `scoreInterpretation(answers)` — Part A threshold counting (items 1–4: ≥ 2, items 5–6: ≥ 3). ≥ 4 positives = likely ADHD
+- **Exports:** `asrsScoreInterpretation`, `ASRSv1`
+- **Sections:** Part A (6 screening items), Part B (12 additional items), History & Impact, Faith Dimension
+
+#### `OCIRevised.js` — OCD Inventory Revised
+- **Reference:** Foa EB, et al. *Psychol Assess* 2002;14(4):485–96
+- **Scoring:** `scoreFields` (18 items, 0–4 each) → `ociScoreInterpretation(total)` — max 72; cutpoint ≥ 21
+- **Exports:** `OCI_SCORE_IDS`, `ociScoreInterpretation`, `OCIRevised`
+- **Sections:** OCD Symptom Checklist (18 items), Impact & History, Faith Dimension (includes scrupulosity coverage)
+- **Bands:** Minimal (0–9), Subclinical (10–20), OCD Likely (≥ 21), Severe (≥ 40)
+
+#### `AUDIT.js` — Alcohol Use Disorders Identification Test
+- **Reference:** Babor TF, et al. WHO Publication No. 01.6a, 2001
+- **Scoring:** `scoreInterpretation(answers)` — sums all 10 items manually (Q9/Q10 use values 0, 2, 4); max 40
+- **Exports:** `auditScoreInterpretation`, `AUDIT`
+- **Implementation note:** Q9 and Q10 options use `gad_scale` type with values `'0'`, `'2'`, `'4'` — non-contiguous but parsed correctly by `parseInt()` in the scoring function
+- **Sections:** Alcohol Use (10 items), Context & History, Faith Dimension
+- **Bands:** Low Risk (0–7), Hazardous (8–15), Harmful (16–19), Likely Dependence (≥ 20)
+
+#### `DASS21.js` — Depression Anxiety Stress Scales (Short Form)
+- **Reference:** Lovibond PF, Lovibond SH. *Behav Res Ther* 1995;33(3):335–43
+- **Scoring:** `scoreInterpretation(answers)` — computes three independent subscales (Depression: items 3,5,10,13,16,17,21 · Anxiety: items 2,4,7,9,15,19,20 · Stress: items 1,6,8,11,12,14,18); returns worst color
+- **Exports:** `dass21ScoreInterpretation`, `DASS21`
+- **Sections:** 21 symptom items (0–3 scale), Context & Duration, Faith Dimension
+
+#### `ACEQuestionnaire.js` — Adverse Childhood Experiences
+- **Reference:** Felitti VJ, Anda RF, et al. *Am J Prev Med* 1998;14(4):245–258
+- **Scoring:** `scoreInterpretation(answers)` — counts `'Yes'` responses across 10 specific field IDs; max 10
+- **Exports:** `aceScoreInterpretation`, `ACEQuestionnaire`
+- **Sections:** About This Assessment, Abuse (3 items), Neglect (2 items), Household Dysfunction (5 items), Current Impact & Reflection, Faith & Healing
+- **Bands:** None (0), Low-Moderate (1), Moderate (2–3), High (4–5), Very High Risk (≥ 6)
+
+#### `InsomniaSeverityIndex.js` — Insomnia Severity Index
+- **Reference:** Morin CM. Guilford Press, 1993. Morin CM, et al. *Sleep* 2011;34(5):601–608
+- **Scoring:** `scoreFields` (7 items, 0–4 each) → `isiScoreInterpretation(total)` — max 28. Item 2 uses reverse-sorted options (satisfaction)
+- **Exports:** `ISI_SCORE_IDS`, `isiScoreInterpretation`, `InsomniaSeverityIndex`
+- **Sections:** Sleep Problem Severity (7 items), Sleep History & Context, Faith & Rest
+- **Bands:** No Significant Insomnia (0–7), Subthreshold (8–14), Moderate Clinical (15–21), Severe Clinical (22–28)
+
+#### `CouplesAssessment.js` — Couples & Relationship Assessment
+- **Type:** Custom, unscored
+- **Export:** `CouplesAssessment`
+- **Sections:** Relationship Background, Communication Patterns (Gottman-informed), Conflict & Repair, Intimacy & Connection, Faith & Marriage (Eph. 5:21–33)
+
+#### `GriefAssessment.js` — Grief & Loss Assessment
+- **Type:** Custom, unscored
+- **Export:** `GriefAssessment`
+- **Sections:** Loss History, Grief Experience, Complicated Grief Indicators (DSM-5 Prolonged Grief Disorder), Faith & Lament (Ps. 22, 88; Lamentations; Job; John 11:35)
+
+#### `BurnoutAssessment.js` — Ministry & Caregiver Burnout Assessment
+- **Type:** Custom, unscored; based on Maslach Burnout Inventory dimensions
+- **Export:** `BurnoutAssessment`
+- **Sections:** Role & Ministry Context, Emotional Exhaustion, Cynicism & Compassion Fatigue, Reduced Accomplishment & Identity, Faith & Sustainability (Matt. 11:28)
+
+#### `SpiritualWellnessInventory.js` — Spiritual Wellness Inventory
+- **Type:** Custom, unscored; faith-specific assessment
+- **Export:** `SpiritualWellnessInventory`
+- **Sections:** Spiritual Practices, Core Beliefs & Theology, Community & Accountability, Spiritual Growth & Discipleship
+
+#### `FamilySystemsAssessment.js` — Family Systems Assessment
+- **Type:** Custom, unscored; Bowen Family Systems Theory + biblical family theology
+- **Export:** `FamilySystemsAssessment`
+- **Sections:** Family Composition, Family Relationships & Emotional Climate, Roles & Patterns & Triangles, Faith in Family Context
+
+---
+
+### Modified Files
+
+#### `apps/web/src/components/Documents/DocumentsPage.jsx`
+- Added 15 import statements for new form definitions
+- Added `CATEGORIES` array (14 domains, display-ordered)
+- Replaced flat `FORM_CATALOG` (4 entries) with 19-entry categorized catalog — each entry has `category` field referencing a `CATEGORIES.id`
+- Removed unused `ThemeIcon` import
+- Replaced single `SimpleGrid` render with `CATEGORIES.map()` loop producing separate labeled `<Stack>` + `<SimpleGrid>` groups per category
+
+#### `package.json` — all 7 monorepo files
+- `apps/api/package.json`, `apps/web/package.json`, `apps/worker/package.json`
+- `package.json` (root), `packages/domain/package.json`, `packages/i18n/package.json`, `packages/telemetry/package.json`
+- Changed: `"version": "2.2.0"` → `"version": "3.0.0"`
+
+---
+
+### Breaking Changes
+
+None. FormRunner, FormDefinition schema, App.jsx routing, and all existing form definitions are unchanged.
+
+---
+
+## v2.2.0 — Electronic Documents & Clinical Form Library
+
+**Date:** March 28, 2026
+**Type:** Minor — new feature module
+
+### Overview
+
+Introduces the **Documents** area as a first-class, fully operational feature of the FaithCounseling platform. Prior to this release, the Documents navigation item was a registered placeholder that rendered a generic workspace grid with no document-specific content. This release replaces that placeholder with a complete electronic forms system purpose-built for Christian counseling practices.
+
+The Documents module provides counselors with a library of reusable, session-ready clinical forms rendered directly in the browser. Forms are multi-section, paginated, and support conditional question logic, auto-scoring, and print/PDF export. Every form in the library includes a dedicated **Faith & Spiritual Profile** or **Faith Dimension** section that invites clients to share how their Christian faith shapes their healing journey. Scripture references are embedded contextually throughout each form.
+
+The form architecture is generic and data-driven: all four initial forms are defined as pure JavaScript configuration objects (sections → typed fields), and a single shared `FormRunner` component renders any form definition without custom per-form code. Adding new form templates in the future requires only a new definition file — no renderer changes.
+
+---
+
+### New Files
+
+#### `apps/web/src/components/Documents/forms/ShortIntakeForm.js`
+
+A concise, approximately 10-minute intake form designed to gather essential information before the first counseling session. Structured into six sections:
+
+1. **Personal Information** — name, date of birth, gender, phone, email, address, emergency contact, marital status, employment, preferred communication method
+2. **Presenting Concerns** — reason for seeking counseling (free-text), primary concern (select), concern severity scale (1–10), how long the issue has been present, prior counseling experience, reason for choosing this practice
+3. **Medical & Mental Health** — current medications, medical conditions, prior mental health diagnoses, substance use status, whether the client is currently safe
+4. **Goals** — what the client hopes to achieve, what a successful outcome would look like, preferred counseling style, how they heard about the practice
+5. **Faith & Spiritual Profile** *(Christian counseling section)* — religious tradition, faith importance scale (0–10), church attendance frequency, whether they are connected to a church community, openness to integrating faith into counseling sessions (select with five levels from "I prefer faith stays separate" through "Faith is central to my healing"), whether prayer in session is welcome, any specific spiritual goals, name of their pastor or church leader if they consent to contact
+6. **Safety Screening** — current thoughts of self-harm or suicide, thoughts of harming others (yes/no radio, required), affirmation that the intake information is accurate
+
+---
+
+#### `apps/web/src/components/Documents/forms/LongIntakeForm.js`
+
+A comprehensive, approximately 40-minute pre-counseling assessment capturing the full clinical and personal picture. Structured into fourteen sections:
+
+1. **Personal Information** — full personal demographics including preferred name, pronouns, and household composition
+2. **Emergency Contact** — name, relationship, phone
+3. **Presenting Concerns** — detailed description of the primary issue, severity and duration, immediate triggers, prior treatment and outcomes, how the issue affects daily functioning, the client's readiness for change
+4. **Mental Health History** — prior diagnoses, psychiatric hospitalizations, prior therapy history, whether the client has ever attempted suicide or engaged in self-harm (with conditional follow-up fields for dates and recency), current mental health medications
+5. **Medical History** — primary care physician, chronic conditions, significant surgeries or hospitalizations, allergies, list of all current medications and dosages, physical health currently affecting mental health
+6. **Family History** — parents' relationship status, family history of mental health or substance use concerns, childhood description (happy/mixed/difficult/traumatic), key family dynamics that shaped the client
+7. **Developmental & Social History** — education level, vocational history, current living situation, primary social supports, legal history, military service including combat exposure
+8. **Relationship History** — current relationship status, relationship duration, relationship satisfaction scale, children (ages and living situation), significant relationships (past and present), relationship strengths and areas for growth
+9. **Substance Use** — alcohol, tobacco, marijuana, prescription misuse, and other substance use; frequency and quantity; whether misuse has ever been a concern; family history of addiction
+10. **Trauma History** — trauma screening checklist (childhood abuse, domestic violence, sexual assault, natural disaster, accident, medical trauma, loss, combat, community violence, other), approximate age of occurrence, whether they have received trauma-specific therapy, whether trauma is a focus for current counseling
+11. **Current Functioning** — sleep quality and issues, appetite and eating patterns, physical activity, how they currently cope with stress, current life stressors
+12. **Goals & Expectations** — specific counseling goals, what they would consider a successful outcome, timeline expectations, preferred counseling approach (directive / reflective / collaborative / spiritual / eclectic), concerns about the counseling process
+13. **Faith & Spiritual Profile** *(Christian counseling section)* — religious tradition/denomination, faith importance scale (1–10), church attendance frequency, whether they are actively connected to a home church, frequency of personal prayer, frequency of personal Bible reading, spiritual disciplines practiced (checkboxes: fasting, journaling, small group, service/volunteering, retreats, worship music, memorization, meditation), preferred level of faith integration in sessions (select with five levels), whether they consent to prayer during or between sessions, specific Christian-focused counseling goals, spiritually significant scriptures or sources of comfort, pastor or church contact consent
+14. **Safety Assessment** — current self-harm or suicidal ideation with required yes/no, access to means of harm, current plan or intent (conditional on ideation response), whether the client is currently safe
+
+---
+
+#### `apps/web/src/components/Documents/forms/AnxietyAssessment.js`
+
+A clinically validated anxiety screening based on the **GAD-7 (Generalized Anxiety Disorder 7-item scale)**, extended with physical symptom screening, anxiety pattern exploration, coping inventory, and a Christian faith dimension. Structured into seven sections with automatic real-time scoring:
+
+1. **Personal Information** — date, name, date of birth, counselor name
+2. **GAD-7 Core Items** — the seven standardized GAD-7 questions using the canonical four-point frequency scale (Not at all / Several days / More than half the days / Nearly every day). Scored from 0–3 per item, 0–21 total. Scoring bands:
+   - 0–4: Minimal anxiety (green)
+   - 5–9: Mild anxiety (yellow)
+   - 10–14: Moderate anxiety (orange) — watchlist threshold
+   - 15–21: Severe anxiety (red) — immediate clinical attention recommended
+3. **Physical Symptoms** — nine physical co-occurring symptoms (chest tightness, rapid heartbeat, shortness of breath, dizziness, sweating, trembling, nausea, fatigue, sleep disruption) with additional field for other physical symptoms
+4. **Anxiety Patterns & Triggers** — primary anxiety situations (select), frequency of panic episodes (select), severity of anxiety impact on daily functioning (scale 0–10), other specific triggers (free text), onset of current anxiety episode and duration
+5. **Impact on Daily Life** — work/school functioning, social functioning, self care functioning, avoidance of activities, notes on daily life impact
+6. **Coping Strategies** — checkboxes for current and past coping methods (deep breathing, prayer/meditation, journaling, exercise, support network, professional help, medication, nature/outdoors, worship music, scripture reading, fasting, service/volunteering); space for describing what has helped most
+7. **Faith Dimension** *(Christian counseling section)* — Philippians 4:6–7 displayed as an invitation to reflection ("Do not be anxious about anything, but in every situation, by prayer and petition, with thanksgiving, present your requests to God..."); whether the client's anxiety affects their sense of God's presence or trust in God (free text); checkboxes for specific spiritual anxiety factors (faith doubts, prayer feels difficult, spiritual disconnection, questioning God's care, shame/guilt, church/community conflict); a scale (0–10) of current trust and surrender to God; whether faith has been a source of comfort or distress in the anxiety experience; specific faith-based goals for counseling
+
+The scoring engine exports a standalone `anxietyScoreInterpretation(total)` function used by the `FormRunner` to display a live score banner as the client completes the GAD-7 section.
+
+---
+
+#### `apps/web/src/components/Documents/forms/SelfHarmAssessment.js`
+
+A carefully constructed risk assessment based on the **C-SSRS (Columbia Suicide Severity Rating Scale)** — adapted to a clinician-guided client self-report format — combined with non-suicidal self-injury (NSSI) screening and a Christian counseling faith dimension. This form is flagged as clinician-only and carries a crisis resource notice on the library card. Structured into eight sections plus a clinician section:
+
+1. **Personal Information** — date, name, date of birth, counselor name
+2. **Before We Begin** — visible crisis resource notice (988 Suicide and Crisis Lifeline, Text HOME to 741741); required confirmation of current immediate safety before the form continues
+3. **C-SSRS Ideation Items** — five items from the Columbia scale:
+   - Passive wish to be dead (cssrs1)
+   - Active suicidal ideation without plan or intent (cssrs2)
+   - Suicidal ideation with intent but no specific plan (cssrs3)
+   - Suicidal ideation with plan (cssrs4)
+   - Suicidal ideation with plan and intent (cssrs5)
+   Each item uses a yes/no radio with conditional follow-up questions when answered Yes: frequency (scale 0–10), most recent episode (date), longest duration of ideation, level of control over thoughts (scale)
+4. **Non-Suicidal Self-Injury Screening** — whether the client has engaged in NSSI in the last 90 days (yes/no, conditional ); if yes: method checkboxes (cutting, burning, hitting/banging, scratching, hair pulling, other), frequency, most recent occurrence (date), what the NSSI achieved emotionally (checkboxes: emotional release, feeling something/numbness, punishment, control, communication, other), and urge intensity in the last week (scale 0–10)
+5. **Behavioral History** — C-SSRS behavior items: lifetime and recent (< 90 days) suicide attempt history (yes/no, conditional dates and method), and aborted or interrupted attempt history
+6. **Protective Factors** — reasons for living (required free text); hopefulnessRating scale (0–10, labeled "No hope at all" to "Completely hopeful"); support network and specific support persons; access to lethal means and whether means restriction has been considered by the clinician; future-oriented thinking and plans
+7. **Current Emotional State** — current suffering level (scale 0–10); current emotional state checkboxes (hopeful / hopeless / worthless / burdened / alone / loved / at peace / confused / angry / numb / stable / other); notes on what is happening in life right now
+8. **Faith Dimension** *(Christian counseling section)* — Jeremiah 29:11 and Psalm 34:18 displayed as pastoral grounding; whether the client believes God has a purpose and future for them (radio: yes / not sure / struggling with this); what is making it hard to see God's purpose (free text, conditional); current sense of God's presence (scale 0–10); whether the client holds moral or religious beliefs that would prevent self-harm (yes/no, free text); whether they would consent to pastoral contact or prayer; scriptures or passages that feel hopeful; open reflection on Jeremiah 29:11
+9. **Clinician Section** — clinician-only fields intended to be completed during or after the session: assessed risk level (select: Imminent / High / Moderate / Low / Minimal), actions taken (checkboxes: safety plan, means restriction, referral, hospitalization, increased frequency, pastor contact, family notification), and clinician notes
+
+The risk engine exports a standalone `selfHarmRiskInterpretation(answers)` function that evaluates the C-SSRS ideation items to calculate a risk band (Imminent / High / Moderate / Low / Minimal) displayed as a live banner in the side panel of the form.
+
+---
+
+#### `apps/web/src/components/Documents/FormRunner.jsx`
+
+The shared generic renderer that takes any form definition object and renders it interactively. Provides:
+
+- **Multi-section navigation** — left-column section list with numbered buttons; active section highlighted in brand indigo; safety-marked sections shown with a red dot badge
+- **Progress tracking** — a sticky header progress bar (filled brand-color) showing percentage of visible fields answered; section count and estimated completion time displayed alongside the progress bar
+- **Field type support** — `text`, `email`, `tel`, `number`, `date` (Mantine `DateInput`), `textarea` (auto-sizing), `select` (searchable + clearable), `radio` (horizontal Group with all options), `checkboxes` (SimpleGrid two-column), `scale` (numeric button row with min/max labels), `gad_scale` (compact Radio.Group row matching the GAD-7 four-option format)
+- **Conditional field rendering** — fields with a `showIf: { field, value }` or `showIf: { field, values[] }` property are shown only when the referenced answer matches; evaluated live on every answer change. Used throughout SelfHarmAssessment for follow-up ideation questions and NSSI method group
+- **Half-width columns** — fields with `half: true` are placed into a two-column SimpleGrid on tablet and wider; full-width fields span both columns
+- **Real-time scoring** — for forms marked `scorable: true`, a score banner is rendered in the left panel showing the current total score, severity band, color, and interpretation. GAD-7 uses a numeric sum (`scoreFields` → sum of integer answers). Self-harm risk uses answer-based logic (`scoreInterpretation(answers)`)
+- **Section descriptions** — section `description` strings are rendered with a left brand-color border callout style for visual emphasis
+- **Print / PDF export** — "Print / Save PDF" button triggers `window.print()`; print CSS hides navigation and side panels so only the form content is printed
+- **Clear and restart** — with a browser confirmation guard
+- **Keyboard and accessibility** — all inputs use native Mantine ARIA patterns; tab order follows document flow
+
+---
+
+#### `apps/web/src/components/Documents/DocumentsPage.jsx`
+
+The form library browser rendered when the user navigates to the Documents area. Provides:
+
+- **Form catalog grid** — `SimpleGrid` with 1/2/3 column breakpoints displaying a card for each available form template
+- **Form cards** — each card shows the form emoji icon, title, description (3-line clamp), type badge (Intake / Assessment / Clinical Assessment), estimated time badge, and section/field count
+- **Crisis alert** — the SelfHarmAssessment card carries a red top border and an inline alert: "Clinical use. In crisis? Call/text 988 or text HOME to 741741."
+- **Form launch** — "Open Form" button mounts `<FormRunner>` with the selected form definition and a back-to-library callback
+- **Christian integration footer** — a brand-tinted `Paper` block at the bottom of the library explains that every form includes a Faith & Spiritual Profile or Faith Dimension section, with Psalm 147:3 as the closing verse
+- **App theme compliance** — uses `var(--bg)`, `var(--surface)`, `var(--text)`, `var(--mantine-color-brand-*)`, and `Paper withBorder radius="lg"` consistent with all other major surfaces in the application
+
+---
+
+### `apps/web/src/App.jsx` — Routing and Telemetry Changes
+
+- Added `import DocumentsPage` alongside other top-level page imports
+- Added `const showDocuments = currentView === 'documents'` boolean flag alongside all other view flags
+- Added `!showDocuments` to the `showClientsWorkspace` fallback guard so the client workspace is not accidentally rendered behind the documents page on the `documents` route
+- Added `showDocuments ? <DocumentsPage />` routing branch between the `showWorkspaceStudio` block and the final dashboard/clients else block
+- Removed `'documents'` from the placeholder `emptyState` list in `useSurfaceTelemetry` — the Documents surface now reports as a real surface, not a placeholder
+
+---
+
+### Surface and Monitoring Compliance
+
+The Documents surface now emits real surface telemetry via `useSurfaceTelemetry` (inherited from the App.jsx routing layer). It is no longer listed as a placeholder surface. The form library view and the form runner view share the `documents` surface ID. Individual form opens do not create separate surface registrations in this release.
+
+### Breaking Changes
+
+None. All changes are additive. No existing API, schema, or routing behavior was removed or altered in a backward-incompatible way.
+
+### Clinical & Faith Notes
+
+All four form instruments in this release are grounded in standard clinical practice and adapted for the Christian counseling context:
+
+- **GAD-7** (Spitzer, Kroenke, Williams, & Löwe, 2006) — validated 7-item generalized anxiety disorder scale reproduced in standard form with standard scoring bands
+- **C-SSRS** (Posner et al., 2011) — Columbia Suicide Severity Rating Scale ideation and behavior items adapted to a self-report format for this tool; clinical review is expected before acting on results
+- **Long Intake** and **Short Intake** — original instruments drawing on standard intake and biopsychosocial assessment conventions common in outpatient mental health settings
+- **Faith Dimensions** — original questions authored for this system; not validated psychometric instruments, but designed to support therapeutic alliance and integrate faith naturally into the intake and assessment process
+
+Counselors should review all completed forms and use clinical judgment before making decisions based on any instrument in this library.
+
+---
+
+## v2.1.20 — Appointment Identity Integrity
+
+**Date:** March 28, 2026
+**Type:** Patch
+
+### Overview
+
+Fixes identity drift in the scheduling module. Clients and counselors already had generated primary keys in the data model, but appointment create/edit and counselor-calendar filtering were still partially name-driven. That meant a counselor rename could leave stale snapshots in appointment displays or make counselor-specific workload and calendar views depend on outdated names instead of the linked record.
+
+### API and DB (v2.1.20)
+
+- Updated appointment reads in `apps/api/src/db/queries/appointments.js` so `clientName` and `counselorName` resolve from the current linked client/staff rows first and only fall back to stored appointment snapshots when necessary
+- Updated `POST /v1/appointments` and `PATCH /v1/appointments/:id` in `apps/api/src/index.js` to accept `counselorId`, validate it against the tenant staff directory, and derive the counselor display name from the linked staff record
+- Added staff-rename propagation in `apps/api/src/index.js` so counselor profile name changes refresh appointment snapshots and re-link legacy name-only appointment rows
+- Added migration coverage in `apps/api/src/db/migrate.js` for `appointments.counselor_id` plus `idx_appointments_counselor` so older databases are upgraded to the current scheduling identity model
+- Added a migration-time backfill that links legacy name-only appointments to a counselor ID when the stored counselor name maps cleanly to one current staff record
+- Preserved compatibility for older appointment rows that still carry a counselor display name snapshot without a linked counselor ID
+
+### Web (v2.1.20)
+
+- Updated `apps/web/src/components/SchedulingPage.jsx` so the appointment composer selects counselors by staff ID instead of by counselor name text
+- Updated counselor-calendar filtering to request `/api/v1/scheduling/calendar` with `counselorId`, making workload and day views stable across counselor renames
+- Updated scheduling metrics to count active counselors by stable ID when available
+- Kept a fallback path for legacy appointments so previously stored name-only rows still render and can be edited
+
+### Breaking changes
+
+None.
+
 ## v2.1.19 — Schema and Query Bug Fixes
 
 **Date:** March 28, 2026

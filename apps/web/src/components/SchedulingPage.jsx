@@ -132,6 +132,25 @@ function resolveStaffName(staff) {
   return [staff?.firstName, staff?.lastName].filter(Boolean).join(' ').trim();
 }
 
+function resolveCounselorId(counselors, appointmentOrUser) {
+  if (!appointmentOrUser) return '';
+  if (appointmentOrUser.counselorId && counselors.some((staff) => staff.id === appointmentOrUser.counselorId)) {
+    return appointmentOrUser.counselorId;
+  }
+  if (appointmentOrUser.staffId && counselors.some((staff) => staff.id === appointmentOrUser.staffId)) {
+    return appointmentOrUser.staffId;
+  }
+  const targetName = appointmentOrUser.counselorName || appointmentOrUser.name || '';
+  if (!targetName) return '';
+  const match = counselors.find((staff) => resolveStaffName(staff) === targetName);
+  return match?.id ?? '';
+}
+
+function resolveCounselorDisplayName(counselors, counselorId, fallbackName = '') {
+  const counselor = counselors.find((staff) => staff.id === counselorId);
+  return counselor ? resolveStaffName(counselor) : fallbackName;
+}
+
 function AppointmentComposer({
   opened,
   onClose,
@@ -152,7 +171,7 @@ function AppointmentComposer({
   const [conflicts, setConflicts] = useState([]);
 
   const counselorOptions = counselors.map((staff) => ({
-    value: resolveStaffName(staff),
+    value: staff.id,
     label: `${resolveStaffName(staff)}${staff.role ? ` · ${staff.role}` : ''}`,
   })).filter((option) => option.value);
 
@@ -170,7 +189,7 @@ function AppointmentComposer({
     initialValues: {
       clientId: initialClientId || '',
       appointmentType: 'individual_therapy',
-      counselorName: currentUser?.name || '',
+      counselorId: resolveCounselorId(counselors, currentUser),
       startsAt: '',
       endsAt: '',
       locationName: 'Main Office',
@@ -180,7 +199,7 @@ function AppointmentComposer({
     validate: {
       clientId: (value) => value ? null : 'Client is required',
       appointmentType: (value) => value ? null : 'Appointment type is required',
-      counselorName: (value) => value.trim() ? null : 'Counselor is required',
+      counselorId: (value) => value ? null : 'Counselor is required',
       startsAt: (value) => value ? null : 'Start time is required',
       endsAt: (value) => value ? null : 'End time is required',
     },
@@ -198,7 +217,7 @@ function AppointmentComposer({
     form.setValues({
       clientId: editingAppointment?.clientId || initialClientId || '',
       appointmentType: editingAppointment?.appointmentType || 'individual_therapy',
-      counselorName: editingAppointment?.counselorName || currentUser?.name || '',
+      counselorId: resolveCounselorId(counselors, editingAppointment || currentUser),
       startsAt: startsAtValue || '',
       endsAt: endsAtValue || '',
       locationName: editingAppointment?.locationName || (isRemoteFromRequest ? 'Remote Session' : 'Main Office'),
@@ -208,7 +227,7 @@ function AppointmentComposer({
     form.resetDirty();
     setConflictMessage('');
     setConflicts([]);
-  }, [opened, editingAppointment, initialClientId, initialPortalRequest, timezone, currentUser?.name]);
+  }, [opened, editingAppointment, initialClientId, initialPortalRequest, timezone, currentUser, counselors]);
 
   const submit = form.onSubmit(async (values) => {
     setSaving(true);
@@ -217,6 +236,7 @@ function AppointmentComposer({
     try {
       const startsAt = toIsoFromLocalDateTime(values.startsAt);
       const endsAt = toIsoFromLocalDateTime(values.endsAt);
+      const counselorName = resolveCounselorDisplayName(counselors, values.counselorId, editingAppointment?.counselorName || currentUser?.name || '');
 
       if (!startsAt || !endsAt) {
         form.setErrors({
@@ -234,7 +254,8 @@ function AppointmentComposer({
       if (mode === 'edit' && editingAppointment?.id) {
         await updateAppointmentRecord(editingAppointment.id, {
           appointmentType: values.appointmentType,
-          counselorName: values.counselorName.trim(),
+          counselorId: values.counselorId,
+          counselorName,
           startsAt,
           endsAt,
           locationName: values.remoteSession ? 'Remote Session' : values.locationName.trim() || 'Main Office',
@@ -250,7 +271,8 @@ function AppointmentComposer({
         await createAppointmentRecord({
           clientId: values.clientId,
           appointmentType: values.appointmentType,
-          counselorName: values.counselorName.trim(),
+          counselorId: values.counselorId,
+          counselorName,
           startsAt,
           endsAt,
           locationName: values.remoteSession ? 'Remote Session' : values.locationName.trim() || 'Main Office',
@@ -329,7 +351,7 @@ function AppointmentComposer({
               searchable
               data={counselorOptions}
               nothingFoundMessage="No counselors"
-              {...form.getInputProps('counselorName')}
+              {...form.getInputProps('counselorId')}
             />
           </SimpleGrid>
 
@@ -1204,7 +1226,7 @@ export default function SchedulingPage({
     locationCalendars: [],
     availability: [],
   });
-  const [selectedCounselorName, setSelectedCounselorName] = useState(currentUser?.name || '');
+  const [selectedCounselorId, setSelectedCounselorId] = useState(currentUser?.staffId || '');
 
   useEffect(() => {
     if (!initialComposerOpen) return;
@@ -1218,11 +1240,19 @@ export default function SchedulingPage({
   }, [initialView]);
 
   useEffect(() => {
-    if (!canManageAll && currentUser?.name) {
-      setSelectedCounselorName(currentUser.name);
+    if (!canManageAll && currentUser?.staffId) {
+      setSelectedCounselorId(currentUser.staffId);
       setView('counselor');
     }
-  }, [canManageAll, currentUser?.name]);
+  }, [canManageAll, currentUser?.staffId]);
+
+  useEffect(() => {
+    if (canManageAll || !staff.length || selectedCounselorId) return;
+    const defaultCounselorId = resolveCounselorId(staff, currentUser);
+    if (defaultCounselorId) {
+      setSelectedCounselorId(defaultCounselorId);
+    }
+  }, [canManageAll, currentUser, selectedCounselorId, staff]);
 
   const loadScheduling = async () => {
     setLoading(true);
@@ -1234,7 +1264,7 @@ export default function SchedulingPage({
         fetchSchedulingCalendar({
           day: selectedDay,
           timezone,
-          counselorName: view === 'counselor' && selectedCounselorName ? selectedCounselorName : undefined,
+          counselorId: view === 'counselor' && selectedCounselorId ? selectedCounselorId : undefined,
         }),
         fetchStaff(),
       ]);
@@ -1328,7 +1358,7 @@ export default function SchedulingPage({
 
   useEffect(() => {
     loadScheduling();
-  }, [selectedDay, view, selectedCounselorName]);
+  }, [selectedDay, view, selectedCounselorId]);
 
   const counselors = useMemo(() => (
     staff.filter((item) => COUNSELING_ROLES.has(item.role))
@@ -1336,32 +1366,42 @@ export default function SchedulingPage({
 
   const counselorOptions = useMemo(() => (
     counselors
-      .map((item) => ({ value: resolveStaffName(item), label: resolveStaffName(item) }))
+      .map((item) => ({ value: item.id, label: resolveStaffName(item) }))
       .filter((item) => item.value)
   ), [counselors]);
 
+  const selectedCounselorName = useMemo(
+    () => resolveCounselorDisplayName(counselors, selectedCounselorId, ''),
+    [counselors, selectedCounselorId],
+  );
+
   const dayAppointments = useMemo(() => (
     appointments.filter((appointment) => appointment.startsAt?.slice(0, 10) === selectedDay)
-      .filter((appointment) => !selectedCounselorName || view !== 'counselor' || appointment.counselorName === selectedCounselorName)
+      .filter((appointment) => (
+        !selectedCounselorId
+        || view !== 'counselor'
+        || appointment.counselorId === selectedCounselorId
+        || appointment.counselorName === selectedCounselorName
+      ))
       .sort((left, right) => left.startsAt.localeCompare(right.startsAt))
-  ), [appointments, selectedDay, selectedCounselorName, view]);
+  ), [appointments, selectedCounselorId, selectedCounselorName, selectedDay, view]);
 
   const metrics = useMemo(() => {
     const scheduled = dayAppointments.filter((appointment) => appointment.status === 'scheduled').length;
     const remote = dayAppointments.filter((appointment) => appointment.remoteSession).length;
-    const counselorsCount = new Set(dayAppointments.map((appointment) => appointment.counselorName)).size;
+    const counselorsCount = new Set(dayAppointments.map((appointment) => appointment.counselorId || appointment.counselorName)).size;
     return { total: dayAppointments.length, scheduled, remote, counselors: counselorsCount };
   }, [dayAppointments]);
 
   const filteredCounselorCalendars = useMemo(() => {
-    if (!selectedCounselorName || view !== 'counselor') return calendarPayload.counselorCalendars;
+    if (!selectedCounselorId || view !== 'counselor') return calendarPayload.counselorCalendars;
     return calendarPayload.counselorCalendars.filter((calendar) => calendar.counselorName === selectedCounselorName);
-  }, [calendarPayload.counselorCalendars, selectedCounselorName, view]);
+  }, [calendarPayload.counselorCalendars, selectedCounselorId, selectedCounselorName, view]);
 
   const availabilityNote = useMemo(() => {
-    if (!selectedCounselorName || view !== 'counselor') return null;
-    return calendarPayload.availability.find((entry) => entry.counselorName === selectedCounselorName) || null;
-  }, [calendarPayload.availability, selectedCounselorName, view]);
+    if (!selectedCounselorId || view !== 'counselor') return null;
+    return calendarPayload.availability.find((entry) => entry.staffId === selectedCounselorId) || null;
+  }, [calendarPayload.availability, selectedCounselorId, view]);
 
   const activeSchedulingSurface = activeTab === 'appointments'
     ? `scheduling.${view}`
@@ -1468,8 +1508,8 @@ export default function SchedulingPage({
                     data={counselorOptions}
                     searchable
                     disabled={!canManageAll}
-                    value={selectedCounselorName}
-                    onChange={(value) => setSelectedCounselorName(value || '')}
+                    value={selectedCounselorId}
+                    onChange={(value) => setSelectedCounselorId(value || '')}
                     w={260}
                   />
                 ) : null}
