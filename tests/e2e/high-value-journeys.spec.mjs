@@ -12,19 +12,19 @@ test.describe('high-value UI journeys', () => {
 
     await signInAs(page, 'practice_admin');
     await ensureCounselor(page);
-    await expect(page.getByText("Today's Sessions")).toBeVisible();
+    await expect(page.getByText(/Today's Sessions|Sesiones de hoy/i)).toBeVisible();
     await openPrimaryNav(page, 'clients');
-    await expect(page.getByRole('heading', { name: 'Clients' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Clients|Clientes/i })).toBeVisible();
 
-    await page.getByRole('button', { name: 'New Client' }).click();
+    await page.getByRole('button', { name: /New Client|Nuevo cliente/i }).click();
     await page.getByLabel('First name').fill(firstName);
     await page.getByLabel('Last name').fill(lastName);
     await page.getByLabel('Faith background').fill('Evangelical');
-    await page.getByRole('button', { name: 'Create Client' }).click();
+    await page.getByRole('button', { name: /Create Client|Crear cliente/i }).click();
 
     await expect(page.locator('section[aria-labelledby="clientsPanelTitle"]')).toContainText(`${firstName} ${lastName}`);
-    await page.getByRole('button', { name: 'New Appointment' }).click();
-    await expect(page.getByRole('dialog', { name: 'New Appointment' })).toBeVisible();
+    await page.getByRole('button', { name: /New Appointment|Nueva cita/i }).click();
+    await expect(page.getByRole('dialog', { name: /New Appointment|Nueva cita/i })).toBeVisible();
     await page.getByRole('textbox', { name: 'Client' }).click();
     await page.getByRole('textbox', { name: 'Client' }).fill(firstName);
     await page.getByRole('option', { name: new RegExp(`${firstName} ${lastName}`, 'i') }).click();
@@ -34,9 +34,9 @@ test.describe('high-value UI journeys', () => {
     await page.locator('input[data-path="startsAt"]').fill(start);
     await page.locator('input[data-path="endsAt"]').fill(end);
     await page.getByLabel('Location').fill('Journey Room');
-    await page.getByRole('button', { name: 'Create Appointment' }).click();
+    await page.getByRole('button', { name: /Create Appointment|Crear cita/i }).click();
 
-    await expect(page.getByText('Appointment created')).toBeVisible();
+    await expect(page.getByText(/Appointment created|Cita creada/i)).toBeVisible();
     await page.getByLabel('Day').fill(day);
     await expect(page.getByRole('table')).toContainText(`${firstName} ${lastName}`);
   });
@@ -44,7 +44,7 @@ test.describe('high-value UI journeys', () => {
   test('practice admin can open workspace studio, monitoring, and operations surfaces used in daily operations', async ({ page }) => {
     await signInAs(page, 'practice_admin');
     await openPrimaryNav(page, 'workspace-studio');
-    await expect(page.getByRole('heading', { name: 'Workspace Studio' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Workspace Studio|Estudio del Espacio/i })).toBeVisible();
     await expect(page.getByText('Client Portal Access')).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Portal' })).toBeVisible();
 

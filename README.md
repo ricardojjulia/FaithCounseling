@@ -4,8 +4,8 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `3.0.6`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh + versioned web asset delivery + UI enhancements across main shell, monitoring, and operations surfaces + desktop sidebar toggle fix + sidebar options icon refresh + schema fixes for availability_overrides and appointment_series + utilization GROUP BY fix + appointment identity integrity for renamed counselors and clients + repaired Workspace Studio document assignment workflow + synced tracked web build artifacts + lint-clean documentation and generated monitoring outputs + **full Electronic Documents module with four clinical forms, GAD-7 auto-scoring, C-SSRS risk stratification, Christian counseling faith dimensions, and a generic form renderer**)
+- Current release: `3.0.7`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh + versioned web asset delivery + UI enhancements across main shell, monitoring, and operations surfaces + desktop sidebar toggle fix + sidebar options icon refresh + schema fixes for availability_overrides and appointment_series + utilization GROUP BY fix + appointment identity integrity for renamed counselors and clients + repaired Workspace Studio document assignment workflow + synced tracked web build artifacts + lint-clean documentation and generated monitoring outputs + full Electronic Documents module with four clinical forms, GAD-7 auto-scoring, C-SSRS risk stratification, Christian counseling faith dimensions, and a generic form renderer + **full-surface Spanish localization pass with 54 new i18n keys, covering client detail, counselor detail, and Workspace Studio deeper surfaces — plus dedicated Playwright localization regression spec**)
 
 ## Translation Guardian Agent
 
@@ -19,6 +19,60 @@ pnpm agent:translation:run
 ```
 
 The service listens on `http://127.0.0.1:8098` by default.
+
+## v3.0.7 — Full-Surface Localization Pass 2 + Playwright Regression Coverage (April 2026)
+
+### v3.0.7 Overview
+
+This release completes Spanish localization across all deeper application surfaces — client detail, counselor detail, and Workspace Studio — and adds a dedicated Playwright localization regression spec that guards against i18n key regressions on CI.
+
+### v3.0.7 — Localization
+
+**Newly localized surfaces (second pass):**
+
+- `ClientDetailPage.jsx` — loading state, error message, back button
+- `ClientDetailHeader.jsx` — action buttons, DOB / ID / pronouns labels, status badge
+- `ClientDetailTabs.jsx` — all 7 clinical detail tabs converted to `labelKey` pattern
+- `CounselorDetailPage.jsx` — loading state, error message, back button
+- `CounselorDetailHeader.jsx` — back button, role badge, license / supervision / ID labels
+- `CounselorDetailTabs.jsx` — all 7 counselor profile tabs converted to `labelKey` pattern
+- `WorkspaceStudioPage.jsx` — title, all 10 studio tab labels, tab placeholder text
+
+**Catalog additions:**
+
+- 54 new EN keys added to `packages/i18n/src/index.js` across six groups:
+  `role.*`, `clientDetail.*`, `counselorDetail.*`, `client.tab.*`, `counselor.tab.*`, `studio.*`
+- 54 matching Spanish translations added to `apps/api/data/i18n/es.json`
+
+**Bug fixes during this pass:**
+
+- Fixed variable-shadowing in `WorkspaceStudioPage.jsx` where the `.map((t) => …)` parameter collided with the `t()` i18n function, causing tab labels to resolve incorrectly.
+- Unified studio tab label rendering — removed a `documentsStudio` special case so all tabs use the same `t(tab.labelKey)` path.
+
+### v3.0.7 — Playwright Regression Coverage
+
+- Added `tests/e2e/localization.spec.mjs` — dedicated localization regression spec with four test suites:
+  - Dashboard: sidebar nav labels change after locale switch; no raw keys visible.
+  - Client detail: tab labels resolve correctly in EN; switch to Spanish produces translated labels; no raw keys appear.
+  - Counselor detail: same guard as client detail.
+  - Workspace Studio: title and all tab labels resolve; locale switch produces Spanish labels; no raw keys appear.
+- Updated `tests/e2e/helpers.mjs` — `openPrimaryNav` is now bilingual-resilient, matching both `[aria-label="Toggle navigation"]` and `[aria-label="Alternar navegacion"]`.
+- Relaxed 8 English-only string assertions in `tests/e2e/high-value-journeys.spec.mjs` to bilingual regex patterns (`/English|Spanish/i`).
+
+### v3.0.7 — Agent Catalog
+
+- Copied `agents/translation_guardian/` into `.github/agents/translation_guardian/` — the canonical location for all repo agents.
+- Added Translation Guardian entry to `.github/agents/README.md`.
+
+### v3.0.7 — Validation
+
+- `pnpm --filter @faith/web build` — passed, 1263 modules, no errors
+- `npx playwright test tests/e2e/localization.spec.mjs` — 3 passed, 2 skipped (client/counselor detail skip without seeded records)
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs` — 3 passed
+
+### v3.0.7 Breaking Changes
+
+None. All new i18n keys fall back to English strings when a locale override is absent.
 
 ## v3.0.6 — Maintenance Release: Lint Cleanup, Docs Refresh, and Build Sync (March 2026)
 

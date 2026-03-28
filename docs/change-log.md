@@ -2,6 +2,85 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v3.0.7 — Full-Surface Localization Pass 2 + Playwright Regression Coverage
+
+**Date:** April 2026
+**Type:** Feature revision
+
+### Summary
+
+Completes Spanish localization across all deeper application surfaces (client detail, counselor detail, Workspace Studio) and introduces a dedicated Playwright localization regression spec. Also copies the Translation Guardian agent into the canonical `.github/agents/` directory and updates the agent catalog.
+
+---
+
+### Findings
+
+1. **Tab labels were hard-coded English strings** in three component trees: `ClientDetailTabs.jsx`, `CounselorDetailTabs.jsx`, and `WorkspaceStudioPage.jsx`. Each used a local `TABS` array with a `label` property that bypassed the i18n system entirely.
+2. **Variable shadowing in `WorkspaceStudioPage.jsx`**: The `.map()` parameter was named `t`, which shadowed the `t()` i18n function. Tab labels in the studio were resolving to the parameter value (a tab object reference) instead of the translated string.
+3. **Inconsistent studio tab rendering**: The `documentsStudio` tab used a bespoke translation key path while all other tabs used a different path — two code paths for one concept.
+4. **Playwright helpers and assertions were English-only**: `openPrimaryNav` in `helpers.mjs` used a hard-coded English `aria-label`. Eight assertions across `high-value-journeys.spec.mjs` would have failed if the locale persisted in test state.
+5. **No dedicated localization regression spec existed**: There was no CI-automatable check that raw i18n key strings were absent from the UI or that translated strings appeared after a locale switch.
+
+### Mitigations and Fixes
+
+| Finding | Component | Fix |
+|---|---|---|
+| Tab labels bypassing i18n | `ClientDetailTabs.jsx`, `CounselorDetailTabs.jsx`, `WorkspaceStudioPage.jsx` | Converted `TABS` arrays from `{ label }` to `{ labelKey }`. All tab renders use `t(tab.labelKey)`. |
+| Variable shadowing | `WorkspaceStudioPage.jsx` | Renamed `.map()` parameter from `t` to `tab` across all three usages in the file. |
+| Inconsistent studio tab key path | `WorkspaceStudioPage.jsx` | Removed `documentsStudio` special case. All 10 studio tabs use uniform `t(tab.labelKey)`. |
+| English-only Playwright selectors | `tests/e2e/helpers.mjs` | `openPrimaryNav` toggle selector now includes the Spanish aria-label alternative. |
+| English-only E2E assertions | `tests/e2e/high-value-journeys.spec.mjs` | 8 assertions relaxed to bilingual regex (`/English\|Spanish/i`). |
+| No localization regression spec | `tests/e2e/localization.spec.mjs` | Created. Four suites: dashboard keys, client detail tabs, counselor detail tabs, studio title + tabs. |
+
+### Added
+
+- `tests/e2e/localization.spec.mjs` — dedicated Playwright localization regression spec
+  - Dashboard: raw key guard; locale-switch labels
+  - Client detail tabs: EN baseline + Spanish switch
+  - Counselor detail tabs: EN baseline + Spanish switch
+  - Workspace Studio: title + all tabs EN baseline + Spanish switch
+- 54 new EN i18n keys in `packages/i18n/src/index.js`:
+  `role.*` (6), `clientDetail.*` (7), `counselorDetail.*` (7), `client.tab.*` (7), `counselor.tab.*` (7), `studio.*` (11 + placeholder)
+- 54 matching Spanish translations in `apps/api/data/i18n/es.json`
+- `.github/agents/translation_guardian/` — Translation Guardian Python service copied from `agents/translation_guardian/`
+- `.github/agents/README.md` — Translation Guardian catalog entry added
+
+### Changed
+
+- `apps/web/src/components/ClientDetail/ClientDetailPage.jsx` — added `useI18n`, keyed loading/error/back strings
+- `apps/web/src/components/ClientDetail/ClientDetailHeader.jsx` — added `useI18n`, keyed buttons, label fields, status badge
+- `apps/web/src/components/ClientDetail/ClientDetailTabs.jsx` — `TABS` converted to `labelKey` pattern; added `useI18n`
+- `apps/web/src/components/CounselorDetail/CounselorDetailPage.jsx` — added `useI18n`, keyed loading/error/back strings
+- `apps/web/src/components/CounselorDetail/CounselorDetailHeader.jsx` — added `useI18n`, keyed back button, role badge, label fields
+- `apps/web/src/components/CounselorDetail/CounselorDetailTabs.jsx` — `TABS` converted to `labelKey` pattern; added `useI18n`
+- `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx` — `STUDIO_TABS` converted to `labelKey` pattern; variable shadowing fixed; title and placeholder keyed
+- `tests/e2e/helpers.mjs` — `openPrimaryNav` bilingual-resilient
+- `tests/e2e/high-value-journeys.spec.mjs` — 8 assertions use bilingual regex
+
+### Version bump
+
+Updated package versions from `3.0.6` to `3.0.7`:
+
+- `package.json`
+- `apps/api/package.json`
+- `apps/web/package.json`
+- `apps/worker/package.json`
+- `packages/domain/package.json`
+- `packages/i18n/package.json`
+- `packages/telemetry/package.json`
+
+### Validation
+
+- `pnpm --filter @faith/web build` — passed, no compile errors (1263 modules transformed)
+- `npx playwright test tests/e2e/localization.spec.mjs` — 3 passed, 2 skipped (client/counselor detail tests skip when no seeded records; no failures)
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs` — 3 passed
+
+### Breaking changes
+
+None. All 54 new i18n keys fall back gracefully to English base strings when a locale override file is absent.
+
+---
+
 ## v3.0.6 — Lint Cleanup, Docs Refresh, and Build Sync
 
 **Date:** March 2026  

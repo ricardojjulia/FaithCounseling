@@ -1,4 +1,5 @@
 import { Group, Button, Title, Badge, Text, Box, Paper } from '@mantine/core';
+import { useI18n } from '../../lib/i18nContext.jsx';
 
 const STATUS_COLOR = { active: 'green', inactive: 'gray', waitlist: 'yellow', discharged: 'blue' };
 
@@ -20,6 +21,7 @@ function formatDate(ds) {
 }
 
 export default function ClientDetailHeader({ client, onBack, onScheduleClient }) {
+  const { t } = useI18n();
   const displayName = client.preferredName
     ? `${client.preferredName} (${client.firstName} ${client.lastName})`
     : `${client.firstName}${client.middleName ? ' ' + client.middleName : ''} ${client.lastName}`;
@@ -30,21 +32,21 @@ export default function ClientDetailHeader({ client, onBack, onScheduleClient })
   return (
     <Paper radius={0} withBorder style={{ borderLeft: 0, borderRight: 0, borderTop: 0 }} p="md">
       <Group gap="md" wrap="wrap">
-        <Button variant="default" size="sm" onClick={onBack}>← Clients</Button>
-        <Button size="sm" onClick={onScheduleClient}>Schedule Appointment</Button>
+        <Button variant="default" size="sm" onClick={onBack}>← {t('nav.clients')}</Button>
+        <Button size="sm" onClick={onScheduleClient}>{t('clientDetail.scheduleAppointment')}</Button>
         <Box style={{ flex: 1, minWidth: 0 }}>
           <Group gap="sm" wrap="wrap" align="center">
             <Title order={1} fz="xl" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {displayName}
             </Title>
             <Badge color={STATUS_COLOR[client.status] || 'gray'} variant="light" tt="capitalize">
-              {client.status}
+              {t(`status.${client.status || 'active'}`)}
             </Badge>
           </Group>
           <Group gap="lg" mt={4}>
-            {dob && <Text fz="sm" c="dimmed">DOB: {dob}{age !== null && ` (${age} yrs)`}</Text>}
-            <Text fz="sm" c="dimmed">ID: {client.id}</Text>
-            {client.pronouns && <Text fz="sm" c="dimmed">Pronouns: {client.pronouns}</Text>}
+            {dob && <Text fz="sm" c="dimmed">{t('clientDetail.dob')}: {dob}{age !== null && ` (${age} ${t('clientDetail.yearsShort')})`}</Text>}
+            <Text fz="sm" c="dimmed">{t('clientDetail.id')}: {client.id}</Text>
+            {client.pronouns && <Text fz="sm" c="dimmed">{t('clientDetail.pronouns')}: {client.pronouns}</Text>}
           </Group>
         </Box>
       </Group>

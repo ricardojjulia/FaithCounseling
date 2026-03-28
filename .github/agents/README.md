@@ -42,6 +42,20 @@ General autonomous repair agent for getting the application running, stable, and
 
 Use when the app is broken and you want a broad engineering repair pass without a narrower business persona.
 
+### [Translation Guardian](/Users/rjulia/FaithCounseling/.github/agents/translation_guardian/)
+
+Translation quality and safety agent. Audits i18n catalogs for missing keys, untranslated fallbacks, glossary violations, raw key leakage, and completeness across all supported locales (en, es, fr, pt). Integrates with the `packages/i18n` base catalog and the API-served locale override files under `apps/api/data/i18n/`.
+
+Use when adding new i18n keys, onboarding a new locale, or verifying that a localization pass left no raw-key fallbacks in the UI.
+
+```bash
+# From repo root
+pnpm agent:translation:build
+pnpm agent:translation:run
+```
+
+The service listens on `http://127.0.0.1:8098` by default.
+
 ## Notes
 
 - Security and auditing work must follow [FULL-SECURITY-AND-AUDITING.md](/Users/rjulia/FaithCounseling/PLANS/FULL-SECURITY-AND-AUDITING.md).

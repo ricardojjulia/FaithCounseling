@@ -74,7 +74,12 @@ export async function openPrimaryNav(page, navKey) {
       return r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight;
     }).catch(() => false);
   if (!inViewport) {
-    await page.click('[aria-label="Toggle navigation"]');
+    const toggle = page.locator('[aria-label="Toggle navigation"], [aria-label="Alternar navegacion"]').first();
+    if (await toggle.isVisible().catch(() => false)) {
+      await toggle.click();
+    } else {
+      await page.locator('header button').first().click();
+    }
     await expect(target).toBeVisible();
   }
   await target.click();

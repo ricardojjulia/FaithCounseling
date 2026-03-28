@@ -37,7 +37,7 @@ export default function WorkspaceStudioPage({ onSchedulePortalRequest }) {
           <Tabs.List style={{ overflowX: 'auto', flexWrap: 'nowrap' }}>
             {STUDIO_TABS.map((tab) => (
               <Tabs.Tab key={tab.id} value={tab.id} style={{ whiteSpace: 'nowrap' }}>
-                {tab.id === 'documentsStudio' ? t('studio.tab.documents') : t(tab.labelKey)}
+                {t(tab.labelKey)}
               </Tabs.Tab>
             ))}
           </Tabs.List>
@@ -48,7 +48,7 @@ export default function WorkspaceStudioPage({ onSchedulePortalRequest }) {
               ) : tab.id === 'documentsStudio' ? (
                 <DocumentsStudioTab />
               ) : (
-                <Text c="dimmed" fz="sm">{t('studio.placeholderForTab', { tab: tab.id === 'documentsStudio' ? t('studio.tab.documents') : t(tab.labelKey) })}</Text>
+                <Text c="dimmed" fz="sm">{t('studio.placeholderForTab', { tab: t(tab.labelKey) })}</Text>
               )}
             </Tabs.Panel>
           ))}
