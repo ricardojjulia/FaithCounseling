@@ -241,6 +241,114 @@
 
       /* ── Auth gate (legacy, hidden by default) ───────────── */
       .auth-gate { display: none; }
+
+      /* ── Audit Intelligence ───────────────────────────────── */
+      .audit-filter-bar {
+        display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;
+        background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+        padding: 16px 20px; margin-bottom: 16px;
+      }
+      .audit-filter-group { display: flex; flex-direction: column; gap: 5px; }
+      .audit-filter-label {
+        font-size: 11px; font-weight: 600; text-transform: uppercase;
+        letter-spacing: .06em; color: #94a3b8;
+      }
+      .audit-window-btns { display: flex; gap: 4px; }
+      .audit-window-btn {
+        padding: 5px 12px; border: 1px solid #e2e8f0; border-radius: 6px;
+        background: #fff; color: #64748b; font-size: 13px; font-weight: 500;
+        cursor: pointer; transition: all .15s;
+      }
+      .audit-window-btn:hover { border-color: #6366f1; color: #4f46e5; }
+      .audit-window-btn.active { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+      .audit-select, .audit-input {
+        padding: 6px 10px; border: 1px solid #e2e8f0; border-radius: 6px;
+        font-size: 13px; color: #1e293b; background: #fff; font-family: inherit;
+        transition: border-color .15s; height: 34px;
+      }
+      .audit-select:focus, .audit-input:focus {
+        outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.12);
+      }
+      .audit-input { min-width: 200px; }
+
+      .audit-stats-row {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;
+      }
+      @media (max-width: 700px) { .audit-stats-row { grid-template-columns: repeat(2, 1fr); } }
+      .audit-stat-card {
+        background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+        padding: 16px 18px; border-top: 3px solid #e2e8f0;
+      }
+      .audit-stat-success { border-top-color: #10b981; }
+      .audit-stat-denied  { border-top-color: #f59e0b; }
+      .audit-stat-error   { border-top-color: #ef4444; }
+      .audit-stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; margin-bottom: 8px; }
+      .audit-stat-value { font-size: 32px; font-weight: 800; color: #1e293b; line-height: 1; font-variant-numeric: tabular-nums; }
+      .audit-stat-sub { font-size: 11px; color: #94a3b8; margin-top: 6px; }
+
+      .audit-breakdowns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+      @media (max-width: 700px) { .audit-breakdowns { grid-template-columns: 1fr; } }
+      .card-subtitle { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; margin-bottom: 8px; }
+      .audit-bar-list { display: flex; flex-direction: column; gap: 8px; }
+      .audit-bar-row { display: flex; align-items: center; gap: 10px; }
+      .audit-bar-label { flex: 0 0 156px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #374151; font-family: 'Menlo','Monaco',monospace; font-size: 12px; }
+      .audit-bar-track { flex: 1; height: 7px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+      .audit-bar-fill { height: 100%; border-radius: 4px; background: #6366f1; transition: width .6s ease; }
+      .audit-bar-count { flex: 0 0 36px; text-align: right; color: #64748b; font-weight: 600; font-size: 12px; }
+
+      .audit-log-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+      .audit-log-desc { font-size: 12px; color: #94a3b8; margin-top: 3px; }
+      .audit-count-badge { font-size: 12px; font-weight: 700; background: #f1f5f9; color: #64748b; border-radius: 999px; padding: 3px 10px; white-space: nowrap; flex-shrink: 0; }
+      .audit-log-table-wrap { overflow-x: auto; }
+      .audit-log-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      .audit-log-table th {
+        text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase;
+        letter-spacing: .06em; color: #94a3b8; padding: 8px 10px;
+        border-bottom: 2px solid #f1f5f9; white-space: nowrap;
+      }
+      .audit-log-table td { padding: 10px; border-bottom: 1px solid #f8fafc; vertical-align: middle; }
+      .audit-log-table tbody tr { transition: background .1s; }
+      .audit-log-table tbody tr:hover { background: #f8fafc; }
+      .audit-log-table tbody tr:last-child td { border-bottom: none; }
+
+      .audit-result-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+      .audit-dot-success { background: #10b981; box-shadow: 0 0 4px rgba(16,185,129,.5); }
+      .audit-dot-denied  { background: #f59e0b; box-shadow: 0 0 4px rgba(245,158,11,.5); }
+      .audit-dot-error   { background: #ef4444; box-shadow: 0 0 4px rgba(239,68,68,.5); }
+      .audit-dot-unknown { background: #cbd5e1; }
+
+      .audit-action-wrap { display: flex; flex-direction: column; gap: 2px; }
+      .audit-action-text { font-family: 'Menlo','Monaco',monospace; font-size: 12px; color: #1e293b; font-weight: 500; }
+      .audit-action-module { color: #6366f1; font-weight: 700; }
+      .audit-action-sep { color: #cbd5e1; }
+      .audit-result-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+      .audit-result-label.success { color: #10b981; }
+      .audit-result-label.denied  { color: #f59e0b; }
+      .audit-result-label.error   { color: #ef4444; }
+      .audit-result-label.unknown { color: #94a3b8; }
+
+      .audit-role-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: #f1f5f9; color: #475569; white-space: nowrap; }
+      .audit-role-owner    { background: #ede9fe; color: #5b21b6; }
+      .audit-role-admin    { background: #dbeafe; color: #1d4ed8; }
+      .audit-role-system   { background: #d1fae5; color: #065f46; }
+      .audit-role-counselor{ background: #fef3c7; color: #92400e; }
+
+      .audit-target-type { color: #374151; font-weight: 600; font-size: 12px; }
+      .audit-target-id   { font-family: 'Menlo','Monaco',monospace; font-size: 11px; color: #94a3b8; margin-top: 1px; }
+      .audit-time-rel { color: #374151; font-weight: 500; white-space: nowrap; font-size: 13px; }
+      .audit-time-abs { font-size: 11px; color: #94a3b8; margin-top: 1px; white-space: nowrap; }
+
+      .audit-empty { text-align: center; color: #94a3b8; padding: 40px; font-size: 13px; }
+      .audit-zero-state { text-align: center; padding: 60px 20px; }
+      .audit-zero-icon  { font-size: 36px; margin-bottom: 12px; }
+      .audit-zero-title { font-size: 16px; font-weight: 700; color: #334155; margin-bottom: 6px; }
+      .audit-zero-sub   { font-size: 13px; color: #94a3b8; }
+
+      .audit-intro {
+        background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #6366f1;
+        border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; font-size: 13px; color: #475569; line-height: 1.6;
+      }
+      .audit-intro strong { color: #1e293b; }
     </style>
   </head>
   <body>
@@ -552,52 +660,128 @@
     <!-- ══════════════════════════════════════════════════════════════ -->
     <!-- TAB: Audit Intelligence                                        -->
     <!-- ══════════════════════════════════════════════════════════════ -->
-    <div class="tab-panel" id="tab-audit" role="tabpanel">
+    <div class="tab-panel" id="tab-audit" role="tabpanel" style="max-width:1100px">
 
-      <div class="card">
-        <div class="card-title">Audit Intelligence</div>
-        <div class="card-desc">Investigation-first audit view with bounded windows. Use filters to narrow results before export and deep triage.</div>
-        <div class="form-row">
-          <div class="field field-sm">
-            <label for="auditWindowDays">Window (days)</label>
-            <input id="auditWindowDays" type="number" min="1" max="90" value="7" />
-          </div>
-          <div class="field field-sm">
-            <label for="auditResultFilter">Result</label>
-            <select id="auditResultFilter">
-              <option value="">All</option>
-              <option value="success">Success</option>
-              <option value="denied">Denied</option>
-              <option value="error">Error</option>
-            </select>
-          </div>
-          <div class="field field-sm">
-            <label for="auditRoleFilter">Actor Role</label>
-            <input id="auditRoleFilter" type="text" placeholder="practice_admin" />
-          </div>
-          <div class="field">
-            <label for="auditActionFilter">Action</label>
-            <input id="auditActionFilter" type="text" placeholder="billing.invoice.update" />
-          </div>
-          <button type="button" class="btn btn-primary" id="refreshAuditBtn">Refresh Audit</button>
-        </div>
-        <div id="auditStatus" class="status-bar"></div>
+      <div class="audit-intro">
+        <strong>Audit Intelligence</strong> — Investigation-first view of all system activity. Select a time window, apply filters, and run a query to see a statistical breakdown and the full event log. No PHI or client names are stored in the audit trail — only action codes, roles, target types, and IDs.
       </div>
 
-      <div class="card">
-        <div class="card-title">Summary</div>
-        <div class="field field-full">
-          <label for="auditSummary">Aggregated summary</label>
-          <textarea id="auditSummary" class="result" rows="10" readonly aria-label="Audit summary"></textarea>
+      <!-- ── Filter bar ──────────────────────────────────────────── -->
+      <div class="audit-filter-bar">
+        <div class="audit-filter-group">
+          <span class="audit-filter-label">Time window</span>
+          <div class="audit-window-btns">
+            <button type="button" class="audit-window-btn active" data-days="7">7 days</button>
+            <button type="button" class="audit-window-btn" data-days="30">30 days</button>
+            <button type="button" class="audit-window-btn" data-days="90">90 days</button>
+          </div>
+          <input id="auditWindowDays" type="hidden" value="7" />
+        </div>
+
+        <div class="audit-filter-group">
+          <label class="audit-filter-label" for="auditResultFilter">Result</label>
+          <select id="auditResultFilter" class="audit-select">
+            <option value="">All results</option>
+            <option value="success">Success</option>
+            <option value="denied">Denied</option>
+            <option value="error">Error</option>
+          </select>
+        </div>
+
+        <div class="audit-filter-group">
+          <label class="audit-filter-label" for="auditRoleFilter">Actor role</label>
+          <select id="auditRoleFilter" class="audit-select">
+            <option value="">All roles</option>
+            <option value="practice_owner">Practice Owner</option>
+            <option value="practice_admin">Practice Admin</option>
+            <option value="counselor">Counselor</option>
+            <option value="scheduler_biller">Scheduler / Biller</option>
+            <option value="system">System</option>
+          </select>
+        </div>
+
+        <div class="audit-filter-group" style="flex:2;min-width:180px">
+          <label class="audit-filter-label" for="auditActionFilter">Action contains</label>
+          <input id="auditActionFilter" type="search" class="audit-input" placeholder="e.g. billing or client.create" />
+        </div>
+
+        <button type="button" class="btn btn-primary" id="refreshAuditBtn" style="align-self:flex-end">Run Query</button>
+      </div>
+
+      <div id="auditStatus" class="status-bar" style="margin-bottom:16px"></div>
+
+      <!-- ── Summary stat cards ──────────────────────────────────── -->
+      <div class="audit-stats-row" id="auditStatsRow" style="display:none">
+        <div class="audit-stat-card">
+          <div class="audit-stat-label">Total Events</div>
+          <div class="audit-stat-value" id="auditStatTotal">—</div>
+          <div class="audit-stat-sub" id="auditStatWindow">last 7 days</div>
+        </div>
+        <div class="audit-stat-card audit-stat-success">
+          <div class="audit-stat-label">Successful</div>
+          <div class="audit-stat-value" id="auditStatSuccess">—</div>
+          <div class="audit-stat-sub">operations completed</div>
+        </div>
+        <div class="audit-stat-card audit-stat-denied">
+          <div class="audit-stat-label">Denied</div>
+          <div class="audit-stat-value" id="auditStatDenied">—</div>
+          <div class="audit-stat-sub">access or permission blocks</div>
+        </div>
+        <div class="audit-stat-card audit-stat-error">
+          <div class="audit-stat-label">Errors</div>
+          <div class="audit-stat-value" id="auditStatError">—</div>
+          <div class="audit-stat-sub">unexpected failures</div>
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-title">Recent Events</div>
-        <div class="field field-full">
-          <label for="auditEvents">Most recent filtered events</label>
-          <textarea id="auditEvents" class="result" rows="12" readonly aria-label="Recent audit events"></textarea>
+      <!-- ── Breakdown charts ────────────────────────────────────── -->
+      <div class="audit-breakdowns" id="auditBreakdowns" style="display:none">
+        <div class="card">
+          <div class="card-title">Top Actions</div>
+          <div id="auditByAction" class="audit-bar-list"></div>
         </div>
+        <div class="card">
+          <div class="card-title">Activity Breakdown</div>
+          <div class="card-subtitle">By Actor Role</div>
+          <div id="auditByRole" class="audit-bar-list" style="margin-bottom:20px"></div>
+          <div class="card-subtitle">By Target Type</div>
+          <div id="auditByTarget" class="audit-bar-list"></div>
+        </div>
+      </div>
+
+      <!-- ── Event log ───────────────────────────────────────────── -->
+      <div class="card" id="auditLogCard" style="display:none">
+        <div class="audit-log-header">
+          <div>
+            <div class="card-title" style="margin-bottom:4px">Event Log</div>
+            <div class="audit-log-desc" id="auditLogDesc">—</div>
+          </div>
+          <span class="audit-count-badge" id="auditEventCount">0 events</span>
+        </div>
+        <div class="audit-log-table-wrap">
+          <table class="audit-log-table">
+            <thead>
+              <tr>
+                <th style="width:32px"></th>
+                <th>Action</th>
+                <th>Actor Role</th>
+                <th>Target</th>
+                <th>Tenant</th>
+                <th>When</th>
+              </tr>
+            </thead>
+            <tbody id="auditLogBody">
+              <tr><td colspan="6" class="audit-empty">Run a query to see events.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── Zero state ──────────────────────────────────────────── -->
+      <div id="auditEmptyState" class="audit-zero-state" style="display:none">
+        <div class="audit-zero-icon">🔍</div>
+        <div class="audit-zero-title">No events matched</div>
+        <div class="audit-zero-sub">Try widening the time window or removing one of the filters.</div>
       </div>
 
     </div>

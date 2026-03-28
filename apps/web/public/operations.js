@@ -500,36 +500,188 @@ function initLanguage() {
   });
 }
 
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function fmtRelTime(iso) {
+  if (!iso) return '—';
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60)   return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+function fmtActionHtml(action) {
+  if (!action) return '—';
+  const parts = String(action).split('.');
+  if (parts.length === 1) return `<span class="audit-action-text">${escapeHtml(action)}</span>`;
+  const [module, ...rest] = parts;
+  const sep = '<span class="audit-action-sep">.</span>';
+  return `<span class="audit-action-text"><span class="audit-action-module">${escapeHtml(module)}</span>${sep}${rest.map(escapeHtml).join(sep)}</span>`;
+}
+
+function roleBadgeClass(role) {
+  if (!role) return '';
+  if (role === 'practice_owner') return 'audit-role-owner';
+  if (role === 'practice_admin') return 'audit-role-admin';
+  if (role === 'system')         return 'audit-role-system';
+  if (role === 'counselor')      return 'audit-role-counselor';
+  return '';
+}
+
 function initAuditIntelligence() {
-  el('refreshAuditBtn')?.addEventListener('click', async () => {
-    const btn = el('refreshAuditBtn');
-    setBusy(btn, true);
-    clearStatus('auditStatus');
-
-    const params = new URLSearchParams();
-    const days = String(el('auditWindowDays')?.value || '7').trim();
-    const result = String(el('auditResultFilter')?.value || '').trim();
-    const actorRole = String(el('auditRoleFilter')?.value || '').trim();
-    const action = String(el('auditActionFilter')?.value || '').trim();
-
-    if (days) params.set('days', days);
-    if (result) params.set('result', result);
-    if (actorRole) params.set('actorRole', actorRole);
-    if (action) params.set('action', action);
-    params.set('limit', '50');
-
-    try {
-      const data = await apiGet(`/v1/audit/intelligence?${params.toString()}`);
-      el('auditSummary').value = pretty(data.summary ?? {});
-      el('auditEvents').value = pretty(data.events ?? []);
-      const count = Array.isArray(data.events) ? data.events.length : 0;
-      setStatus('auditStatus', `Loaded ${count} event(s) for investigation.`, 'success');
-    } catch (err) {
-      setStatus('auditStatus', `Error: ${err.message}`, 'error');
-    } finally {
-      setBusy(btn, false);
-    }
+  // Window preset buttons
+  document.querySelectorAll('.audit-window-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.audit-window-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      el('auditWindowDays').value = btn.dataset.days;
+    });
   });
+
+  el('auditActionFilter')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') runAuditQuery();
+  });
+
+  el('refreshAuditBtn')?.addEventListener('click', runAuditQuery);
+}
+
+async function runAuditQuery() {
+  const btn = el('refreshAuditBtn');
+  setBusy(btn, true);
+  clearStatus('auditStatus');
+
+  const params = new URLSearchParams();
+  const days      = String(el('auditWindowDays')?.value  || '7').trim();
+  const result    = String(el('auditResultFilter')?.value || '').trim();
+  const actorRole = String(el('auditRoleFilter')?.value  || '').trim();
+  const action    = String(el('auditActionFilter')?.value || '').trim();
+
+  if (days)      params.set('days', days);
+  if (result)    params.set('result', result);
+  if (actorRole) params.set('actorRole', actorRole);
+  if (action)    params.set('action', action);
+  params.set('limit', '100');
+
+  try {
+    const data = await apiGet(`/v1/audit/intelligence?${params.toString()}`);
+    renderAuditSummary(data.summary ?? {}, Number(days));
+    renderAuditEvents(data.events ?? [], Number(days));
+    const count = Array.isArray(data.events) ? data.events.length : 0;
+    if (count === 0) {
+      clearStatus('auditStatus');
+    } else {
+      setStatus('auditStatus', `Query returned ${count} event(s) · window: last ${days} day(s).`, 'success');
+    }
+  } catch (err) {
+    setStatus('auditStatus', `Error: ${err.message}`, 'error');
+  } finally {
+    setBusy(btn, false);
+  }
+}
+
+function renderAuditSummary(summary, days) {
+  const statsRow  = el('auditStatsRow');
+  const breakdowns = el('auditBreakdowns');
+  if (!statsRow) return;
+
+  statsRow.style.display = '';
+
+  const total    = summary.total ?? 0;
+  const byResult = summary.byResult ?? [];
+  const get = (key) => byResult.find((r) => r.result === key)?.total ?? 0;
+
+  el('auditStatTotal').textContent   = total.toLocaleString();
+  el('auditStatWindow').textContent  = `last ${summary.window?.days ?? days} days`;
+  el('auditStatSuccess').textContent = get('success').toLocaleString();
+  el('auditStatDenied').textContent  = get('denied').toLocaleString();
+  el('auditStatError').textContent   = get('error').toLocaleString();
+
+  if (!breakdowns) return;
+  breakdowns.style.display = '';
+
+  function renderBars(containerId, items, key, color) {
+    const container = el(containerId);
+    if (!container) return;
+    if (!items.length) { container.innerHTML = '<div style="color:#94a3b8;font-size:13px;padding:4px 0">No data in this window</div>'; return; }
+    const max = items[0]?.total ?? 1;
+    container.innerHTML = items.slice(0, 8).map((item) => `
+      <div class="audit-bar-row">
+        <div class="audit-bar-label" title="${escapeHtml(item[key])}">${escapeHtml(item[key] ?? '—')}</div>
+        <div class="audit-bar-track">
+          <div class="audit-bar-fill" style="width:${((item.total / max) * 100).toFixed(1)}%;background:${color}"></div>
+        </div>
+        <div class="audit-bar-count">${item.total}</div>
+      </div>`).join('');
+  }
+
+  renderBars('auditByAction', summary.byAction ?? [],      'action',     '#6366f1');
+  renderBars('auditByRole',   summary.byActorRole ?? [],   'actorRole',  '#8b5cf6');
+  renderBars('auditByTarget', summary.byTargetType ?? [],  'targetType', '#06b6d4');
+}
+
+function renderAuditEvents(events, days) {
+  const logCard    = el('auditLogCard');
+  const emptyState = el('auditEmptyState');
+  const tbody      = el('auditLogBody');
+  if (!tbody) return;
+
+  if (!events.length) {
+    if (logCard)    logCard.style.display    = 'none';
+    if (emptyState) emptyState.style.display = '';
+    return;
+  }
+
+  if (logCard)    logCard.style.display    = '';
+  if (emptyState) emptyState.style.display = 'none';
+
+  el('auditEventCount').textContent = `${events.length} event${events.length !== 1 ? 's' : ''}`;
+
+  const parts = [];
+  const rf = el('auditResultFilter')?.value;
+  const rl = el('auditRoleFilter')?.value;
+  const af = el('auditActionFilter')?.value?.trim();
+  if (rf) parts.push(`result: ${rf}`);
+  if (rl) parts.push(`role: ${rl}`);
+  if (af) parts.push(`action contains "${af}"`);
+  el('auditLogDesc').textContent = parts.length
+    ? `Filtered by ${parts.join(' · ')} — last ${days} day(s)`
+    : `All activity — last ${days} day(s)`;
+
+  tbody.innerHTML = events.map((ev) => {
+    const result   = ev.result ?? 'unknown';
+    const dotClass = { success: 'audit-dot-success', denied: 'audit-dot-denied', error: 'audit-dot-error' }[result] ?? 'audit-dot-unknown';
+    const absTime  = new Date(ev.occurredAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    return `<tr>
+      <td style="text-align:center;padding-left:12px">
+        <span class="audit-result-dot ${dotClass}" title="${escapeHtml(result)}"></span>
+      </td>
+      <td>
+        <div class="audit-action-wrap">
+          ${fmtActionHtml(ev.action)}
+          <span class="audit-result-label ${result}">${result}</span>
+        </div>
+      </td>
+      <td><span class="audit-role-badge ${roleBadgeClass(ev.actorRole)}">${escapeHtml(ev.actorRole ?? '—')}</span></td>
+      <td>
+        <div class="audit-target-type">${escapeHtml(ev.targetType ?? '—')}</div>
+        <div class="audit-target-id">${escapeHtml(ev.targetId ?? '—')}</div>
+      </td>
+      <td><div style="font-size:12px;color:#64748b;font-family:'Menlo','Monaco',monospace">${escapeHtml(ev.tenantId ?? '—')}</div></td>
+      <td>
+        <div class="audit-time-rel">${fmtRelTime(ev.occurredAt)}</div>
+        <div class="audit-time-abs">${absTime}</div>
+      </td>
+    </tr>`;
+  }).join('');
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
