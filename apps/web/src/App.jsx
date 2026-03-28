@@ -56,12 +56,52 @@ function defaultCalendarView(role) {
     : 'counselor';
 }
 
+function toValidDate(value) {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date : null;
+}
+
+function summarizeAppointmentMetrics(items) {
+  const now = new Date();
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfTomorrow = new Date(startOfToday);
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+
+  let sessions = 0;
+  let futureAppointments = 0;
+
+  for (const item of items) {
+    const startsAt = toValidDate(item?.startsAt ?? item?.scheduledAt ?? item?.starts_at ?? item?.scheduled_at);
+    if (!startsAt) continue;
+
+    const isCancelled = item?.status === 'cancelled' || item?.status === 'canceled';
+    if (isCancelled) continue;
+
+    if (startsAt >= startOfToday && startsAt < startOfTomorrow) {
+      sessions += 1;
+    }
+    if (startsAt >= now) {
+      futureAppointments += 1;
+    }
+  }
+
+  return { sessions, futureAppointments };
+}
+
 export default function App() {
   const [navOpened, { toggle: toggleNav, close: closeNav }] = useDisclosure(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [authBootstrapping, setAuthBootstrapping] = useState(true);
-  const [metricsData, setMetricsData] = useState({ sessions: 0, appointmentTypes: 0, auditEvents: 0 });
+  const [metricsData, setMetricsData] = useState({
+    sessions: 0,
+    sessionsMeta: 'Scheduled for today',
+    futureAppointments: 0,
+    futureAppointmentsMeta: 'Scheduled ahead',
+    auditEvents: 0,
+    auditEventsMeta: 'Last 7 days',
+  });
   const [connectionStatus, setConnectionStatus] = useState('loading');
   const [clientsData, setClientsData] = useState({ items: [], loading: true, error: null });
   const [refreshClientsKey, setRefreshClientsKey] = useState(0);
@@ -111,14 +151,52 @@ export default function App() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    fetch('/api/v1/appointment-types', { credentials: 'include' })
+    fetch('/api/v1/appointments', { credentials: 'include' })
       .then((res) => { if (!res.ok) throw new Error(); return res.json(); })
       .then((payload) => {
-        const count = Array.isArray(payload?.items) ? payload.items.length : 0;
-        setMetricsData((prev) => ({ ...prev, appointmentTypes: count }));
+        const items = Array.isArray(payload?.items) ? payload.items : [];
+        const { sessions, futureAppointments } = summarizeAppointmentMetrics(items);
+        setMetricsData((prev) => ({
+          ...prev,
+          sessions,
+          sessionsMeta: 'Scheduled for today',
+          futureAppointments,
+          futureAppointmentsMeta: 'Scheduled ahead',
+        }));
       })
       .catch(() => {});
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const canReadAuditSummary = ['platform_admin', 'practice_owner', 'practice_admin'].includes(userRole || '');
+    if (!canReadAuditSummary) {
+      setMetricsData((prev) => ({
+        ...prev,
+        auditEvents: 0,
+        auditEventsMeta: 'Admin visibility required',
+      }));
+      return;
+    }
+
+    fetch('/api/v1/audit/intelligence?days=7&limit=1', { credentials: 'include' })
+      .then((res) => { if (!res.ok) throw new Error(); return res.json(); })
+      .then((payload) => {
+        const total = Number(payload?.summary?.total ?? 0);
+        setMetricsData((prev) => ({
+          ...prev,
+          auditEvents: total,
+          auditEventsMeta: 'Last 7 days',
+        }));
+      })
+      .catch(() => {
+        setMetricsData((prev) => ({
+          ...prev,
+          auditEventsMeta: 'Unable to load',
+        }));
+      });
+  }, [isAuthenticated, userRole]);
 
   const handleAuthContinue = (profile) => {
     setCurrentUser(normalizeSessionUser(profile));

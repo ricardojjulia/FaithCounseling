@@ -1,5 +1,53 @@
 # Change Log
 
+## v2.1.7 — Reporting Tab UI Redesign
+
+**Date:** March 28, 2026
+**Type:** Minor Release
+
+### Overview
+
+Replaces the two raw JSON textareas in the Operations Studio Reporting tab with a fully rendered dashboard. Practice Reporting now displays stat cards, proportional bar charts, a document-completion progress bar, an accounts-receivable aging grid, and a location-performance table. Platform Operations Summary now renders provisioning, impersonation, and data-export activity as stat pills and sortable tables, with a retention-policy grid at the bottom.
+
+### Web (v2.1.7)
+
+- Replaced `initReporting()` in `operations.js` with purpose-built rendering functions; the old `textarea.value = pretty(data)` pattern is gone
+- Added `renderPracticeReport(summary)` — drives utilization stat cards (sessions, completed, remote rate, avg/counselor), referral-source bar chart, document-completion progress bar with pending/overdue counts, assessment-trends bar chart, AR aging cells with warn/danger color coding, outstanding-by-client table, and location-performance table
+- Added `renderPlatformSummary(summary)` — drives provisioning stat pills + recent-tenants table, impersonation stat pills + recent-sessions table, data-exports stat pills + recent-exports table, and retention-policy grid
+- Added `runPracticeReport()` — reads active `.rpt-window-btn` for day window, fetches `/v1/reporting/overview?days=N`, populates as-of timestamp
+- Added `runPlatformSummary()` — fetches `/v1/platform/overview`, delegates to `renderPlatformSummary`
+- Added JS helpers: `fmtMoney(cents)`, `fmtPct(ratio)`, `rptBars()`, `platStatPill()`, `statusBadgeHtml()`
+- `initReporting()` now wires `.rpt-window-btn` preset toggling (same active-button-as-state-source pattern as Audit tab), Run Report → `runPracticeReport`, Refresh → `runPlatformSummary`
+- All CSS classes reference existing definitions in `operations.html`; no new styles needed
+
+### Breaking changes
+
+None.
+
+## v2.1.6 — Dashboard Metrics Correction
+
+**Date:** March 28, 2026
+**Type:** Minor Release
+
+### Overview
+
+Corrects the dashboard metric cards so they show live appointment and audit data instead of a miswired appointment-type count and a never-populated audit total. Before this change, the second card reported configuration depth (`Appointment Types`) instead of future workload, and the audit card displayed `0` because the frontend never issued an audit-summary request.
+
+### Web (v2.1.6)
+
+- Replaced `Appointment Types` with `Future Appointments` in the React dashboard metrics component
+- Changed dashboard appointment metric sourcing from `/api/v1/appointment-types` to `/api/v1/appointments`
+- `Today's Sessions` now counts current-day non-cancelled appointments
+- `Future Appointments` now counts upcoming non-cancelled appointments
+- Replaced placeholder metric badge copy with live, context-appropriate metadata tied to the underlying values
+- Fixed the dashboard audit metric bug by fetching `GET /api/v1/audit/intelligence?days=7&limit=1` and reading `summary.total`
+- Renamed the third card from `Audit Event Sync` to `Audit Events` so the label matches the displayed number
+- Added role-aware audit metric messaging so non-admin users see `Admin visibility required` instead of a misleading silent zero state
+
+### Breaking changes
+
+None.
+
 ## v2.1.5 — Structured PHI-Safe API Logging
 
 **Date:** March 28, 2026

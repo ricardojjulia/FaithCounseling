@@ -4,9 +4,9 @@ const META_COLOR = { positive: 'green', warning: 'orange', '': 'gray' };
 
 export default function Metrics({ data }) {
   const metrics = [
-    { label: "Today's Sessions",   value: data.sessions || 0,       meta: '+12% from yesterday', tone: 'positive' },
-    { label: 'Appointment Types',  value: data.appointmentTypes || 0, meta: `${data.appointmentTypes || 0} configured`, tone: '' },
-    { label: 'Audit Event Sync',   value: data.auditEvents || 0,    meta: 'Synced 2m ago',        tone: '' },
+    { label: "Today's Sessions", value: data.sessions || 0, meta: data.sessionsMeta || 'Scheduled for today', tone: 'positive' },
+    { label: 'Future Appointments', value: data.futureAppointments || 0, meta: data.futureAppointmentsMeta || 'Scheduled ahead', tone: '' },
+    { label: 'Audit Events', value: data.auditEvents || 0, meta: data.auditEventsMeta || 'Last 7 days', tone: '' },
   ];
 
   return (

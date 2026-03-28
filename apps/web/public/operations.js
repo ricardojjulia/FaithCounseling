@@ -152,37 +152,262 @@ function initTabs() {
 
 // ── Reporting tab ─────────────────────────────────────────────────────────────
 
+// ── Reporting helpers ─────────────────────────────────────────────────────────
+
+function fmtMoney(cents) {
+  if (cents == null) return '—';
+  return '$' + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtPct(ratio) {
+  if (ratio == null) return '—';
+  return (ratio * 100).toFixed(1) + '%';
+}
+
+function rptBars(containerId, items, labelKey, valueKey, total) {
+  const wrap = el(containerId);
+  if (!wrap) return;
+  if (!items || !items.length) { wrap.innerHTML = '<div class="audit-bar-zero">No data</div>'; return; }
+  const max = Math.max(...items.map(i => i[valueKey]));
+  wrap.innerHTML = items.map(item => {
+    const pct = max > 0 ? Math.round((item[valueKey] / max) * 100) : 0;
+    const share = total > 0 ? fmtPct(item[valueKey] / total) : '';
+    return `<div class="audit-bar-row">
+      <span class="audit-bar-label">${escapeHtml(String(item[labelKey] ?? '—'))}</span>
+      <div class="audit-bar-track"><div class="audit-bar-fill" style="width:${pct}%"></div></div>
+      <span class="audit-bar-count">${item[valueKey]}${share ? ' <span style="color:#94a3b8;font-size:10px">'+share+'</span>' : ''}</span>
+    </div>`;
+  }).join('');
+}
+
+function platStatPill(label, value, color) {
+  const colors = { blue: '#3b82f6', green: '#22c55e', amber: '#f59e0b', red: '#ef4444', slate: '#64748b' };
+  const c = colors[color] || colors.slate;
+  return `<div class="plat-stat" style="border-top:3px solid ${c}">
+    <div class="plat-stat-label">${escapeHtml(label)}</div>
+    <div class="plat-stat-value" style="color:${c}">${value ?? '—'}</div>
+  </div>`;
+}
+
+function statusBadgeHtml(status) {
+  const s = String(status ?? '');
+  return `<span class="status-badge ${s}">${escapeHtml(s || '—')}</span>`;
+}
+
+// ── Practice Reporting renderer ───────────────────────────────────────────────
+
+function renderPracticeReport(s) {
+  const u = s.utilization ?? {};
+  // Stat cards
+  el('rptSessions').textContent   = u.totalSessions ?? '—';
+  el('rptSessionsSub').textContent = `in ${s.windowDays ?? '?'}-day window`;
+  el('rptCompleted').textContent  = u.completedSessions ?? '—';
+  el('rptRemoteRate').textContent = fmtPct(u.remoteSessionRate);
+  const counselors = (s.counselorProductivity ?? []).length;
+  el('rptAvgPerCounselor').textContent = counselors > 0
+    ? ((u.totalSessions ?? 0) / counselors).toFixed(1) : '—';
+  el('rptUtilRow').style.display = '';
+
+  // Referral bars
+  rptBars('rptReferralBars', s.referralSources ?? [], 'source', 'count',
+    (s.referralSources ?? []).reduce((a, r) => a + r.count, 0));
+
+  // Document completion progress bar
+  const dc = s.documentCompletion ?? {};
+  const docTotal = (dc.completed ?? 0) + (dc.pending ?? 0) + (dc.overdue ?? 0);
+  const docPct   = docTotal > 0 ? Math.round((dc.completed / docTotal) * 100) : 0;
+  el('rptDocCompletion').innerHTML = `
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:#64748b;margin-bottom:4px">
+      <span>${dc.completed ?? 0} completed</span>
+      <span>${dc.pending ?? 0} pending · ${dc.overdue ?? 0} overdue</span>
+    </div>
+    <div style="background:#f1f5f9;border-radius:4px;height:10px;overflow:hidden">
+      <div style="background:#22c55e;width:${docPct}%;height:100%;border-radius:4px;transition:width .4s"></div>
+    </div>
+    <div style="font-size:11px;color:#64748b;margin-top:4px">${docPct}% completion rate</div>`;
+
+  // Assessment trends bars
+  const aItems = (s.assessmentTrends ?? []).map(a => ({ name: a.type, count: a.count }));
+  rptBars('rptAssessmentBars', aItems, 'name', 'count',
+    aItems.reduce((a, r) => a + r.count, 0));
+  el('rptMidRow').style.display = '';
+
+  // AR section
+  const ar = s.accountsReceivable ?? {};
+  const totals = ar.totals ?? {};
+  el('rptArOutstanding').innerHTML =
+    `<span style="font-size:13px;font-weight:600;color:#ef4444;margin-left:8px">${fmtMoney(totals.outstanding)}</span>`;
+
+  const aging = [
+    { label: 'Current',  val: totals.current },
+    { label: '30–60d',   val: totals.thirtyToSixty },
+    { label: '60–90d',   val: totals.sixtyToNinety },
+    { label: '90d+',     val: totals.ninetyPlus },
+  ];
+  el('rptArAging').innerHTML = aging.map((a, i) => {
+    const dangerCls = i >= 3 ? ' danger' : i >= 2 ? ' warn' : '';
+    return `<div class="rpt-aging-cell">
+      <div class="rpt-aging-label">${a.label}</div>
+      <div class="rpt-aging-val${dangerCls}">${fmtMoney(a.val)}</div>
+    </div>`;
+  }).join('');
+
+  const clients = ar.clients ?? [];
+  el('rptArClients').innerHTML = clients.length
+    ? clients.map(c =>
+        `<tr>
+          <td style="font-family:monospace;font-size:12px">${escapeHtml(c.clientId)}</td>
+          <td style="text-align:right;color:#ef4444">${fmtMoney(c.outstanding)}</td>
+          <td style="text-align:right;color:#64748b">${c.invoiceCount ?? '—'}</td>
+        </tr>`).join('')
+    : '<tr><td colspan="3" style="text-align:center;color:#94a3b8;padding:12px">No outstanding AR</td></tr>';
+  el('rptArCard').style.display = '';
+
+  // Location performance
+  const locs = s.locationPerformance ?? [];
+  el('rptLocBody').innerHTML = locs.length
+    ? locs.map(l => {
+        const pct = l.totalSessions > 0
+          ? fmtPct(l.completedSessions / l.totalSessions) : '—';
+        return `<tr>
+          <td>${escapeHtml(l.locationId)}</td>
+          <td style="text-align:right">${l.totalSessions ?? 0}</td>
+          <td style="text-align:right">${l.completedSessions ?? 0}</td>
+          <td style="text-align:right">${l.remoteSessions ?? 0}</td>
+          <td style="text-align:right;font-weight:600;color:#4f46e5">${pct}</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:12px">No location data</td></tr>';
+  el('rptLocCard').style.display = '';
+}
+
+async function runPracticeReport() {
+  const btn = el('refreshReportingBtn');
+  const days = document.querySelector('.rpt-window-btn.active')?.dataset?.days ?? '30';
+  setBusy(btn, true);
+  clearStatus('reportingStatus');
+  try {
+    const data = await apiGet(`/v1/reporting/overview?days=${days}`);
+    renderPracticeReport(data.summary ?? data);
+    const asOf = (data.summary ?? data).generatedAt;
+    el('reportingAsOf').textContent = asOf ? `as of ${new Date(asOf).toLocaleString()}` : '';
+    setStatus('reportingStatus', 'Report loaded.', 'success');
+  } catch (err) {
+    setStatus('reportingStatus', `Error: ${err.message}`, 'error');
+  } finally {
+    setBusy(btn, false);
+  }
+}
+
+// ── Platform Operations Summary renderer ──────────────────────────────────────
+
+function renderPlatformSummary(s) {
+  // Provisioning
+  const prov = s.provisioning ?? {};
+  el('platProvStats').innerHTML = [
+    platStatPill('Total', prov.total, 'blue'),
+    platStatPill('Queued', prov.queued, 'amber'),
+    platStatPill('In Progress', prov.inProgress, 'blue'),
+    platStatPill('Completed', prov.completed, 'green'),
+  ].join('');
+  const provRecent = prov.recent ?? [];
+  el('platProvBody').innerHTML = provRecent.length
+    ? provRecent.map(r =>
+        `<tr>
+          <td style="font-family:monospace;font-size:11px">${escapeHtml(r.tenantId)}</td>
+          <td>${escapeHtml(r.practiceName ?? '—')}</td>
+          <td>${statusBadgeHtml(r.status)}</td>
+          <td style="color:#64748b;font-size:12px">${fmtRelTime(r.requestedAt)}</td>
+          <td style="color:#64748b;font-size:12px">${r.completedAt ? fmtRelTime(r.completedAt) : '—'}</td>
+        </tr>`).join('')
+    : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:12px">No recent provisioning</td></tr>';
+  el('platProvUpdated').textContent = prov.asOf ? `updated ${fmtRelTime(prov.asOf)}` : '';
+
+  // Impersonation
+  const imp = s.supportImpersonation ?? {};
+  el('platImpStats').innerHTML = [
+    platStatPill('Total', imp.total, 'blue'),
+    platStatPill('Active', imp.active, 'amber'),
+    platStatPill('Ended', imp.ended, 'slate'),
+  ].join('');
+  const impRecent = imp.recent ?? [];
+  el('platImpBody').innerHTML = impRecent.length
+    ? impRecent.map(r =>
+        `<tr>
+          <td style="font-family:monospace;font-size:11px">${escapeHtml(r.targetTenantId)}</td>
+          <td>${escapeHtml(r.role ?? '—')}</td>
+          <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.reason ?? '—')}</td>
+          <td>${statusBadgeHtml(r.status)}</td>
+          <td style="color:#64748b;font-size:12px">${fmtRelTime(r.startedAt)}</td>
+          <td style="color:#64748b;font-size:12px">${r.durationMinutes != null ? r.durationMinutes + 'm' : '—'}</td>
+        </tr>`).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:12px">No recent sessions</td></tr>';
+
+  // Exports
+  const exp = s.dataExports ?? {};
+  el('platExportStats').innerHTML = [
+    platStatPill('Total', exp.total, 'blue'),
+    platStatPill('Queued', exp.queued, 'amber'),
+    platStatPill('Completed', exp.completed, 'green'),
+    platStatPill('Failed', exp.failed, 'red'),
+  ].join('');
+  const expRecent = exp.recent ?? [];
+  el('platExportBody').innerHTML = expRecent.length
+    ? expRecent.map(r =>
+        `<tr>
+          <td>${escapeHtml(r.type ?? '—')}</td>
+          <td>${escapeHtml(r.format ?? '—')}</td>
+          <td style="font-family:monospace;font-size:11px">${escapeHtml(r.requestedBy ?? '—')}</td>
+          <td>${statusBadgeHtml(r.status)}</td>
+          <td style="color:#64748b;font-size:12px">${fmtRelTime(r.requestedAt)}</td>
+          <td style="color:#64748b;font-size:12px">${r.completedAt ? fmtRelTime(r.completedAt) : '—'}</td>
+        </tr>`).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:12px">No recent exports</td></tr>';
+
+  // Retention policy
+  const ret = s.retentionPolicy ?? {};
+  el('platRetentionUpdated').textContent = ret.asOf ? `updated ${fmtRelTime(ret.asOf)}` : '';
+  const policies = ret.policies ?? Object.entries(ret).filter(([k]) => k !== 'asOf').map(([k, v]) => ({ type: k, ...v }));
+  el('platRetentionGrid').innerHTML = policies.length
+    ? policies.map(p =>
+        `<div class="plat-policy-item">
+          <div class="plat-policy-item-label">${escapeHtml(p.type ?? p.dataType ?? '—')}</div>
+          <div class="plat-policy-item-value">${p.retentionDays ?? p.days ?? '—'} <span style="font-size:11px;color:#94a3b8;font-weight:400">days</span></div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:4px">${p.purgeable ? 'purgeable' : ''}</div>
+        </div>`).join('')
+    : '<div style="color:#94a3b8;font-size:13px;padding:8px">No retention policies configured</div>';
+
+  el('platCard').style.display = '';
+}
+
+async function runPlatformSummary() {
+  const btn = el('refreshPlatformBtn');
+  setBusy(btn, true);
+  clearStatus('platformStatus');
+  try {
+    const data = await apiGet('/v1/platform/overview');
+    renderPlatformSummary(data.summary ?? data);
+    setStatus('platformStatus', 'Platform summary loaded.', 'success');
+  } catch (err) {
+    setStatus('platformStatus', `Error: ${err.message}`, 'error');
+  } finally {
+    setBusy(btn, false);
+  }
+}
+
+// ── initReporting ─────────────────────────────────────────────────────────────
+
 function initReporting() {
-  el('refreshReportingBtn')?.addEventListener('click', async () => {
-    const btn = el('refreshReportingBtn');
-    const days = parseInt(el('reportingWindowDays')?.value || '30', 10);
-    setBusy(btn, true);
-    clearStatus('reportingStatus');
-    try {
-      const data = await apiGet(`/v1/reporting/overview?days=${days}`);
-      el('reportingSummary').value = pretty(data);
-      setStatus('reportingStatus', 'Report loaded.', 'success');
-    } catch (err) {
-      setStatus('reportingStatus', `Error: ${err.message}`, 'error');
-    } finally {
-      setBusy(btn, false);
-    }
+  // Window preset buttons
+  document.querySelectorAll('.rpt-window-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.rpt-window-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
   });
 
-  el('refreshPlatformBtn')?.addEventListener('click', async () => {
-    const btn = el('refreshPlatformBtn');
-    setBusy(btn, true);
-    clearStatus('platformStatus');
-    try {
-      const data = await apiGet('/v1/platform/overview');
-      el('platformSummary').value = pretty(data);
-      setStatus('platformStatus', 'Platform summary loaded.', 'success');
-    } catch (err) {
-      setStatus('platformStatus', `Error: ${err.message}`, 'error');
-    } finally {
-      setBusy(btn, false);
-    }
-  });
+  el('refreshReportingBtn')?.addEventListener('click', runPracticeReport);
+  el('refreshPlatformBtn')?.addEventListener('click', runPlatformSummary);
 }
 
 // ── Platform Ops tab ──────────────────────────────────────────────────────────

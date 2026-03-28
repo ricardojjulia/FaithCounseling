@@ -4,8 +4,102 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `2.1.5`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging)
+- Current release: `2.1.7`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign)
+
+## v2.1.7 — Reporting Tab UI Redesign (March 2026)
+
+### v2.1.7 Overview
+
+Replaces the two raw JSON textarea boxes in the Operations Studio Reporting tab with a purpose-built dashboard. The previous implementation dumped entire API payloads into read-only textareas, making it impossible to scan trends, compare figures, or understand the shape of the data without hand-parsing JSON. The redesign renders every field in a form suited to its meaning — numbers as numbers, ratios as percentages, time-series as bars, aging buckets as colored cells, and lists as sortable tables.
+
+### v2.1.7 Changes
+
+#### Operations Studio — Reporting Tab (`apps/web/public/operations.js`)
+
+##### Background and motivation
+
+`initReporting()` previously attached click handlers that fetched the API and wrote the raw response to `el('reportingSummary').value` and `el('platformSummary').value`. Neither textarea element exists in the current HTML anymore. The replacement decouples fetch, render, and DOM attachment into three layers so each section can be tested or extended independently.
+
+##### `initReporting()`
+
+- Wires `.rpt-window-btn` preset toggling so clicking 7/30/90/180 flips the `active` class without any hidden `<input>` — consistent with the active-button-as-state-source pattern used in the Audit tab
+- Attaches Run Report → `runPracticeReport()` and Refresh → `runPlatformSummary()`
+
+##### `runPracticeReport()`
+
+Reads the selected window from `document.querySelector('.rpt-window-btn.active')?.dataset?.days ?? '30'`, calls `GET /v1/reporting/overview?days=N`, writes the as-of timestamp from `summary.generatedAt` to `#reportingAsOf`, and delegates to `renderPracticeReport(summary)`.
+
+##### `renderPracticeReport(summary)`
+
+| Section | What it renders |
+| --- | --- |
+| Stat cards | Sessions (total), Completed, Remote Rate (%), Avg/Counselor — each with a colored top-accent card |
+| Referral sources | Proportional horizontal bar chart; bar width is relative to the highest-count source |
+| Document completion | Progress bar (green fill) showing completed vs pending vs overdue; percentage caption beneath |
+| Assessment trends | Proportional bar chart of assessment types administered in the window |
+| AR aging | Grid of cells — Current, 30–60d, 60–90d, 90d+ — with amber/danger color coding on older buckets |
+| Outstanding by client | Table with client ID, outstanding balance, and invoice count |
+| Location performance | Table with total / completed / remote session counts and a completion-% column |
+
+##### `renderPlatformSummary(summary)`
+
+| Section | What it renders |
+| --- | --- |
+| Provisioning | Stat pills (Total / Queued / In Progress / Completed), recent tenants table with status badges and timestamps |
+| Impersonation | Stat pills (Total / Active / Ended), recent sessions table with tenant, role, reason, status, start time, duration |
+| Data exports | Stat pills (Total / Queued / Completed / Failed), recent exports table with type, format, requester, status, timestamps |
+| Retention policy | Grid of policy cards using `.plat-policy-item` CSS — each shows data type, retention days, and purgeability flag |
+
+##### Helper functions added
+
+| Function | Purpose |
+| --- | --- |
+| `fmtMoney(cents)` | Formats an integer cent value as a locale `$` string with two decimal places |
+| `fmtPct(ratio)` | Formats a 0–1 float as a `%` string with one decimal |
+| `rptBars(containerId, items, labelKey, valueKey, total)` | Generic horizontal bar chart renderer; bar widths are relative to the max value in the dataset; optionally appends a % share label |
+| `platStatPill(label, value, color)` | Renders a `.plat-stat` card with a colored top border using the existing CSS |
+| `statusBadgeHtml(status)` | Wraps a status string in a `.status-badge` span matched to the existing CSS class variants |
+
+### v2.1.7 Validation
+
+- `node --check apps/web/public/operations.js` — no syntax errors
+- All CSS class names (`plat-stat`, `plat-stat-label`, `plat-stat-value`, `plat-policy-item`, `rpt-aging-cell`, `rpt-aging-val`, `status-badge`, etc.) reference existing definitions in `operations.html`; no new styles required
+- Run Report with a 30-day window should populate all six sections: stat cards, referral bars, doc completion, assessment bars, AR aging + client table, location table
+- Refresh Platform should populate all four sections: provisioning, impersonation, exports, retention policy
+- A `null` or missing subsection (e.g. no `clients` array in AR) degrades gracefully to a "No outstanding AR" table row, never a JS error
+
+## v2.1.6 — Dashboard Metrics Correction (March 2026)
+
+### v2.1.6 Overview
+
+Corrects the top dashboard metrics so they reflect live operational data instead of placeholder or miswired values. Before this fix, the second card was labeled `Appointment Types` and showed how many appointment types were configured, which is not an operational workload metric. The third card rendered `Audit Event Sync` but never loaded any audit data at all, so it silently stayed at the initial `0` value even when audit activity existed. The dashboard now reports actual scheduling load and real audit activity.
+
+### v2.1.6 Changes
+
+#### Dashboard metric cards (`apps/web/src/App.jsx`, `apps/web/src/components/Metrics.jsx`)
+
+- Replaced the `Appointment Types` dashboard card with `Future Appointments`
+- Removed the misleading configuration-style metric that counted `/api/v1/appointment-types`
+- Dashboard scheduling metrics now come from `/api/v1/appointments`, which makes the cards reflect actual scheduled work instead of setup metadata
+- `Today's Sessions` now counts non-cancelled appointments scheduled for the current calendar day
+- `Future Appointments` now counts non-cancelled appointments scheduled at or after the current time
+- Replaced the static `+12% from yesterday` and `5 configured` badge text with live, relevant metadata tied to what the cards actually measure
+
+#### Audit metric wiring
+
+- Fixed the dashboard audit metric bug where `auditEvents` stayed at `0` because the frontend initialized the state but never fetched any audit summary data
+- Dashboard now calls `GET /api/v1/audit/intelligence?days=7&limit=1` for admin-capable roles and uses `summary.total` as the displayed count
+- The card label now reflects what is actually being shown: `Audit Events` instead of the vague `Audit Event Sync`
+- Non-admin roles now see `Admin visibility required` instead of a misleading silent zero-fetch state
+- When the summary loads successfully, the card metadata now states `Last 7 days` so operators know the count is a bounded audit window, not a lifetime total
+
+### v2.1.6 Validation
+
+- `pnpm --filter @faith/web build`
+- Dashboard metric source code now fetches live appointment data and live audit summary data
+- The `Future Appointments` label and metadata are rendered from the React source instead of the old appointment-type placeholder
+- Audit metric no longer relies on the default `0` initializer alone
 
 ## v2.1.5 — Structured PHI-Safe API Logging (March 2026)
 

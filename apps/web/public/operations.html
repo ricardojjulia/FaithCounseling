@@ -349,6 +349,95 @@
         border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; font-size: 13px; color: #475569; line-height: 1.6;
       }
       .audit-intro strong { color: #1e293b; }
+
+      /* ── Reporting tab ────────────────────────────────────── */
+      .rpt-window-bar {
+        display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+        background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+        padding: 14px 20px; margin-bottom: 16px;
+      }
+      .rpt-window-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; margin-right: 4px; }
+      .rpt-window-btns { display: flex; gap: 4px; }
+      .rpt-window-btn {
+        padding: 5px 12px; border: 1px solid #e2e8f0; border-radius: 6px;
+        background: #fff; color: #64748b; font-size: 13px; font-weight: 500;
+        cursor: pointer; transition: all .15s;
+      }
+      .rpt-window-btn:hover { border-color: #6366f1; color: #4f46e5; }
+      .rpt-window-btn.active { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+      .rpt-as-of { font-size: 12px; color: #94a3b8; margin-left: auto; }
+
+      .rpt-stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+      @media (max-width: 700px) { .rpt-stat-row { grid-template-columns: repeat(2, 1fr); } }
+      .rpt-stat {
+        background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+        padding: 16px 18px; border-top: 3px solid #e2e8f0;
+      }
+      .rpt-stat.blue   { border-top-color: #6366f1; }
+      .rpt-stat.green  { border-top-color: #10b981; }
+      .rpt-stat.amber  { border-top-color: #f59e0b; }
+      .rpt-stat.purple { border-top-color: #8b5cf6; }
+      .rpt-stat.cyan   { border-top-color: #06b6d4; }
+      .rpt-stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; margin-bottom: 8px; }
+      .rpt-stat-value { font-size: 32px; font-weight: 800; color: #1e293b; line-height: 1; font-variant-numeric: tabular-nums; }
+      .rpt-stat-sub { font-size: 11px; color: #94a3b8; margin-top: 6px; }
+
+      .rpt-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+      @media (max-width: 800px) { .rpt-grid-2 { grid-template-columns: 1fr; } }
+
+      .rpt-progress-row { margin-bottom: 14px; }
+      .rpt-progress-row:last-child { margin-bottom: 0; }
+      .rpt-progress-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; font-size: 13px; }
+      .rpt-progress-name { color: #374151; font-weight: 500; }
+      .rpt-progress-val  { font-weight: 700; color: #1e293b; font-variant-numeric: tabular-nums; }
+      .rpt-progress-track { height: 8px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+      .rpt-progress-fill  { height: 100%; border-radius: 4px; transition: width .7s ease; }
+
+      .rpt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      .rpt-table th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; padding: 7px 10px; border-bottom: 2px solid #f1f5f9; white-space: nowrap; }
+      .rpt-table td { padding: 10px; border-bottom: 1px solid #f8fafc; vertical-align: middle; color: #374151; }
+      .rpt-table tbody tr:hover { background: #f8fafc; }
+      .rpt-table tbody tr:last-child td { border-bottom: none; }
+      .rpt-table-wrap { overflow-x: auto; }
+
+      .rpt-ar-aging { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 16px; }
+      @media (max-width: 700px) { .rpt-ar-aging { grid-template-columns: repeat(2, 1fr); } }
+      .rpt-aging-cell { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; text-align: center; }
+      .rpt-aging-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; margin-bottom: 5px; }
+      .rpt-aging-val { font-size: 20px; font-weight: 800; color: #1e293b; font-variant-numeric: tabular-nums; }
+      .rpt-aging-val.warn { color: #f59e0b; }
+      .rpt-aging-val.danger { color: #ef4444; }
+
+      .rpt-empty { text-align: center; color: #94a3b8; padding: 28px; font-size: 13px; }
+
+      .plat-section { margin-bottom: 24px; }
+      .plat-section:last-child { margin-bottom: 0; }
+      .plat-section-title {
+        font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+        color: #64748b; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #f1f5f9;
+        display: flex; align-items: center; justify-content: space-between;
+      }
+      .plat-stat-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+      .plat-stat { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; flex: 1; min-width: 80px; text-align: center; }
+      .plat-stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; margin-bottom: 5px; }
+      .plat-stat-value { font-size: 24px; font-weight: 800; color: #1e293b; font-variant-numeric: tabular-nums; }
+      .plat-stat-value.active-val { color: #10b981; }
+      .plat-stat-value.warn-val   { color: #f59e0b; }
+
+      .plat-policy-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+      @media (max-width: 700px) { .plat-policy-grid { grid-template-columns: 1fr; } }
+      .plat-policy-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; }
+      .plat-policy-item-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; margin-bottom: 6px; }
+      .plat-policy-item-value { font-size: 15px; font-weight: 700; color: #1e293b; }
+
+      .status-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+      .status-badge.completed { background: #d1fae5; color: #065f46; }
+      .status-badge.queued    { background: #fef3c7; color: #92400e; }
+      .status-badge.in_progress { background: #dbeafe; color: #1d4ed8; }
+      .status-badge.active    { background: #dbeafe; color: #1d4ed8; }
+      .status-badge.ended     { background: #f1f5f9; color: #64748b; }
+      .status-badge.failed    { background: #fee2e2; color: #991b1b; }
+      .status-badge.pending   { background: #fef3c7; color: #92400e; }
     </style>
   </head>
   <body>
@@ -386,34 +475,142 @@
     <!-- ══════════════════════════════════════════════════════════════ -->
     <!-- TAB: Reporting                                                 -->
     <!-- ══════════════════════════════════════════════════════════════ -->
-    <div class="tab-panel active" id="tab-reporting" role="tabpanel">
+    <div class="tab-panel active" id="tab-reporting" role="tabpanel" style="max-width:1100px">
 
-      <div class="card">
-        <div class="card-title">Practice Reporting</div>
-        <div class="form-row">
-          <div class="field field-sm">
-            <label for="reportingWindowDays">Window (days)</label>
-            <input id="reportingWindowDays" type="number" min="7" max="365" value="30" />
-          </div>
-          <button type="button" class="btn btn-primary" id="refreshReportingBtn">Refresh Report</button>
+      <!-- ── Practice Reporting ───────────────────────────────────── -->
+      <div class="rpt-window-bar">
+        <span class="rpt-window-label">Practice Report</span>
+        <div class="rpt-window-btns">
+          <button type="button" class="rpt-window-btn" data-days="7">7 days</button>
+          <button type="button" class="rpt-window-btn active" data-days="30">30 days</button>
+          <button type="button" class="rpt-window-btn" data-days="90">90 days</button>
+          <button type="button" class="rpt-window-btn" data-days="180">180 days</button>
         </div>
-        <div class="field field-full" style="margin-top:4px">
-          <label for="reportingSummary">Summary</label>
-          <textarea id="reportingSummary" class="result" rows="10" readonly aria-label="Reporting summary"></textarea>
+        <button type="button" class="btn btn-primary" id="refreshReportingBtn" style="margin-left:8px">Run Report</button>
+        <span class="rpt-as-of" id="reportingAsOf"></span>
+      </div>
+      <div id="reportingStatus" class="status-bar" style="margin-bottom:16px"></div>
+
+      <!-- Utilization stat cards -->
+      <div class="rpt-stat-row" id="rptUtilRow" style="display:none">
+        <div class="rpt-stat blue">
+          <div class="rpt-stat-label">Sessions</div>
+          <div class="rpt-stat-value" id="rptSessions">—</div>
+          <div class="rpt-stat-sub" id="rptSessionsSub">in window</div>
         </div>
-        <div id="reportingStatus" class="status-bar"></div>
+        <div class="rpt-stat green">
+          <div class="rpt-stat-label">Completed</div>
+          <div class="rpt-stat-value" id="rptCompleted">—</div>
+          <div class="rpt-stat-sub">sessions finished</div>
+        </div>
+        <div class="rpt-stat purple">
+          <div class="rpt-stat-label">Remote Rate</div>
+          <div class="rpt-stat-value" id="rptRemoteRate">—</div>
+          <div class="rpt-stat-sub">of all sessions</div>
+        </div>
+        <div class="rpt-stat amber">
+          <div class="rpt-stat-label">Avg / Counselor</div>
+          <div class="rpt-stat-value" id="rptAvgPerCounselor">—</div>
+          <div class="rpt-stat-sub">sessions per provider</div>
+        </div>
       </div>
 
-      <div class="card">
-        <div class="card-title">Platform Operations Summary</div>
-        <div class="form-row">
-          <button type="button" class="btn btn-primary" id="refreshPlatformBtn">Refresh Summary</button>
+      <!-- Referrals + Document completion -->
+      <div class="rpt-grid-2" id="rptMidRow" style="display:none">
+        <div class="card">
+          <div class="card-title">Referral Sources</div>
+          <div id="rptReferralBars" class="audit-bar-list"></div>
         </div>
-        <div class="field field-full" style="margin-top:4px">
-          <label for="platformSummary">Summary</label>
-          <textarea id="platformSummary" class="result" rows="10" readonly aria-label="Platform operations summary"></textarea>
+        <div class="card">
+          <div class="card-title">Document Completion</div>
+          <div id="rptDocCompletion"></div>
+          <div style="height:16px"></div>
+          <div class="card-subtitle">Assessment Trends</div>
+          <div id="rptAssessmentBars" class="audit-bar-list"></div>
         </div>
-        <div id="platformStatus" class="status-bar"></div>
+      </div>
+
+      <!-- Accounts Receivable -->
+      <div class="card" id="rptArCard" style="display:none;margin-bottom:16px">
+        <div class="card-title">Accounts Receivable <span id="rptArOutstanding"></span></div>
+        <div class="rpt-ar-aging" id="rptArAging"></div>
+        <div class="card-subtitle">Outstanding by Client</div>
+        <div class="rpt-table-wrap">
+          <table class="rpt-table">
+            <thead><tr><th>Client</th><th style="text-align:right">Outstanding</th><th style="text-align:right">Invoices</th></tr></thead>
+            <tbody id="rptArClients"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Location Performance -->
+      <div class="card" id="rptLocCard" style="display:none;margin-bottom:24px">
+        <div class="card-title">Location Performance</div>
+        <div class="rpt-table-wrap">
+          <table class="rpt-table">
+            <thead><tr><th>Location</th><th style="text-align:right">Total</th><th style="text-align:right">Completed</th><th style="text-align:right">Remote</th><th style="text-align:right">Completion %</th></tr></thead>
+            <tbody id="rptLocBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── Platform Operations Summary ──────────────────────────── -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <h2 style="font-size:14px;font-weight:700;color:#1e293b">Platform Operations Summary</h2>
+        <button type="button" class="btn btn-default" id="refreshPlatformBtn">Refresh</button>
+      </div>
+      <div id="platformStatus" class="status-bar" style="margin-bottom:16px"></div>
+
+      <div class="card" id="platCard" style="display:none">
+
+        <!-- Provisioning -->
+        <div class="plat-section">
+          <div class="plat-section-title">
+            Tenant Provisioning
+            <span id="platProvUpdated" style="font-size:11px;font-weight:400;color:#94a3b8;text-transform:none;letter-spacing:0"></span>
+          </div>
+          <div class="plat-stat-row" id="platProvStats"></div>
+          <div class="rpt-table-wrap">
+            <table class="rpt-table">
+              <thead><tr><th>Tenant</th><th>Practice</th><th>Status</th><th>Requested</th><th>Completed</th></tr></thead>
+              <tbody id="platProvBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Impersonation -->
+        <div class="plat-section">
+          <div class="plat-section-title">Support Impersonation Sessions</div>
+          <div class="plat-stat-row" id="platImpStats"></div>
+          <div class="rpt-table-wrap">
+            <table class="rpt-table">
+              <thead><tr><th>Target Tenant</th><th>Role</th><th>Reason</th><th>Status</th><th>Started</th><th>Duration</th></tr></thead>
+              <tbody id="platImpBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Data Exports -->
+        <div class="plat-section">
+          <div class="plat-section-title">Data Exports</div>
+          <div class="plat-stat-row" id="platExportStats"></div>
+          <div class="rpt-table-wrap">
+            <table class="rpt-table">
+              <thead><tr><th>Type</th><th>Format</th><th>Requested by</th><th>Status</th><th>Requested</th><th>Completed</th></tr></thead>
+              <tbody id="platExportBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Retention Policy -->
+        <div class="plat-section">
+          <div class="plat-section-title">
+            Retention Policy
+            <span id="platRetentionUpdated" style="font-size:11px;font-weight:400;color:#94a3b8;text-transform:none;letter-spacing:0"></span>
+          </div>
+          <div class="plat-policy-grid" id="platRetentionGrid"></div>
+        </div>
+
       </div>
 
     </div>
@@ -791,6 +988,6 @@
 
     <script defer src="/telemetry.js"></script>
     <script defer src="/signon-fallback.js"></script>
-    <script defer src="/operations.js"></script>
+    <script defer src="/operations.js?v=2.1.7"></script>
   </body>
 </html>

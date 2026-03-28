@@ -25,7 +25,7 @@ Default URL: `http://localhost:3000`
 
 - sidebar navigation shell
 - global search across today's schedule
-- key metric cards
+- key metric cards for today's sessions, future appointments, and audit-event visibility
 - operations panels for schedule, priority queue, and compliance watch
 - care flow progress indicators
 - same-origin `/api/*` proxy for live dashboard hydration from the API service
@@ -37,6 +37,8 @@ Default URL: `http://localhost:3000`
 - Monitoring and operations pages consume `/api/v1/telemetry/summary` for runtime telemetry
 - Frontend surfaces emit structured telemetry to `/api/v1/telemetry/events`
 - Health probes are available through `/api/health`, `/api/health/live`, and `/api/health/ready`
+- Dashboard metric cards consume `/api/v1/appointments` for session and future-appointment counts
+- Dashboard audit visibility consumes `/api/v1/audit/intelligence?days=7&limit=1` for admin-capable roles and degrades to an explicit admin-visibility message for other roles
 - The monitoring OTEL status banner follows the API `exportedViaOtel` flag, which now treats `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` as a valid OTEL export configuration
 - React app views, detail tabs, scheduling subviews, Workspace Studio tabs, and standalone pages now participate in the shared surface-monitoring baseline
 - The monitoring page now renders overall UI summary cards, top failing surfaces/workflows, health probes, and a per-surface breakdown from the shared telemetry summary
