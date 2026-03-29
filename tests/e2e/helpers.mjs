@@ -21,6 +21,19 @@ const TEST_ACCOUNTS = {
   },
 };
 
+export function getTestAccount(role) {
+  return TEST_ACCOUNTS[role];
+}
+
+export async function signInWithCredentials(page, { email, password }) {
+  await expect(page.locator('#loginEmail')).toBeVisible({ timeout: 10000 });
+  await page.fill('#loginEmail', email);
+  await page.fill('#loginPassword', password);
+  await page.click('button[type="submit"]');
+  await expect(page.locator('#authGate')).toBeHidden({ timeout: 10000 });
+  await expect(page.locator('#userBadge')).toBeVisible({ timeout: 5000 });
+}
+
 /**
  * Sign in via the real login form.
  *
@@ -53,11 +66,7 @@ export async function signInAs(page, role) {
     if (!account) {
       throw new Error(`No seeded login account is configured for role "${role}". Use a real seeded account or a public-route workflow.`);
     }
-
-    await page.fill('#loginEmail', account.email);
-    await page.fill('#loginPassword', account.password);
-    await page.click('button[type="submit"]');
-    await expect(page.locator('#authGate')).toBeHidden({ timeout: 10000 });
+    await signInWithCredentials(page, account);
   } else {
     // Legacy role-selector fallback (no DB)
     await expect.poll(async () => page.locator('#roleSelect option').count()).toBeGreaterThan(0);
@@ -67,6 +76,17 @@ export async function signInAs(page, role) {
   }
 
   await expect(page.locator('#userBadge')).toBeVisible({ timeout: 5000 });
+}
+
+export async function signOut(page) {
+  await page.evaluate(async () => {
+    await fetch('/api/v1/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+    });
+  });
+  await page.goto('/');
+  await expect(page.locator('#loginEmail')).toBeVisible({ timeout: 10000 });
 }
 
 export async function openPrimaryNav(page, navKey) {

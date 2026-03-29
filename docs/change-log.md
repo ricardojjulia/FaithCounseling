@@ -4,9 +4,23 @@
 
 ## Unreleased
 
-- uploads and published document workflows for authenticated portal clients
+- authenticated portal `Counselor` tab with assigned-counselor detail and optional counselor directory
+- authenticated portal `Financials` tab with invoice/offering summary plus payment history
+- authenticated portal `Resources` tab with full client-facing library visibility
+- authenticated portal `Documents` tab with assigned forms, intake packet status, portal document actions, and secure client uploads
+- authenticated portal `Data Rights` tab with self-service JSON export, policy-aware deletion requests, and request history
+- authenticated portal password change for signed-in clients
+- public portal password reset request and one-time reset completion flow
+- Workspace Studio review queue for deletion requests with fulfill, restrict, and deny actions
+- new monitored portal tab surfaces:
+  - `portal.counselor`
+  - `portal.financials`
+- `portal.resources`
+- `portal.documents`
+- `portal.data_rights`
 - counselor directory and counselor detail views inside the client portal
-- dedicated financial portal page, plus GDPR-style export/delete request workflows
+- policy-aware portal-scope deletion fulfillment that revokes portal access while retaining protected clinical, billing, and audit records
+- dedicated financial portal page beyond the current invoice/offering summary implementation
 
 ## v3.5.0 — Authenticated Client Portal Access + Self-Service Foundation
 

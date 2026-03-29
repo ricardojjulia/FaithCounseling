@@ -43,6 +43,7 @@ const IDLE_TIMEOUT_MS = {
 const MAX_FAILED_ATTEMPTS = 10;
 const STAFF_SESSION_COOKIE = 'session';
 const PORTAL_SESSION_COOKIE = 'portal_session';
+const PORTAL_RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
 
 // Password minimum per session-policy.md
 const MIN_PASSWORD_LENGTH = 14;
@@ -52,6 +53,10 @@ const DEACTIVATED_LOCK_DATE = '2099-12-31 23:59:59';
 
 function hashToken(rawToken) {
   return crypto.createHash('sha256').update(rawToken).digest('hex');
+}
+
+function hashResetToken(rawToken) {
+  return crypto.createHash('sha256').update(String(rawToken)).digest('hex');
 }
 
 function parseCookies(cookieHeader) {
@@ -418,6 +423,138 @@ export async function changePassword(staffAccountId, currentPassword, newPasswor
     'UPDATE sessions SET revoked = 1 WHERE staff_account_id = ?',
     [staffAccountId],
   );
+}
+
+export async function changePortalPassword(portalAccountId, currentPassword, newPassword) {
+  const strengthError = validatePasswordStrength(newPassword);
+  if (strengthError) throw { statusCode: 400, error: strengthError };
+
+  const breached = await isPasswordBreached(newPassword);
+  if (breached) {
+    throw {
+      statusCode: 400,
+      error: 'This password has appeared in a known data breach. Please choose a different password.',
+    };
+  }
+
+  const [rows] = await pool.query(
+    'SELECT id, password_hash FROM portal_accounts WHERE id = ?',
+    [portalAccountId],
+  );
+  const account = rows[0];
+  if (!account) throw { statusCode: 404, error: 'Portal account not found' };
+  if (!account.password_hash) throw { statusCode: 403, error: 'Portal password has not been set yet' };
+
+  const currentOk = await argon2.verify(account.password_hash, currentPassword, ARGON2_OPTIONS);
+  if (!currentOk) throw { statusCode: 403, error: 'Current password is incorrect' };
+
+  const newHash = await argon2.hash(newPassword, ARGON2_OPTIONS);
+  await pool.query(
+    'UPDATE portal_accounts SET password_hash = ?, failed_attempts = 0, locked_until = NULL, status = ? WHERE id = ?',
+    [newHash, 'active', portalAccountId],
+  );
+  await pool.query(
+    'UPDATE portal_sessions SET revoked = 1 WHERE portal_account_id = ?',
+    [portalAccountId],
+  );
+}
+
+export async function requestPortalPasswordReset(email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    throw { statusCode: 400, error: 'A valid email is required' };
+  }
+
+  const emailLookupHash = deriveLookupHash(normalizedEmail, { lowercase: true });
+  const [rows] = await pool.query(
+    'SELECT id, tenant_id, status FROM portal_accounts WHERE email_lookup_hash = ? LIMIT 1',
+    [emailLookupHash],
+  );
+  const account = rows[0];
+  if (!account || account.status === 'revoked') {
+    return { issued: false };
+  }
+
+  await pool.query(
+    'UPDATE portal_password_resets SET used_at = NOW() WHERE portal_account_id = ? AND used_at IS NULL AND expires_at > NOW()',
+    [account.id],
+  );
+
+  const rawToken = crypto.randomBytes(24).toString('hex');
+  const expiresAt = new Date(Date.now() + PORTAL_RESET_TOKEN_TTL_MS);
+  await pool.query(
+    `INSERT INTO portal_password_resets
+       (id, portal_account_id, tenant_id, token_hash, expires_at)
+     VALUES (?, ?, ?, ?, ?)`,
+    [
+      `prr-${crypto.randomUUID()}`,
+      account.id,
+      account.tenant_id,
+      hashResetToken(rawToken),
+      expiresAt,
+    ],
+  );
+
+  return {
+    issued: true,
+    expiresAt: expiresAt.toISOString(),
+    resetToken: process.env.NODE_ENV === 'production' ? undefined : rawToken,
+  };
+}
+
+export async function completePortalPasswordReset(email, token, newPassword) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    throw { statusCode: 400, error: 'A valid email is required' };
+  }
+  if (typeof token !== 'string' || token.trim().length < 16) {
+    throw { statusCode: 400, error: 'A valid reset code is required' };
+  }
+
+  const strengthError = validatePasswordStrength(newPassword);
+  if (strengthError) throw { statusCode: 400, error: strengthError };
+
+  const breached = await isPasswordBreached(newPassword);
+  if (breached) {
+    throw {
+      statusCode: 400,
+      error: 'This password has appeared in a known data breach. Please choose a different password.',
+    };
+  }
+
+  const emailLookupHash = deriveLookupHash(normalizedEmail, { lowercase: true });
+  const tokenHash = hashResetToken(token.trim());
+  const [rows] = await pool.query(
+    `SELECT pr.id, pa.id AS portal_account_id
+       FROM portal_password_resets pr
+       JOIN portal_accounts pa ON pa.id = pr.portal_account_id AND pa.tenant_id = pr.tenant_id
+      WHERE pa.email_lookup_hash = ?
+        AND pr.token_hash = ?
+        AND pr.used_at IS NULL
+        AND pr.expires_at > NOW()
+      LIMIT 1`,
+    [emailLookupHash, tokenHash],
+  );
+  const resetRow = rows[0];
+  if (!resetRow) {
+    throw { statusCode: 400, error: 'Reset code is invalid or has expired' };
+  }
+
+  const newHash = await argon2.hash(newPassword, ARGON2_OPTIONS);
+  await pool.query(
+    'UPDATE portal_accounts SET password_hash = ?, failed_attempts = 0, locked_until = NULL, status = ? WHERE id = ?',
+    [newHash, 'active', resetRow.portal_account_id],
+  );
+  await pool.query(
+    'UPDATE portal_password_resets SET used_at = NOW() WHERE id = ?',
+    [resetRow.id],
+  );
+  await pool.query(
+    'UPDATE portal_sessions SET revoked = 1 WHERE portal_account_id = ?',
+    [resetRow.portal_account_id],
+  );
+
+  return { portalAccountId: resetRow.portal_account_id };
 }
 
 export async function createStaffAccount({ staffMemberId, tenantId, email, password }) {

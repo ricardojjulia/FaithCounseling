@@ -411,7 +411,7 @@ export default function App() {
         ) : showDocuments ? (
           <DocumentsPage />
         ) : showPortal ? (
-          <ClientPortalPage currentUser={currentUser} clients={clientsData.items} />
+          <ClientPortalPage currentUser={currentUser} clients={clientsData.items} onSignOut={handleSignOut} />
         ) : (
           <>
             {showDashboard ? <Metrics data={metricsData} currentUser={currentUser} /> : null}

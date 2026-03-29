@@ -51,6 +51,9 @@ import {
   logout,
   resolveSession,
   changePassword,
+  changePortalPassword,
+  requestPortalPasswordReset,
+  completePortalPasswordReset,
   createStaffAccount,
   adminResetStaffPassword,
   adminUnlockStaffAccount,
@@ -110,6 +113,8 @@ import {
   getPortalAccount, createPortalAccount, updatePortalAccount,
   getPortalClientProfile, upsertPortalClientProfile,
   listPortalResources, createPortalResource, updatePortalResource,
+  listPortalUploads, createPortalUpload,
+  listPortalDataRightRequests, createPortalDataRightRequest, updatePortalDataRightRequest,
   listPortalMessageThreads, getPortalMessageThread, createPortalMessageThread, updatePortalMessageThread,
   listPortalMessages, createPortalMessage,
   listPortalAppointmentRequests, createPortalAppointmentRequest, updatePortalAppointmentRequest,
@@ -569,13 +574,24 @@ const serviceCodeStatuses = Object.freeze(['active', 'inactive']);
 const invoiceStatuses = Object.freeze(['draft', 'issued', 'partially_paid', 'paid', 'void']);
 const paymentMethods = Object.freeze(['card', 'cash', 'check', 'ach', 'other']);
 const claimStatuses = Object.freeze(['not_submitted', 'queued', 'submitted', 'accepted', 'denied', 'paid']);
-const portalAccountStatuses = Object.freeze(['invited', 'active', 'locked']);
+const portalAccountStatuses = Object.freeze(['invited', 'active', 'locked', 'revoked']);
 const portalMessageThreadStatuses = Object.freeze(['open', 'closed']);
 const portalAppointmentRequestStatuses = Object.freeze(['requested', 'approved', 'declined', 'scheduled']);
 const portalResourceTypes = Object.freeze(['document', 'education', 'devotional', 'form']);
 const portalRegistrationModes = Object.freeze(['invite_only', 'review_required', 'instant_activation']);
 const portalFinancialModes = Object.freeze(['billing', 'offerings']);
 const portalContactPreferenceOptions = Object.freeze(['email', 'sms', 'phone', 'portal_message']);
+const portalUploadStatuses = Object.freeze(['uploaded', 'reviewed']);
+const portalDataRightRequestTypes = Object.freeze(['export_data', 'delete_request']);
+const portalDataRightRequestStatuses = Object.freeze(['requested', 'under_review', 'completed', 'restricted', 'denied']);
+const portalDataRightReviewReasonCodes = Object.freeze([
+  'portal_erasure_completed',
+  'retention_obligation_remaining',
+  'legal_hold_enabled',
+  'request_denied',
+  'insufficient_verification',
+  'duplicate_request',
+]);
 const formAssignmentTypes = Object.freeze(['next_session', 'future_session', 'scheduled_recurring', 'account_signup']);
 const formAssignmentWorkflowStatuses = Object.freeze(['assigned', 'in_progress', 'completed', 'cancelled']);
 const portalRegistrationStatuses = Object.freeze(['requested', 'reviewing', 'approved', 'declined']);
@@ -915,6 +931,9 @@ const portalAppointmentRequests = [
   },
 ];
 
+const portalUploads = [];
+const portalDataRightRequests = [];
+
 const christianNoteTemplates = [
   {
     id: 'fnt-001',
@@ -1164,6 +1183,16 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/auth/portal-password-reset-request' && request.method === 'POST') {
+      await handlePortalPasswordResetRequest(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/auth/portal-password-reset' && request.method === 'POST') {
+      await handlePortalPasswordResetComplete(request, response);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/clients') {
       await handleClientsCollection(request, response, requestUrl, session);
       return;
@@ -1378,6 +1407,11 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/portal/uploads') {
+      await handlePortalUploads(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/portal/appointment-requests') {
       await handlePortalAppointmentRequests(request, response, requestUrl, session);
       return;
@@ -1390,6 +1424,16 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === '/v1/portal/resources') {
       await handlePortalResources(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/portal/data-rights') {
+      await handlePortalDataRights(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/portal/data-rights/review') {
+      await handlePortalDataRightsReview(request, response, session);
       return;
     }
 
@@ -1748,14 +1792,43 @@ async function handleAuthChangePassword(request, response, session) {
     writeJson(response, 401, { error: 'Authentication required' });
     return;
   }
-  if (session.role === 'client') {
-    writeJson(response, 403, { error: 'Portal password change is not yet available from this surface' });
-    return;
-  }
   const payload = await readJsonBody(request);
   try {
+    if (session.role === 'client') {
+      await changePortalPassword(session.portal_account_id, payload.currentPassword, payload.newPassword);
+      await emitAudit(request, 'portal.password_changed', 'portal_account', session.portal_account_id, session);
+      writeJson(response, 200, { ok: true, signOutRequired: true });
+      return;
+    }
     await changePassword(session.staff_account_id, payload.currentPassword, payload.newPassword);
     await emitAudit(request, 'staff.password_changed', 'staff_account', session.staff_account_id, session);
+    writeJson(response, 200, { ok: true });
+  } catch (err) {
+    writeJson(response, err.statusCode || 500, { error: err.error || err.message });
+  }
+}
+
+async function handlePortalPasswordResetRequest(request, response) {
+  const payload = await readJsonBody(request);
+  try {
+    const result = await requestPortalPasswordReset(payload.email);
+    await emitAudit(request, 'portal.password_reset.request', 'portal_account', 'lookup');
+    writeJson(response, 202, {
+      ok: true,
+      notice: 'If the portal account exists, a reset code has been issued.',
+      resetToken: result.resetToken,
+      expiresAt: result.expiresAt,
+    });
+  } catch (err) {
+    writeJson(response, err.statusCode || 500, { error: err.error || err.message });
+  }
+}
+
+async function handlePortalPasswordResetComplete(request, response) {
+  const payload = await readJsonBody(request);
+  try {
+    const result = await completePortalPasswordReset(payload.email, payload.token, payload.newPassword);
+    await emitAudit(request, 'portal.password_reset.complete', 'portal_account', result.portalAccountId ?? 'unknown');
     writeJson(response, 200, { ok: true });
   } catch (err) {
     writeJson(response, err.statusCode || 500, { error: err.error || err.message });
@@ -6058,6 +6131,8 @@ async function handlePortalOverview(request, response, requestUrl, session) {
   let appointmentRequests = [];
   let upcomingAppointments = [];
   let assignedCounselor = null;
+  let counselorDirectory = [];
+  let paymentHistory = [];
 
   if (process.env.DB_NAME) {
     account = await getPortalAccount(client.id, client.tenantId);
@@ -6099,6 +6174,27 @@ async function handlePortalOverview(request, response, requestUrl, session) {
         };
       }
     }
+    if (settings?.showPublicCounselorDirectory) {
+      const staff = await listStaff(client.tenantId);
+      counselorDirectory = staff
+        .filter((item) => ['counselor', 'intern'].includes(item.role))
+        .map((item) => ({
+          staffId: item.id,
+          firstName: item.firstName,
+          lastName: item.lastName,
+          role: item.role,
+          bio: item.bio ?? '',
+          licenseType: item.licenseType ?? '',
+          supervisionStatus: item.supervisionStatus ?? '',
+        }));
+    }
+    const invoiceIds = balanceItems.map((item) => item.id);
+    if (invoiceIds.length) {
+      const tenantPayments = await listPayments(client.tenantId);
+      paymentHistory = tenantPayments
+        .filter((item) => item.clientId === client.id || invoiceIds.includes(item.invoiceId))
+        .sort((left, right) => String(right.receivedAt).localeCompare(String(left.receivedAt)));
+    }
   } else {
     account = portalAccounts.find((item) => item.clientId === client.id && item.tenantId === client.tenantId) ?? null;
     forms = intakePackets.filter((item) => item.clientId === client.id && item.tenantId === client.tenantId);
@@ -6138,6 +6234,23 @@ async function handlePortalOverview(request, response, requestUrl, session) {
         };
       }
     }
+    if (settings?.showPublicCounselorDirectory) {
+      counselorDirectory = staffMembers
+        .filter((item) => item.tenantId === client.tenantId)
+        .filter((item) => ['counselor', 'intern'].includes(item.role))
+        .map((item) => ({
+          staffId: item.id,
+          firstName: item.firstName,
+          lastName: item.lastName,
+          role: item.role,
+          bio: item.bio ?? '',
+          licenseType: item.licenseType ?? '',
+          supervisionStatus: item.supervisionStatus ?? '',
+        }));
+    }
+    paymentHistory = payments
+      .filter((item) => item.tenantId === client.tenantId && item.clientId === client.id)
+      .sort((left, right) => String(right.receivedAt).localeCompare(String(left.receivedAt)));
   }
 
   emitAudit(request, 'portal.overview.read', 'portal', client.id);
@@ -6159,6 +6272,7 @@ async function handlePortalOverview(request, response, requestUrl, session) {
         practiceName: settings.practiceName,
         financialMode: settings.financialMode,
         contactPreferenceOptions: settings.contactPreferenceOptions ?? [],
+        showPublicCounselorDirectory: Boolean(settings.showPublicCounselorDirectory),
       }
       : null,
     balances: {
@@ -6167,9 +6281,11 @@ async function handlePortalOverview(request, response, requestUrl, session) {
       outstanding: normalizeCurrency(balanceItems.reduce((sum, item) => sum + normalizeCurrency(item.balance), 0)),
       items: balanceItems,
     },
+    paymentHistory,
     resources,
     messageThreads,
     appointmentRequests,
+    counselorDirectory,
   });
 }
 
@@ -6563,7 +6679,11 @@ async function handlePortalDocuments(request, response, requestUrl, session) {
 
   if (request.method === 'GET') {
     if (process.env.DB_NAME) {
-      const items = await listDocumentAssignments(client.tenantId, { clientId: client.id });
+      const assignments = await listDocumentAssignments(client.tenantId, { clientId: client.id });
+      const items = await Promise.all(assignments.map(async (item) => ({
+        ...item,
+        templateTitle: (await getDocumentTemplateById(item.templateId, client.tenantId))?.title ?? 'Document',
+      })));
       emitAudit(request, 'portal.document.read', 'document_assignment', client.id, session);
       writeJson(response, 200, { items });
       return;
@@ -6666,6 +6786,739 @@ async function handlePortalDocuments(request, response, requestUrl, session) {
 
   telemetry.recordMutation('portal.document.update');
   emitAudit(request, 'portal.document.update', 'document_assignment', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function getTenantRetentionPolicySnapshot(tenantId) {
+  const fallback = {
+    clinicalRecordsSchedule: '10_years',
+    billingSchedule: '7_years',
+    auditLogSchedule: 'indefinite',
+    includeDocumentVersions: true,
+    legalHoldEnabled: false,
+  };
+
+  if (process.env.DB_NAME) {
+    const policy = await getRetentionPolicy(tenantId);
+    return policy
+      ? {
+        clinicalRecordsSchedule: policy.clinicalRecordsSchedule,
+        billingSchedule: policy.billingSchedule,
+        auditLogSchedule: policy.auditLogSchedule,
+        includeDocumentVersions: policy.includeDocumentVersions !== false,
+        legalHoldEnabled: Boolean(policy.legalHoldEnabled),
+      }
+      : fallback;
+  }
+
+  const policy = retentionPolicies.find((item) => item.tenantId === tenantId) ?? null;
+  return policy
+    ? {
+      clinicalRecordsSchedule: policy.clinicalRecordsSchedule,
+      billingSchedule: policy.billingSchedule,
+      auditLogSchedule: policy.auditLogSchedule,
+      includeDocumentVersions: policy.includeDocumentVersions !== false,
+      legalHoldEnabled: Boolean(policy.legalHoldEnabled),
+    }
+    : fallback;
+}
+
+async function buildClientDataRightsSummary(client) {
+  const policy = await getTenantRetentionPolicySnapshot(client.tenantId);
+
+  if (process.env.DB_NAME) {
+    const [
+      appointments,
+      documents,
+      uploads,
+      formAssignments,
+      formSubmissions,
+      appointmentRequests,
+      messageThreads,
+      messages,
+      resources,
+      balanceItems,
+    ] = await Promise.all([
+      listAppointments(client.tenantId).then((items) => items.filter((item) => item.clientId === client.id)),
+      listDocumentAssignments(client.tenantId, { clientId: client.id }),
+      listPortalUploads(client.tenantId, client.id),
+      listFormAssignments(client.tenantId, { clientId: client.id }),
+      listFormSubmissions(client.tenantId, { clientId: client.id }),
+      listPortalAppointmentRequests(client.tenantId, client.id),
+      listPortalMessageThreads(client.tenantId, client.id),
+      listPortalMessageThreads(client.tenantId, client.id).then(async (threads) => {
+        const nested = await Promise.all(threads.map((thread) => listPortalMessages(thread.id, client.tenantId)));
+        return nested.flat();
+      }),
+      listPortalResources(client.tenantId).then((items) => items.filter((item) => ['all', 'client', 'clients'].includes(item.audience ?? 'all'))),
+      listInvoices(client.tenantId, client.id),
+    ]);
+
+    return {
+      retentionPolicy: policy,
+      counts: {
+        appointments: appointments.length,
+        documents: documents.length,
+        uploads: uploads.length,
+        formAssignments: formAssignments.length,
+        formSubmissions: formSubmissions.length,
+        appointmentRequests: appointmentRequests.length,
+        messageThreads: messageThreads.length,
+        messages: messages.length,
+        resources: resources.length,
+        billingItems: balanceItems.length,
+      },
+    };
+  }
+
+  return {
+    retentionPolicy: policy,
+    counts: {
+      appointments: appointments.filter((item) => item.tenantId === client.tenantId && item.clientId === client.id).length,
+      documents: documentAssignments.filter((item) => item.tenantId === client.tenantId && item.assigneeType === 'client' && item.assigneeId === client.id).length,
+      uploads: portalUploads.filter((item) => item.tenantId === client.tenantId && item.clientId === client.id).length,
+      formAssignments: formWorkflowAssignments.filter((item) => item.tenantId === client.tenantId && item.clientId === client.id).length,
+      formSubmissions: formWorkflowSubmissions.filter((item) => item.tenantId === client.tenantId && item.clientId === client.id).length,
+      appointmentRequests: portalAppointmentRequests.filter((item) => item.tenantId === client.tenantId && item.clientId === client.id).length,
+      messageThreads: portalMessageThreads.filter((item) => item.tenantId === client.tenantId && item.clientId === client.id).length,
+      messages: portalMessages.filter((item) => item.tenantId === client.tenantId && item.clientId === client.id).length,
+      resources: portalResources.filter((item) => item.tenantId === client.tenantId && item.clientId === client.id).length,
+      billingItems: invoices.filter((item) => item.tenantId === client.tenantId && item.clientId === client.id).length,
+    },
+  };
+}
+
+async function buildClientExportBundle(client) {
+  const retentionPolicy = await getTenantRetentionPolicySnapshot(client.tenantId);
+
+  if (process.env.DB_NAME) {
+    const [rows] = await pool.query('SELECT * FROM clients WHERE id = ? AND tenant_id = ? LIMIT 1', [client.id, client.tenantId]);
+    const clientRecord = rows[0] ? dbRowToClient(rows[0]) : null;
+    const [
+      addresses,
+      phones,
+      contacts,
+      insurance,
+      referringProviders,
+      diagnoses,
+      medications,
+      allergies,
+      clinicalHistory,
+      faithProfile,
+      legal,
+      portalAccount,
+      portalProfile,
+      appointments,
+      documents,
+      intakePacket,
+      formAssignments,
+      formSubmissions,
+      uploads,
+      appointmentRequests,
+      threads,
+      resources,
+      balanceItems,
+    ] = await Promise.all([
+      listClientAddresses(client.id, client.tenantId),
+      listClientPhones(client.id, client.tenantId),
+      listClientContacts(client.id, client.tenantId),
+      listClientInsurance(client.id, client.tenantId),
+      listReferringProviders(client.id, client.tenantId),
+      listClientDiagnoses(client.id, client.tenantId),
+      listClientMedications(client.id, client.tenantId),
+      listClientAllergies(client.id, client.tenantId),
+      getClientClinicalHistory(client.id, client.tenantId),
+      getClientFaithProfile(client.id, client.tenantId),
+      getClientLegal(client.id, client.tenantId),
+      getPortalAccount(client.id, client.tenantId),
+      getPortalClientProfile(client.id, client.tenantId),
+      listAppointments(client.tenantId).then((items) => items.filter((item) => item.clientId === client.id)),
+      listDocumentAssignments(client.tenantId, { clientId: client.id }).then(async (items) => Promise.all(items.map(async (item) => ({
+        ...item,
+        templateTitle: (await getDocumentTemplateById(item.templateId, client.tenantId))?.title ?? 'Document',
+      })))),
+      getIntakePacket(client.id, client.tenantId),
+      listFormAssignments(client.tenantId, { clientId: client.id }),
+      listFormSubmissions(client.tenantId, { clientId: client.id }),
+      listPortalUploads(client.tenantId, client.id, { includeContent: true }),
+      listPortalAppointmentRequests(client.tenantId, client.id),
+      listPortalMessageThreads(client.tenantId, client.id),
+      listPortalResources(client.tenantId).then((items) => items.filter((item) => ['all', 'client', 'clients'].includes(item.audience ?? 'all'))),
+      listInvoices(client.tenantId, client.id),
+    ]);
+    const messageThreads = await Promise.all(threads.map(async (thread) => ({
+      ...thread,
+      messages: await listPortalMessages(thread.id, client.tenantId),
+    })));
+
+    return {
+      exportedAt: new Date().toISOString(),
+      exportVersion: '3.5.0',
+      format: 'json',
+      tenantId: client.tenantId,
+      client: clientRecord,
+      portalAccount,
+      portalProfile,
+      addresses,
+      phones,
+      contacts,
+      insurance,
+      referringProviders,
+      diagnoses,
+      medications,
+      allergies,
+      clinicalHistory,
+      faithProfile,
+      legal,
+      appointments,
+      documents,
+      intakePacket,
+      formAssignments,
+      formSubmissions,
+      uploads,
+      appointmentRequests,
+      messageThreads,
+      resources,
+      balances: balanceItems,
+      retentionPolicy,
+    };
+  }
+
+  return {
+    exportedAt: new Date().toISOString(),
+    exportVersion: '3.5.0',
+    format: 'json',
+    tenantId: client.tenantId,
+    client: clients.find((item) => item.id === client.id && item.tenantId === client.tenantId) ?? client,
+    portalAccount: portalAccounts.find((item) => item.clientId === client.id && item.tenantId === client.tenantId) ?? null,
+    portalProfile: portalClientProfiles.find((item) => item.clientId === client.id && item.tenantId === client.tenantId) ?? null,
+    addresses: [],
+    phones: [],
+    contacts: [],
+    insurance: [],
+    referringProviders: [],
+    diagnoses: [],
+    medications: [],
+    allergies: [],
+    clinicalHistory: null,
+    faithProfile: null,
+    legal: null,
+    appointments: appointments.filter((item) => item.clientId === client.id && item.tenantId === client.tenantId),
+    documents: documentAssignments
+      .filter((item) => item.tenantId === client.tenantId && item.assigneeType === 'client' && item.assigneeId === client.id)
+      .map((item) => ({
+        ...item,
+        templateTitle: documentTemplates.find((template) => template.id === item.templateId)?.title ?? 'Document',
+      })),
+    intakePacket: intakePackets.find((item) => item.clientId === client.id && item.tenantId === client.tenantId) ?? null,
+    formAssignments: formWorkflowAssignments.filter((item) => item.clientId === client.id && item.tenantId === client.tenantId),
+    formSubmissions: formWorkflowSubmissions.filter((item) => item.clientId === client.id && item.tenantId === client.tenantId),
+    uploads: portalUploads.filter((item) => item.clientId === client.id && item.tenantId === client.tenantId),
+    appointmentRequests: portalAppointmentRequests.filter((item) => item.clientId === client.id && item.tenantId === client.tenantId),
+    messageThreads: portalMessageThreads
+      .filter((item) => item.clientId === client.id && item.tenantId === client.tenantId)
+      .map((thread) => ({
+        ...thread,
+        messages: portalMessages.filter((message) => message.threadId === thread.id),
+      })),
+    resources: portalResources.filter((item) => item.clientId === client.id && item.tenantId === client.tenantId),
+    balances: invoices.filter((item) => item.clientId === client.id && item.tenantId === client.tenantId),
+    retentionPolicy,
+  };
+}
+
+function buildDeletedPortalEmail(clientId) {
+  return `deleted+${clientId}@portal.invalid`;
+}
+
+async function fulfillPortalDeletionRequest(client, requestItem) {
+  const now = new Date().toISOString();
+
+  if (process.env.DB_NAME) {
+    const account = await getPortalAccount(client.id, client.tenantId);
+    if (account) {
+      await updatePortalAccount(client.id, client.tenantId, {
+        status: 'revoked',
+        email: buildDeletedPortalEmail(client.id),
+        failedAttempts: 0,
+        lockedUntil: null,
+      });
+      await pool.query('UPDATE portal_sessions SET revoked = 1 WHERE portal_account_id = ?', [account.id]);
+      await pool.query('DELETE FROM portal_password_resets WHERE portal_account_id = ?', [account.id]);
+    }
+
+    await pool.query('DELETE FROM portal_client_profiles WHERE tenant_id = ? AND client_id = ?', [client.tenantId, client.id]);
+    await pool.query('DELETE FROM portal_uploads WHERE tenant_id = ? AND client_id = ?', [client.tenantId, client.id]);
+    await pool.query('DELETE FROM portal_appointment_requests WHERE tenant_id = ? AND client_id = ?', [client.tenantId, client.id]);
+
+    const [threadRows] = await pool.query(
+      'SELECT id FROM portal_message_threads WHERE tenant_id = ? AND client_id = ?',
+      [client.tenantId, client.id],
+    );
+    const threadIds = threadRows.map((row) => row.id);
+    if (threadIds.length) {
+      await pool.query(
+        `DELETE FROM portal_messages
+         WHERE tenant_id = ? AND thread_id IN (${threadIds.map(() => '?').join(', ')})`,
+        [client.tenantId, ...threadIds],
+      );
+      await pool.query('DELETE FROM portal_message_threads WHERE tenant_id = ? AND client_id = ?', [client.tenantId, client.id]);
+    }
+
+    return updatePortalDataRightRequest(requestItem.id, client.tenantId, {
+      status: 'completed',
+      reasonCode: 'portal_erasure_completed',
+      resolvedAt: now,
+    });
+  }
+
+  const account = portalAccounts.find((item) => item.clientId === client.id && item.tenantId === client.tenantId) ?? null;
+  if (account) {
+    account.status = 'revoked';
+    account.email = buildDeletedPortalEmail(client.id);
+    account.lastLoginAt = null;
+  }
+
+  for (let index = portalClientProfiles.length - 1; index >= 0; index -= 1) {
+    const item = portalClientProfiles[index];
+    if (item.clientId === client.id && item.tenantId === client.tenantId) {
+      portalClientProfiles.splice(index, 1);
+    }
+  }
+  for (let index = portalUploads.length - 1; index >= 0; index -= 1) {
+    const item = portalUploads[index];
+    if (item.clientId === client.id && item.tenantId === client.tenantId) {
+      portalUploads.splice(index, 1);
+    }
+  }
+  for (let index = portalAppointmentRequests.length - 1; index >= 0; index -= 1) {
+    const item = portalAppointmentRequests[index];
+    if (item.clientId === client.id && item.tenantId === client.tenantId) {
+      portalAppointmentRequests.splice(index, 1);
+    }
+  }
+  for (let index = portalMessages.length - 1; index >= 0; index -= 1) {
+    const item = portalMessages[index];
+    if (item.clientId === client.id && item.tenantId === client.tenantId) {
+      portalMessages.splice(index, 1);
+    }
+  }
+  for (let index = portalMessageThreads.length - 1; index >= 0; index -= 1) {
+    const item = portalMessageThreads[index];
+    if (item.clientId === client.id && item.tenantId === client.tenantId) {
+      portalMessageThreads.splice(index, 1);
+    }
+  }
+
+  requestItem.status = 'completed';
+  requestItem.reasonCode = 'portal_erasure_completed';
+  requestItem.resolvedAt = now;
+  requestItem.updatedAt = now;
+  return requestItem;
+}
+
+async function handlePortalUploads(request, response, requestUrl, session) {
+  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50), session);
+  if (!client) return;
+
+  if (request.method === 'GET') {
+    const items = process.env.DB_NAME
+      ? await listPortalUploads(client.tenantId, client.id)
+      : portalUploads
+        .filter((item) => item.tenantId === client.tenantId && item.clientId === client.id)
+        .map(({ contentBase64, ...item }) => item);
+    emitAudit(request, 'portal.upload.read', 'portal_upload', client.id, session);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const fileName = sanitizeStr(payload.fileName, 255);
+  const contentBase64 = typeof payload.contentBase64 === 'string' ? payload.contentBase64.trim() : '';
+  if (!fileName || !contentBase64) {
+    writeJson(response, 400, { error: 'fileName and contentBase64 are required' });
+    return;
+  }
+
+  let buffer;
+  try {
+    buffer = Buffer.from(contentBase64, 'base64');
+  } catch {
+    writeJson(response, 400, { error: 'contentBase64 must be valid base64 data' });
+    return;
+  }
+
+  if (!buffer.length) {
+    writeJson(response, 400, { error: 'Uploaded file cannot be empty' });
+    return;
+  }
+
+  if (buffer.length > 2 * 1024 * 1024) {
+    writeJson(response, 400, { error: 'Uploaded file must be 2 MB or smaller' });
+    return;
+  }
+
+  const category = sanitizeStr(payload.category, 64) ?? 'supporting_document';
+  const mimeType = sanitizeStr(payload.mimeType, 128) ?? 'application/octet-stream';
+  const notes = sanitizeStr(payload.notes, 1000) ?? '';
+  const uploadedByRole = callerRole(request, session) || 'client';
+
+  if (process.env.DB_NAME) {
+    const item = await createPortalUpload({
+      id: genId('pu'),
+      tenantId: client.tenantId,
+      clientId: client.id,
+      category,
+      fileName,
+      mimeType,
+      sizeBytes: buffer.length,
+      notes,
+      contentBase64: buffer.toString('base64'),
+      uploadedByRole,
+      status: 'uploaded',
+    });
+    telemetry.recordMutation('portal.upload.create');
+    emitAudit(request, 'portal.upload.create', 'portal_upload', item.id, session);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  const item = {
+    id: createId('pu', portalUploads),
+    tenantId: client.tenantId,
+    clientId: client.id,
+    category,
+    fileName,
+    mimeType,
+    sizeBytes: buffer.length,
+    notes,
+    contentBase64: buffer.toString('base64'),
+    uploadedByRole,
+    status: 'uploaded',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  portalUploads.push(item);
+  telemetry.recordMutation('portal.upload.create');
+  emitAudit(request, 'portal.upload.create', 'portal_upload', item.id, session);
+  writeJson(response, 201, { item: { ...item, contentBase64: undefined } });
+}
+
+async function handlePortalDataRights(request, response, requestUrl, session) {
+  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50), session);
+  if (!client) return;
+
+  if (request.method === 'GET') {
+    const [summary, items] = await Promise.all([
+      buildClientDataRightsSummary(client),
+      process.env.DB_NAME
+        ? listPortalDataRightRequests(client.tenantId, client.id)
+        : Promise.resolve(
+          portalDataRightRequests
+            .filter((item) => item.tenantId === client.tenantId && item.clientId === client.id)
+            .sort((left, right) => String(right.requestedAt).localeCompare(String(left.requestedAt))),
+        ),
+    ]);
+    emitAudit(request, 'portal.data_right.read', 'portal_data_right_request', client.id, session);
+    writeJson(response, 200, { items, summary });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const requestType = normalizePortalDataRightRequestType(payload.requestType);
+  if (!requestType) {
+    writeJson(response, 400, { error: 'requestType must be valid' });
+    return;
+  }
+
+  const notes = sanitizeStr(payload.notes, 1000) ?? '';
+  const retentionPolicy = await getTenantRetentionPolicySnapshot(client.tenantId);
+
+  if (requestType === 'export_data') {
+    const exportPackage = await buildClientExportBundle(client);
+    const now = new Date().toISOString();
+
+    let exportJob;
+    if (process.env.DB_NAME) {
+      exportJob = await createDataExportJob({
+        id: genId('dex'),
+        tenantId: client.tenantId,
+        exportType: 'clinical_records',
+        status: 'completed',
+        requestedByRole: callerRole(request, session) || 'client',
+        requestedAt: now,
+        completedAt: now,
+        format: 'json',
+      });
+      const item = await createPortalDataRightRequest({
+        id: genId('pdr'),
+        tenantId: client.tenantId,
+        clientId: client.id,
+        requestType,
+        status: 'completed',
+        deliveryFormat: 'json',
+        reasonCode: 'self_service_export',
+        notes,
+        policySnapshot: retentionPolicy,
+        requestedAt: now,
+        resolvedAt: now,
+      });
+      telemetry.recordMutation('portal.data_right.export');
+      emitAudit(request, 'portal.data_right.export', 'portal_data_right_request', item.id, session);
+      writeJson(response, 201, {
+        item,
+        exportJob,
+        fileName: `faithcounseling-${client.id}-export-${new Date(now).toISOString().slice(0, 10)}.json`,
+        exportPackage,
+      });
+      return;
+    }
+
+    exportJob = {
+      id: createId('dex', dataExportJobs),
+      tenantId: client.tenantId,
+      exportType: 'clinical_records',
+      status: 'completed',
+      requestedByRole: callerRole(request, session) || 'client',
+      requestedAt: now,
+      completedAt: now,
+      format: 'json',
+    };
+    dataExportJobs.push(exportJob);
+    const item = {
+      id: createId('pdr', portalDataRightRequests),
+      tenantId: client.tenantId,
+      clientId: client.id,
+      requestType,
+      status: 'completed',
+      deliveryFormat: 'json',
+      reasonCode: 'self_service_export',
+      notes,
+      policySnapshot: retentionPolicy,
+      requestedAt: now,
+      resolvedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    };
+    portalDataRightRequests.push(item);
+    telemetry.recordMutation('portal.data_right.export');
+    emitAudit(request, 'portal.data_right.export', 'portal_data_right_request', item.id, session);
+    writeJson(response, 201, {
+      item,
+      exportJob,
+      fileName: `faithcounseling-${client.id}-export-${new Date(now).toISOString().slice(0, 10)}.json`,
+      exportPackage,
+    });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const status = retentionPolicy.legalHoldEnabled ? 'restricted' : 'under_review';
+  const reasonCode = retentionPolicy.legalHoldEnabled ? 'legal_hold_enabled' : 'retention_review_required';
+  const normalizedStatus = normalizePortalDataRightRequestStatus(status) ?? 'under_review';
+
+  if (process.env.DB_NAME) {
+    const item = await createPortalDataRightRequest({
+      id: genId('pdr'),
+      tenantId: client.tenantId,
+      clientId: client.id,
+      requestType,
+      status: normalizedStatus,
+      deliveryFormat: 'json',
+      reasonCode,
+      notes,
+      policySnapshot: retentionPolicy,
+      requestedAt: now,
+      resolvedAt: normalizedStatus === 'restricted' ? now : null,
+    });
+    telemetry.recordMutation('portal.data_right.delete_request');
+    emitAudit(request, 'portal.data_right.delete_request.create', 'portal_data_right_request', item.id, session);
+    writeJson(response, 201, {
+      item,
+      notice: normalizedStatus === 'restricted'
+        ? 'Deletion cannot proceed while legal hold is enabled for this tenant.'
+        : 'Deletion request recorded and queued for retention/compliance review.',
+    });
+    return;
+  }
+
+  const item = {
+    id: createId('pdr', portalDataRightRequests),
+    tenantId: client.tenantId,
+    clientId: client.id,
+    requestType,
+    status: normalizedStatus,
+    deliveryFormat: 'json',
+    reasonCode,
+    notes,
+    policySnapshot: retentionPolicy,
+    requestedAt: now,
+    resolvedAt: normalizedStatus === 'restricted' ? now : null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  portalDataRightRequests.push(item);
+  telemetry.recordMutation('portal.data_right.delete_request');
+  emitAudit(request, 'portal.data_right.delete_request.create', 'portal_data_right_request', item.id, session);
+  writeJson(response, 201, {
+    item,
+    notice: normalizedStatus === 'restricted'
+      ? 'Deletion cannot proceed while legal hold is enabled for this tenant.'
+      : 'Deletion request recorded and queued for retention/compliance review.',
+  });
+}
+
+async function handlePortalDataRightsReview(request, response, session) {
+  if (requirePracticeAdmin(request, response, session)) return;
+
+  if (request.method === 'GET') {
+    const tenantId = callerTenant(request, session);
+    const items = process.env.DB_NAME
+      ? await listPortalDataRightRequests(tenantId)
+      : portalDataRightRequests
+        .filter((item) => item.tenantId === tenantId)
+        .slice()
+        .sort((left, right) => String(right.requestedAt).localeCompare(String(left.requestedAt)));
+    emitAudit(request, 'portal.data_right.review.read', 'portal_data_right_request', 'collection', session);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const requestId = sanitizeStr(payload.requestId, 64);
+  const nextStatus = normalizePortalDataRightRequestStatus(payload.status);
+  const reasonCode = normalizePortalDataRightReviewReasonCode(payload.reasonCode)
+    ?? (nextStatus === 'completed'
+      ? 'portal_erasure_completed'
+      : nextStatus === 'restricted'
+        ? 'retention_obligation_remaining'
+        : 'request_denied');
+
+  if (!requestId || !nextStatus || !['completed', 'restricted', 'denied'].includes(nextStatus)) {
+    writeJson(response, 400, { error: 'requestId and a valid review status are required' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  const notes = sanitizeStr(payload.notes, 1000) ?? '';
+  const now = new Date().toISOString();
+
+  if (process.env.DB_NAME) {
+    const items = await listPortalDataRightRequests(tenantId);
+    const existing = items.find((item) => item.id === requestId);
+    if (!existing) {
+      writeJson(response, 404, { error: 'Data-right request not found' });
+      return;
+    }
+    if (existing.requestType !== 'delete_request') {
+      writeJson(response, 400, { error: 'Only deletion requests require review actions' });
+      return;
+    }
+    if (existing.status === 'completed' || existing.status === 'denied' || existing.status === 'restricted') {
+      writeJson(response, 409, { error: 'This request has already been resolved' });
+      return;
+    }
+
+    const [rows] = await pool.query(
+      'SELECT id, tenant_id, first_name_enc, last_name_enc FROM clients WHERE id = ? AND tenant_id = ? LIMIT 1',
+      [existing.clientId, tenantId],
+    );
+    const client = rows[0]
+      ? {
+        id: rows[0].id,
+        tenantId: rows[0].tenant_id,
+        firstName: decrypt(rows[0].first_name_enc),
+        lastName: decrypt(rows[0].last_name_enc),
+      }
+      : null;
+    if (!client) {
+      writeJson(response, 404, { error: 'Client not found for this request' });
+      return;
+    }
+
+    const item = nextStatus === 'completed'
+      ? await fulfillPortalDeletionRequest(client, existing)
+      : await updatePortalDataRightRequest(existing.id, tenantId, {
+        status: nextStatus,
+        reasonCode,
+        notes: notes || existing.notes || '',
+        resolvedAt: now,
+      });
+
+    telemetry.recordMutation(`portal.data_right.review.${nextStatus}`);
+    emitAudit(
+      request,
+      nextStatus === 'completed'
+        ? 'portal.data_right.delete_request.fulfill'
+        : nextStatus === 'restricted'
+          ? 'portal.data_right.delete_request.restrict'
+          : 'portal.data_right.delete_request.deny',
+      'portal_data_right_request',
+      item.id,
+      session,
+    );
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  const existing = portalDataRightRequests.find((item) => item.id === requestId && item.tenantId === tenantId) ?? null;
+  if (!existing) {
+    writeJson(response, 404, { error: 'Data-right request not found' });
+    return;
+  }
+  if (existing.requestType !== 'delete_request') {
+    writeJson(response, 400, { error: 'Only deletion requests require review actions' });
+    return;
+  }
+  if (existing.status === 'completed' || existing.status === 'denied' || existing.status === 'restricted') {
+    writeJson(response, 409, { error: 'This request has already been resolved' });
+    return;
+  }
+
+  const client = clients.find((item) => item.id === existing.clientId && item.tenantId === tenantId) ?? null;
+  if (!client) {
+    writeJson(response, 404, { error: 'Client not found for this request' });
+    return;
+  }
+
+  const item = nextStatus === 'completed'
+    ? await fulfillPortalDeletionRequest(client, existing)
+    : (() => {
+      existing.status = nextStatus;
+      existing.reasonCode = reasonCode;
+      existing.notes = notes || existing.notes || '';
+      existing.resolvedAt = now;
+      existing.updatedAt = now;
+      return existing;
+    })();
+
+  telemetry.recordMutation(`portal.data_right.review.${nextStatus}`);
+  emitAudit(
+    request,
+    nextStatus === 'completed'
+      ? 'portal.data_right.delete_request.fulfill'
+      : nextStatus === 'restricted'
+        ? 'portal.data_right.delete_request.restrict'
+        : 'portal.data_right.delete_request.deny',
+    'portal_data_right_request',
+    item.id,
+    session,
+  );
   writeJson(response, 200, { item });
 }
 
@@ -9693,6 +10546,22 @@ function normalizePortalResourceType(value) {
   return portalResourceTypes.includes(value) ? value : null;
 }
 
+function normalizePortalUploadStatus(value) {
+  return portalUploadStatuses.includes(value) ? value : null;
+}
+
+function normalizePortalDataRightRequestType(value) {
+  return portalDataRightRequestTypes.includes(value) ? value : null;
+}
+
+function normalizePortalDataRightRequestStatus(value) {
+  return portalDataRightRequestStatuses.includes(value) ? value : null;
+}
+
+function normalizePortalDataRightReviewReasonCode(value) {
+  return portalDataRightReviewReasonCodes.includes(value) ? value : null;
+}
+
 function normalizeFaithIntegrationLevel(value) {
   return faithIntegrationLevels.includes(value) ? value : null;
 }
@@ -10362,6 +11231,8 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/auth/logout') return '/v1/auth/logout';
   if (pathname === '/v1/auth/me') return '/v1/auth/me';
   if (pathname === '/v1/auth/change-password') return '/v1/auth/change-password';
+  if (pathname === '/v1/auth/portal-password-reset-request') return '/v1/auth/portal-password-reset-request';
+  if (pathname === '/v1/auth/portal-password-reset') return '/v1/auth/portal-password-reset';
   if (pathname === '/v1/appointment-types') return '/v1/appointment-types';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/lifecycle')) return '/v1/clients/:id/lifecycle';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/consents')) return '/v1/clients/:id/consents';
@@ -10393,9 +11264,12 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/portal/profile') return '/v1/portal/profile';
   if (pathname === '/v1/portal/intake-packets') return '/v1/portal/intake-packets';
   if (pathname === '/v1/portal/documents') return '/v1/portal/documents';
+  if (pathname === '/v1/portal/uploads') return '/v1/portal/uploads';
   if (pathname === '/v1/portal/appointment-requests') return '/v1/portal/appointment-requests';
   if (pathname === '/v1/portal/messages') return '/v1/portal/messages';
   if (pathname === '/v1/portal/resources') return '/v1/portal/resources';
+  if (pathname === '/v1/portal/data-rights') return '/v1/portal/data-rights';
+  if (pathname === '/v1/portal/data-rights/review') return '/v1/portal/data-rights/review';
   if (pathname === '/v1/faith/overview') return '/v1/faith/overview';
   if (pathname === '/v1/faith/note-templates') return '/v1/faith/note-templates';
   if (pathname === '/v1/faith/treatment-goals') return '/v1/faith/treatment-goals';

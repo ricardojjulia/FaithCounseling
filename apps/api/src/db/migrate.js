@@ -467,19 +467,41 @@ async function ensureDevPortalClient(conn) {
       ],
     );
     console.log('  + ensured seeded portal client account for local development');
-    return;
+  } else {
+    await conn.query(
+      `UPDATE portal_accounts
+       SET email_lookup_hash = ?,
+           password_hash = ?,
+           failed_attempts = 0,
+           locked_until = NULL,
+           status = 'active'
+       WHERE id = ?`,
+      [
+        deriveLookupHash('sarah.kim@example.test', { lowercase: true }),
+        portalPasswordHash,
+        portalAccount.id,
+      ],
+    );
   }
 
-  await conn.query(
-    `UPDATE portal_accounts
-     SET email_lookup_hash = COALESCE(email_lookup_hash, ?),
-         password_hash = COALESCE(password_hash, ?),
-         status = CASE WHEN status = 'locked' THEN status ELSE 'active' END
-     WHERE id = ?`,
-    [
-      deriveLookupHash('sarah.kim@example.test', { lowercase: true }),
-      portalPasswordHash,
-      portalAccount.id,
-    ],
+  const [[portalResource]] = await conn.query(
+    'SELECT id FROM portal_resources WHERE id = ? AND tenant_id = ? LIMIT 1',
+    ['pr-001', 'system'],
   );
+  if (!portalResource) {
+    await conn.query(
+      `INSERT INTO portal_resources
+         (id, tenant_id, title, content, resource_type, audience, published_at)
+       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      [
+        'pr-001',
+        'system',
+        'Breath Prayer Starter Guide',
+        'A short guided breath prayer routine to practice between sessions.',
+        'devotional',
+        'client',
+      ],
+    );
+    console.log('  + ensured seeded portal resource for local development');
+  }
 }

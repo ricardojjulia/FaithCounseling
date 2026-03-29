@@ -14,6 +14,11 @@ export const SURFACE_DEFINITIONS = Object.freeze([
   { id: 'portal.dashboard', kind: 'tab' },
   { id: 'portal.profile', kind: 'tab' },
   { id: 'portal.appointments', kind: 'tab' },
+  { id: 'portal.documents', kind: 'tab' },
+  { id: 'portal.counselor', kind: 'tab' },
+  { id: 'portal.financials', kind: 'tab' },
+  { id: 'portal.resources', kind: 'tab' },
+  { id: 'portal.data_rights', kind: 'tab' },
 
   { id: 'about', kind: 'page' },
   { id: 'operations', kind: 'page' },

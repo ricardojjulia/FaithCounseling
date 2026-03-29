@@ -90,6 +90,11 @@ Required boundary rules:
 - `portal.dashboard`
 - `portal.profile`
 - `portal.appointments`
+- `portal.documents`
+- `portal.counselor`
+- `portal.financials`
+- `portal.resources`
+- `portal.data_rights`
 
 ### Operations Studio tabs
 

@@ -58,6 +58,45 @@ function rowToPortalResource(row) {
   };
 }
 
+function rowToPortalUpload(row, { includeContent = false } = {}) {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    clientId: row.client_id,
+    category: row.category,
+    fileName: decrypt(row.file_name_enc),
+    mimeType: row.mime_type ?? 'application/octet-stream',
+    sizeBytes: Number(row.size_bytes) || 0,
+    notes: row.notes_enc ? decrypt(row.notes_enc) : '',
+    uploadedByRole: row.uploaded_by_role ?? 'client',
+    status: row.status ?? 'uploaded',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    ...(includeContent && row.content_enc ? { contentBase64: decrypt(row.content_enc) } : {}),
+  };
+}
+
+function rowToPortalDataRightRequest(row) {
+  const policySnapshot = row.policy_snapshot
+    ? (typeof row.policy_snapshot === 'string' ? JSON.parse(row.policy_snapshot) : row.policy_snapshot)
+    : null;
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    clientId: row.client_id,
+    requestType: row.request_type,
+    status: row.status,
+    deliveryFormat: row.delivery_format ?? 'json',
+    reasonCode: row.reason_code ?? 'self_service_request',
+    notes: row.notes_enc ? decrypt(row.notes_enc) : '',
+    policySnapshot,
+    requestedAt: row.requested_at ?? row.created_at,
+    resolvedAt: row.resolved_at ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 function rowToPortalMessageThread(row) {
   return {
     id: row.id,
@@ -397,6 +436,150 @@ export async function updatePortalResource(id, tenantId, fields) {
   );
   if (rows.length === 0) return null;
   return rowToPortalResource(rows[0]);
+}
+
+// ---------------------------------------------------------------------------
+// Portal Uploads
+// ---------------------------------------------------------------------------
+
+export async function listPortalUploads(tenantId, clientId, { includeContent = false } = {}) {
+  const conditions = ['tenant_id = ?'];
+  const values = [tenantId];
+  if (clientId !== undefined) {
+    conditions.push('client_id = ?');
+    values.push(clientId);
+  }
+  const [rows] = await pool.query(
+    `SELECT * FROM portal_uploads WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC`,
+    values,
+  );
+  return rows.map((row) => rowToPortalUpload(row, { includeContent }));
+}
+
+export async function getPortalUpload(id, tenantId, { includeContent = false } = {}) {
+  const [rows] = await pool.query(
+    'SELECT * FROM portal_uploads WHERE id = ? AND tenant_id = ? LIMIT 1',
+    [id, tenantId],
+  );
+  if (!rows.length) return null;
+  return rowToPortalUpload(rows[0], { includeContent });
+}
+
+export async function createPortalUpload({
+  id,
+  tenantId,
+  clientId,
+  category,
+  fileName,
+  mimeType,
+  sizeBytes,
+  notes,
+  contentBase64,
+  uploadedByRole,
+  status,
+}) {
+  await pool.query(
+    `INSERT INTO portal_uploads
+       (id, tenant_id, client_id, category, file_name_enc, mime_type, size_bytes, notes_enc, content_enc, uploaded_by_role, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      tenantId,
+      clientId,
+      category ?? 'supporting_document',
+      encrypt(fileName),
+      mimeType ?? 'application/octet-stream',
+      Number(sizeBytes) || 0,
+      notes ? encrypt(notes) : null,
+      encrypt(contentBase64),
+      uploadedByRole ?? 'client',
+      status ?? 'uploaded',
+    ],
+  );
+  return getPortalUpload(id, tenantId);
+}
+
+// ---------------------------------------------------------------------------
+// Portal Data-Rights Requests
+// ---------------------------------------------------------------------------
+
+export async function listPortalDataRightRequests(tenantId, clientId) {
+  const conditions = ['tenant_id = ?'];
+  const values = [tenantId];
+  if (clientId !== undefined) {
+    conditions.push('client_id = ?');
+    values.push(clientId);
+  }
+  const [rows] = await pool.query(
+    `SELECT * FROM portal_data_right_requests WHERE ${conditions.join(' AND ')} ORDER BY requested_at DESC, created_at DESC`,
+    values,
+  );
+  return rows.map(rowToPortalDataRightRequest);
+}
+
+export async function createPortalDataRightRequest({
+  id,
+  tenantId,
+  clientId,
+  requestType,
+  status,
+  deliveryFormat,
+  reasonCode,
+  notes,
+  policySnapshot,
+  requestedAt,
+  resolvedAt,
+}) {
+  await pool.query(
+    `INSERT INTO portal_data_right_requests
+       (id, tenant_id, client_id, request_type, status, delivery_format, reason_code, notes_enc, policy_snapshot, requested_at, resolved_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      tenantId,
+      clientId,
+      requestType,
+      status ?? 'requested',
+      deliveryFormat ?? 'json',
+      reasonCode ?? 'self_service_request',
+      notes ? encrypt(notes) : null,
+      policySnapshot ? JSON.stringify(policySnapshot) : null,
+      toSqlTimestamp(requestedAt),
+      toSqlTimestamp(resolvedAt),
+    ],
+  );
+  const [rows] = await pool.query(
+    'SELECT * FROM portal_data_right_requests WHERE id = ? AND tenant_id = ? LIMIT 1',
+    [id, tenantId],
+  );
+  return rows[0] ? rowToPortalDataRightRequest(rows[0]) : null;
+}
+
+export async function updatePortalDataRightRequest(id, tenantId, fields) {
+  const setClauses = [];
+  const values = [];
+
+  if (fields.status !== undefined) { setClauses.push('status = ?'); values.push(fields.status); }
+  if (fields.deliveryFormat !== undefined) { setClauses.push('delivery_format = ?'); values.push(fields.deliveryFormat); }
+  if (fields.reasonCode !== undefined) { setClauses.push('reason_code = ?'); values.push(fields.reasonCode); }
+  if (fields.notes !== undefined) { setClauses.push('notes_enc = ?'); values.push(fields.notes ? encrypt(fields.notes) : null); }
+  if (fields.policySnapshot !== undefined) { setClauses.push('policy_snapshot = ?'); values.push(fields.policySnapshot ? JSON.stringify(fields.policySnapshot) : null); }
+  if (fields.requestedAt !== undefined) { setClauses.push('requested_at = ?'); values.push(toSqlTimestamp(fields.requestedAt)); }
+  if (fields.resolvedAt !== undefined) { setClauses.push('resolved_at = ?'); values.push(toSqlTimestamp(fields.resolvedAt)); }
+
+  if (setClauses.length > 0) {
+    values.push(id, tenantId);
+    await pool.query(
+      `UPDATE portal_data_right_requests SET ${setClauses.join(', ')} WHERE id = ? AND tenant_id = ?`,
+      values,
+    );
+  }
+
+  const [rows] = await pool.query(
+    'SELECT * FROM portal_data_right_requests WHERE id = ? AND tenant_id = ? LIMIT 1',
+    [id, tenantId],
+  );
+  return rows[0] ? rowToPortalDataRightRequest(rows[0]) : null;
 }
 
 // ---------------------------------------------------------------------------

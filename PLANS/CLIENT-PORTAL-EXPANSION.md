@@ -77,14 +77,41 @@ Completed in repo as of March 29, 2026:
   - Playwright regression coverage for a real seeded portal-client login and self-service flow
   - portal account password hashing, lockout tracking, and dedicated portal session persistence
   - Workspace Studio portal-account creation now returns a one-time temporary password for secure invitation handoff
+  - authenticated portal `Documents` tab with:
+    - assigned form visibility
+    - intake packet completion status
+    - portal document read/sign-complete actions
+    - secure client upload history and submission
+  - authenticated portal `Data Rights` tab with:
+    - self-service JSON export
+    - policy-aware deletion requests
+    - retention and legal-hold visibility
+    - request history
+  - dedicated portal credential management with:
+    - authenticated client password change
+    - public portal password-reset request
+    - one-time reset-code completion
+    - session revocation after password changes or resets
+  - authenticated portal `Counselor` tab with:
+    - assigned counselor card
+    - optional counselor directory when enabled by practice settings
+  - authenticated portal `Financials` tab with:
+    - invoice or offering summary
+    - invoice list
+    - payment or offering history
+  - authenticated portal `Resources` tab with:
+    - client-facing resource library fed by portal-published content
+  - Workspace Studio portal data-rights review queue with:
+    - tenant-scoped deletion request visibility
+    - fulfill, restrict, and deny actions
+    - policy-aware portal-scope erasure with portal-access revocation
 
 Still pending:
 
 - onboarding wizard with account activation flow
 - uploads and published document workflows beyond current dashboard/resource visibility
 - richer counselor directory and counselor detail surfaces
-- dedicated financial portal page beyond current summary card
-- data-rights export/delete workflows
+- dedicated financial portal page beyond current invoice/payment summary implementation
 - final agent-driven validation sequence from Phase 6
 
 ## Canonical Constraints
@@ -102,6 +129,7 @@ Non-negotiable constraints:
 - all portal actions must be tenant-scoped and ownership-validated
 - client authentication must use hashed passwords, session revocation, lockout protection, and tenant-scoped portal sessions
 - export and deletion workflows must be privileged, auditable, and policy-aware
+- password reset and password change flows must revoke active portal sessions on success
 
 ## Product Experience Model
 
@@ -182,6 +210,8 @@ Authenticated clients must be able to:
 - review balances, payments, due items, or voluntary offerings depending on tenant settings
 - request a copy of their data
 - request deletion or account closure
+- change their portal password while authenticated
+- request a one-time portal password reset from the sign-in surface
 
 ## Functional Modules
 
@@ -217,6 +247,16 @@ Features:
 - new messages
 - balance or offering summary
 - quick links to data-rights actions
+
+### Module 3b: Portal credentials
+
+Features:
+
+- authenticated password change
+- public reset-code request
+- one-time reset-code completion
+- session revocation after credential changes
+- audit coverage for request, completion, and password-change actions
 
 ### Module 4: Scheduling
 
@@ -285,6 +325,9 @@ Features:
 - `Request Deletion` action
 - request status tracking
 - policy-aware responses when deletion cannot be fully executed because of legal hold, retention, fraud prevention, accounting, or clinical record obligations
+- staff review queue for deletion requests
+- fulfill, restrict, and deny actions with auditable reason codes
+- portal-scope erasure/anonymization when deletion is approved
 
 ## Data Model Additions
 

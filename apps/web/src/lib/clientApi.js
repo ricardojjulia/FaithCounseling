@@ -62,6 +62,78 @@ export function updatePortalAppointmentRequestRecord(data, clientId = null) {
   });
 }
 
+export function fetchPortalDocuments(clientId = null) {
+  return apiFetch(withClientId('/api/v1/portal/documents', clientId));
+}
+
+export function updatePortalDocumentRecord(data, clientId = null) {
+  return apiFetch(withClientId('/api/v1/portal/documents', clientId), {
+    method: 'PATCH',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function fetchPortalIntakePackets(clientId = null) {
+  return apiFetch(withClientId('/api/v1/portal/intake-packets', clientId));
+}
+
+export function updatePortalIntakePacket(data, clientId = null) {
+  return apiFetch(withClientId('/api/v1/portal/intake-packets', clientId), {
+    method: 'PATCH',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function fetchPortalUploads(clientId = null) {
+  return apiFetch(withClientId('/api/v1/portal/uploads', clientId));
+}
+
+export function createPortalUploadRecord(data, clientId = null) {
+  return apiFetch(withClientId('/api/v1/portal/uploads', clientId), {
+    method: 'POST',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function fetchPortalDataRights(clientId = null) {
+  return apiFetch(withClientId('/api/v1/portal/data-rights', clientId));
+}
+
+export function createPortalDataRightsRequest(data, clientId = null) {
+  return apiFetch(withClientId('/api/v1/portal/data-rights', clientId), {
+    method: 'POST',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function changeAuthenticatedPassword(data) {
+  return apiFetch('/api/v1/auth/change-password', {
+    method: 'POST',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function requestPortalPasswordReset(data) {
+  return apiFetch('/api/v1/auth/portal-password-reset-request', {
+    method: 'POST',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function completePortalPasswordReset(data) {
+  return apiFetch('/api/v1/auth/portal-password-reset', {
+    method: 'POST',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
 // ── Client core ──────────────────────────────────────────────────────────────
 
 export function fetchClient(clientId) {

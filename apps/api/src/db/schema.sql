@@ -599,6 +599,21 @@ CREATE TABLE IF NOT EXISTS portal_sessions (
   CONSTRAINT fk_portal_sessions_account FOREIGN KEY (portal_account_id) REFERENCES portal_accounts (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS portal_password_resets (
+  id                VARCHAR(64)  NOT NULL,
+  portal_account_id VARCHAR(64)  NOT NULL,
+  tenant_id         VARCHAR(64)  NOT NULL,
+  token_hash        CHAR(64)     NOT NULL,
+  requested_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at        TIMESTAMP    NOT NULL,
+  used_at           TIMESTAMP    NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_portal_password_reset_token (token_hash),
+  INDEX idx_portal_password_reset_account (portal_account_id),
+  INDEX idx_portal_password_reset_expires (expires_at),
+  CONSTRAINT fk_portal_password_reset_account FOREIGN KEY (portal_account_id) REFERENCES portal_accounts (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ─── Portal client profiles ──────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS portal_client_profiles (
@@ -659,6 +674,49 @@ CREATE TABLE IF NOT EXISTS portal_resources (
   updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   INDEX idx_portal_resource_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Portal uploads ──────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS portal_uploads (
+  id               VARCHAR(64)  NOT NULL,
+  tenant_id        VARCHAR(64)  NOT NULL,
+  client_id        VARCHAR(64)  NOT NULL,
+  category         VARCHAR(64)  NOT NULL DEFAULT 'supporting_document',
+  file_name_enc    TEXT         NOT NULL,   -- encrypted PII
+  mime_type        VARCHAR(128) NULL,
+  size_bytes       INT          NOT NULL DEFAULT 0,
+  notes_enc        TEXT         NULL,       -- encrypted free text / PHI
+  content_enc      MEDIUMTEXT   NOT NULL,   -- encrypted base64 payload
+  uploaded_by_role VARCHAR(64)  NOT NULL DEFAULT 'client',
+  status           VARCHAR(64)  NOT NULL DEFAULT 'uploaded',
+  created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_portal_upload_tenant_client (tenant_id, client_id),
+  CONSTRAINT fk_portal_upload_client FOREIGN KEY (client_id) REFERENCES clients (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Portal data-rights requests ─────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS portal_data_right_requests (
+  id              VARCHAR(64)  NOT NULL,
+  tenant_id       VARCHAR(64)  NOT NULL,
+  client_id       VARCHAR(64)  NOT NULL,
+  request_type    VARCHAR(64)  NOT NULL,
+  status          VARCHAR(64)  NOT NULL DEFAULT 'requested',
+  delivery_format VARCHAR(16)  NOT NULL DEFAULT 'json',
+  reason_code     VARCHAR(64)  NOT NULL DEFAULT 'self_service_request',
+  notes_enc       MEDIUMTEXT   NULL,         -- encrypted free text / PHI
+  policy_snapshot JSON         NULL,
+  requested_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  resolved_at     TIMESTAMP    NULL,
+  created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_portal_data_right_tenant_client (tenant_id, client_id),
+  INDEX idx_portal_data_right_status (tenant_id, status),
+  CONSTRAINT fk_portal_data_right_client FOREIGN KEY (client_id) REFERENCES clients (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─── Portal message threads ───────────────────────────────────────────────────

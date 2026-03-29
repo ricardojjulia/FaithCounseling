@@ -171,7 +171,7 @@ const PUBLIC_ROUTES = new Set([
 const WRITE_ROLES = new Set(['platform_admin', 'practice_owner', 'practice_admin', 'counselor']);
 
 // Routes restricted to admin-level roles only
-const ADMIN_ROUTES = ['/v1/i18n/settings/', '/v1/i18n/translate', '/v1/monitoring/db', '/v1/telemetry/summary'];
+const ADMIN_ROUTES = ['/v1/i18n/settings/', '/v1/i18n/translate', '/v1/monitoring/db', '/v1/telemetry/summary', '/v1/portal/data-rights/review'];
 
 const ADMIN_ROLES = new Set(['platform_admin', 'practice_owner', 'practice_admin']);
 const CLIENT_ALLOWED_ROUTE_PREFIXES = ['/v1/portal/'];
@@ -197,6 +197,8 @@ export function enforceRbac(request, response, route, session = null) {
   // Auth endpoints are public (no session needed to log in)
   if (route === '/v1/auth/login' || route === '/v1/auth/logout') return false;
   if (route === '/v1/auth/me') return false;
+  if (route === '/v1/auth/portal-password-reset-request') return false;
+  if (route === '/v1/auth/portal-password-reset') return false;
   if (route === '/v1/portal/public-requests' && request.method === 'POST') return false;
   if (route === '/v1/portal/public-config' && request.method === 'GET') return false;
 
@@ -224,6 +226,10 @@ export function enforceRbac(request, response, route, session = null) {
   if (isAdminRoute && !ADMIN_ROLES.has(role)) {
     writeSecureJson(response, 403, { error: 'Insufficient permissions' });
     return true;
+  }
+
+  if (role === 'client' && route === '/v1/auth/change-password' && request.method === 'POST') {
+    return false;
   }
 
   if (role === 'client') {

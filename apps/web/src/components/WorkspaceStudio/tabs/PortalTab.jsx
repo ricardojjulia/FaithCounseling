@@ -30,7 +30,7 @@ function fmtDateTime(iso) {
 }
 
 function accountStatusColor(status) {
-  return { active: 'green', invited: 'yellow', locked: 'red' }[status] ?? 'gray';
+  return { active: 'green', invited: 'yellow', locked: 'red', revoked: 'red' }[status] ?? 'gray';
 }
 
 function apptRequestStatusColor(status) {
@@ -39,6 +39,10 @@ function apptRequestStatusColor(status) {
 
 function resourceTypeColor(type) {
   return { devotional: 'violet', education: 'blue', document: 'gray', form: 'orange' }[type] ?? 'gray';
+}
+
+function dataRightStatusColor(status) {
+  return { requested: 'blue', under_review: 'blue', completed: 'green', restricted: 'orange', denied: 'red' }[status] ?? 'gray';
 }
 
 // ── sub-components ────────────────────────────────────────────────────────────
@@ -138,12 +142,12 @@ function AccountSection({ account, clientId, onRefresh }) {
             Activate
           </Button>
         )}
-        {account.status !== 'locked' && (
+        {account.status !== 'locked' && account.status !== 'revoked' && (
           <Button size="xs" color="red" variant="light" loading={saving} onClick={() => setStatus('locked')}>
             Lock Access
           </Button>
         )}
-        {account.status === 'locked' && (
+        {(account.status === 'locked' || account.status === 'revoked') && (
           <Button size="xs" color="green" variant="light" loading={saving} onClick={() => setStatus('active')}>
             Restore Access
           </Button>
@@ -717,6 +721,124 @@ function PublicRequestsSection({ items, loading, onRefresh }) {
   );
 }
 
+function DataRightsRequestsSection({ items, loading, onRefresh }) {
+  const [updatingId, setUpdatingId] = useState(null);
+
+  const runAction = async (requestId, status, reasonCode) => {
+    setUpdatingId(requestId);
+    try {
+      await apiFetch('/api/v1/portal/data-rights/review', {
+        method: 'PATCH',
+        headers: csrfHeaders(),
+        body: JSON.stringify({ requestId, status, reasonCode }),
+      });
+      notifications.show({
+        title: 'Updated',
+        message: `Deletion request marked ${status.replaceAll('_', ' ')}.`,
+        color: status === 'completed' ? 'green' : status === 'restricted' ? 'yellow' : 'red',
+      });
+      onRefresh();
+    } catch (err) {
+      notifications.show({ title: 'Error', message: err.message, color: 'red' });
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Paper withBorder radius="md" p="md">
+        <Group justify="center" py="md"><Loader size="sm" /></Group>
+      </Paper>
+    );
+  }
+
+  return (
+    <Paper withBorder radius="md" p="md">
+      <Stack gap="sm">
+        <Group justify="space-between" align="center">
+          <Box>
+            <Title order={3} fz="md">Data Rights Requests</Title>
+            <Text fz="sm" c="dimmed">
+              Review portal deletion requests and complete policy-aware portal erasure when appropriate.
+            </Text>
+          </Box>
+          <Button size="xs" variant="default" onClick={onRefresh}>Refresh Queue</Button>
+        </Group>
+
+        {!items.length ? (
+          <Text c="dimmed" fz="sm">No data-right review items are waiting.</Text>
+        ) : items.map((item) => {
+          const resolved = ['completed', 'restricted', 'denied'].includes(item.status);
+          return (
+            <Paper key={item.id} withBorder radius="sm" p="sm">
+              <Group justify="space-between" align="flex-start" wrap="wrap">
+                <Box maw={540}>
+                  <Group gap="xs" mb={4} wrap="wrap">
+                    <Badge variant="light" color={dataRightStatusColor(item.status)}>
+                      {item.status}
+                    </Badge>
+                    <Badge variant="outline" color="gray">
+                      {(item.requestType || 'delete_request').replaceAll('_', ' ')}
+                    </Badge>
+                  </Group>
+                  <Text fz="sm" fw={600}>{item.clientId}</Text>
+                  <Text fz="xs" c="dimmed">
+                    Requested {fmtDateTime(item.requestedAt)}
+                    {item.resolvedAt ? ` • resolved ${fmtDateTime(item.resolvedAt)}` : ''}
+                  </Text>
+                  {item.reasonCode ? (
+                    <Text fz="xs" c="dimmed" mt={4}>
+                      Reason: {item.reasonCode.replaceAll('_', ' ')}
+                    </Text>
+                  ) : null}
+                  {item.notes ? (
+                    <Text fz="xs" c="dimmed" mt={6}>
+                      {item.notes}
+                    </Text>
+                  ) : null}
+                </Box>
+
+                {!resolved ? (
+                  <Group gap="xs" wrap="wrap">
+                    <Button
+                      size="xs"
+                      color="green"
+                      variant="light"
+                      loading={updatingId === item.id}
+                      onClick={() => runAction(item.id, 'completed', 'portal_erasure_completed')}
+                    >
+                      Fulfill
+                    </Button>
+                    <Button
+                      size="xs"
+                      color="yellow"
+                      variant="light"
+                      loading={updatingId === item.id}
+                      onClick={() => runAction(item.id, 'restricted', 'retention_obligation_remaining')}
+                    >
+                      Restrict
+                    </Button>
+                    <Button
+                      size="xs"
+                      color="red"
+                      variant="light"
+                      loading={updatingId === item.id}
+                      onClick={() => runAction(item.id, 'denied', 'request_denied')}
+                    >
+                      Deny
+                    </Button>
+                  </Group>
+                ) : null}
+              </Group>
+            </Paper>
+          );
+        })}
+      </Stack>
+    </Paper>
+  );
+}
+
 // ── accordion item label helper ───────────────────────────────────────────────
 
 function AccordionLabel({ title, count, countColor }) {
@@ -744,6 +866,8 @@ export default function PortalTab({ onSchedulePortalRequest }) {
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [publicRequestsLoading, setPublicRequestsLoading] = useState(true);
   const [publicRequests, setPublicRequests] = useState([]);
+  const [dataRightsLoading, setDataRightsLoading] = useState(true);
+  const [dataRightsRequests, setDataRightsRequests] = useState([]);
   const [settingsDraft, setSettingsDraft] = useState({
     practiceName: 'FaithCounseling',
     logoUrl: '',
@@ -782,8 +906,9 @@ export default function PortalTab({ onSchedulePortalRequest }) {
       apiFetch('/api/v1/portal/settings'),
       apiFetch('/api/v1/forms/catalog'),
       apiFetch('/api/v1/portal/public-requests'),
+      apiFetch('/api/v1/portal/data-rights/review'),
     ])
-      .then(([settingsData, formData, publicRequestData]) => {
+      .then(([settingsData, formData, publicRequestData, dataRightsData]) => {
         const item = settingsData?.item ?? {};
         setSettingsDraft((current) => ({ ...current, ...item }));
         const options = (formData?.items ?? []).map((entry) => ({
@@ -792,6 +917,7 @@ export default function PortalTab({ onSchedulePortalRequest }) {
         }));
         setCatalogOptions(options);
         setPublicRequests(publicRequestData?.items ?? []);
+        setDataRightsRequests((dataRightsData?.items ?? []).filter((entry) => entry.requestType === 'delete_request'));
       })
       .catch((err) => {
         notifications.show({ title: 'Portal settings unavailable', message: err.message, color: 'red' });
@@ -799,6 +925,7 @@ export default function PortalTab({ onSchedulePortalRequest }) {
       .finally(() => {
         setSettingsLoading(false);
         setPublicRequestsLoading(false);
+        setDataRightsLoading(false);
       });
   }, []);
 
@@ -810,6 +937,16 @@ export default function PortalTab({ onSchedulePortalRequest }) {
         notifications.show({ title: 'Portal requests unavailable', message: err.message, color: 'red' });
       })
       .finally(() => setPublicRequestsLoading(false));
+  }, []);
+
+  const loadDataRightsRequests = useCallback(() => {
+    setDataRightsLoading(true);
+    apiFetch('/api/v1/portal/data-rights/review')
+      .then((data) => setDataRightsRequests((data?.items ?? []).filter((entry) => entry.requestType === 'delete_request')))
+      .catch((err) => {
+        notifications.show({ title: 'Data-right queue unavailable', message: err.message, color: 'red' });
+      })
+      .finally(() => setDataRightsLoading(false));
   }, []);
 
   const loadOverview = useCallback((cid) => {
@@ -878,6 +1015,12 @@ export default function PortalTab({ onSchedulePortalRequest }) {
         items={publicRequests}
         loading={publicRequestsLoading}
         onRefresh={loadPublicRequests}
+      />
+
+      <DataRightsRequestsSection
+        items={dataRightsRequests}
+        loading={dataRightsLoading}
+        onRefresh={loadDataRightsRequests}
       />
 
       {/* Client picker */}
