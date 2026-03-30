@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ensureCounselor, futureDateTimeLocal, getTestAccount, openPrimaryNav, signInAs, signInWithCredentials, signOut } from './helpers.mjs';
+import { ensureCounselor, futureDateTimeLocal, getTestAccount, openPrimaryNav, signInAs, signInWithCredentials } from './helpers.mjs';
 
 test.describe('high-value UI journeys', () => {
   test('shared sign-in gate links new clients into the portal create-account flow', async ({ page }) => {
@@ -16,7 +16,8 @@ test.describe('high-value UI journeys', () => {
     await signInAs(page, 'practice_admin');
     await expect(page.locator('.workspace-topbar')).toBeVisible();
 
-    await signOut(page);
+    await page.getByRole('banner').getByRole('button', { name: /Sign out|Cerrar sesión/i }).click();
+    await expect(page.locator('#loginEmail')).toBeVisible({ timeout: 10000 });
     await page.reload();
 
     await expect(page.locator('#loginEmail')).toBeVisible({ timeout: 10000 });

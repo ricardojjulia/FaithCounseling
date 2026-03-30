@@ -27,6 +27,7 @@ The service listens on `http://127.0.0.1:8098` by default.
 This is a critical logout hardening release for the completed client portal work. It closes the session-restoration gap where a browser refresh could pick the user session back up after sign-out if stale auth cookies or active session rows remained.
 
 The server now clears both staff and portal auth cookies with explicit expiry, revokes all active sessions for the authenticated account on logout, and clears the opposite auth cookie on login so refresh or role switching cannot silently restore a session.
+The browser sign-out path now also sends the required CSRF header, and the web proxy preserves separate auth `Set-Cookie` headers so the real topbar `Sign out` action cannot leave a recoverable session behind.
 
 ### v4.6.0 — Validation
 

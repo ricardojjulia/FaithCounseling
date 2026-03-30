@@ -262,13 +262,16 @@ async function proxyApiRequest(request, response) {
     // Preserve any cookies set before proxying (for example CSRF cookie)
     // and merge with upstream Set-Cookie values (for example session cookie).
     const priorSetCookie = response.getHeader('Set-Cookie');
-    const upstreamSetCookie = upstreamResponse.headers.get('set-cookie');
+    const upstreamSetCookie = typeof upstreamResponse.headers.getSetCookie === 'function'
+      ? upstreamResponse.headers.getSetCookie()
+      : (upstreamResponse.headers.get('set-cookie') ? [upstreamResponse.headers.get('set-cookie')] : []);
     const mergedSetCookies = [
       ...(Array.isArray(priorSetCookie) ? priorSetCookie : priorSetCookie ? [priorSetCookie] : []),
-      ...(upstreamSetCookie ? [upstreamSetCookie] : []),
+      ...upstreamSetCookie,
     ];
-    if (mergedSetCookies.length) responseHeaders['set-cookie'] = mergedSetCookies;
-
+    if (mergedSetCookies.length) {
+      response.setHeader('Set-Cookie', mergedSetCookies);
+    }
     response.writeHead(upstreamResponse.status, responseHeaders);
     response.end(responseText);
   } catch {

@@ -80,9 +80,17 @@ export async function signInAs(page, role) {
 
 export async function signOut(page) {
   await page.evaluate(async () => {
+    const csrfToken = document.cookie
+      .split(';')
+      .map((part) => part.trim())
+      .find((part) => part.startsWith('csrf_token='))
+      ?.slice('csrf_token='.length) || '';
     await fetch('/api/v1/auth/logout', {
       method: 'POST',
       credentials: 'include',
+      headers: {
+        'x-csrf-token': csrfToken,
+      },
     });
   });
   await page.goto('/');

@@ -16,6 +16,7 @@ Closes the logout invalidation gap. Sign-out now clears both auth cookies with e
 - logout now clears both auth cookies and revokes the authenticated account's active sessions so refresh cannot restore the session
 - login now clears the opposite auth cookie so stale staff and portal sessions cannot coexist in the browser
 - browser regression coverage for logout plus refresh invalidation
+- topbar sign-out now includes the required CSRF header, and the web proxy preserves separate auth `Set-Cookie` headers
 
 ### Validation
 

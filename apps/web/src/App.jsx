@@ -229,7 +229,18 @@ export default function App() {
   };
 
   const handleSignOut = async () => {
-    try { await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include' }); } catch { /* best-effort */ }
+    try {
+      const response = await fetch('/api/v1/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: csrfHeaders(),
+      });
+      if (!response.ok) {
+        return;
+      }
+    } catch {
+      return;
+    }
     setIsAuthenticated(false);
     setCurrentUser(null);
     closeNav();
