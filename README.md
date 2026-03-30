@@ -15,6 +15,7 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 - practice operations workspace for counselors, managers, and admins
 - upgraded Operations Dashboard with counselor workload, 1-hour gap visibility, compliance note-gap tracking, and portal request rollups
+- dashboard drill-down workflows that open the affected client, document, scheduling, and portal-review queues directly from summary metrics
 - scheduling with appointments, waitlist, reminders, recurring workflows, and utilization support
 - client and counselor management with richer portal, profile, and operational views
 - authenticated client portal with onboarding, documents, uploads, data rights, counselor, financial, and resources surfaces
@@ -23,7 +24,7 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Current Release Focus
 
-The current build adds a real Operations Dashboard summary for staff. Today’s Schedule now shows counselor workload and remaining 1-hour gaps, Priority Queue is driven by a real high-touchpoint client flag, Compliance Watch tracks unresolved note gaps and incomplete assigned work, and the Clients card now focuses on totals, unscheduled clients, and portal request statuses.
+The current build adds a real Operations Dashboard summary for staff and makes those metrics actionable. Today’s Schedule shows counselor workload and remaining 1-hour gaps, Priority Queue is driven by a real high-touchpoint client flag, Compliance Watch tracks unresolved note gaps and incomplete assigned work, and the Clients card focuses on totals, unscheduled clients, and portal request statuses. Staff can now drill straight into those queues from the dashboard and jump into client detail, scheduling, document review, or portal operations without hunting through the app.
 
 ## Key Docs
 

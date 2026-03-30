@@ -1,13 +1,15 @@
 # Operations Dashboard Upgrade Summary
 
 **Date:** March 30, 2026
-**Status:** Implemented and validated
+**Status:** Implemented, validated, and extended with dashboard drill-downs
 **Plan:** [PLANS/OPERATIONS-DASHBOARD-UPGRADE.md](../PLANS/OPERATIONS-DASHBOARD-UPGRADE.md)
 **Implementation log:** [docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md](./OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md)
 
 ## What shipped
 
 The Operations Dashboard is now backed by a real operations-summary API instead of placeholder text.
+
+It also now supports in-dashboard drill-down workflows so staff can open the underlying queues directly from the summary metrics.
 
 ### Today's Schedule
 
@@ -26,6 +28,7 @@ Availability math now:
 
 - now shows the count of clients explicitly marked `high touchpoint`
 - includes staff-facing explanation text so the metric is self-describing
+- supports direct drill-down into the flagged-client queue with one-click access to client detail
 
 ### Compliance Watch
 
@@ -37,6 +40,7 @@ Availability math now:
   - documents
   - forms
   - total
+- each metric now opens the affected backlog directly from the dashboard
 
 ### Clients
 
@@ -53,6 +57,12 @@ Portal requests combine:
 
 Status buckets remain separated by request type.
 
+The dashboard now also supports direct drill-downs for:
+
+- clients without scheduled appointments
+- outstanding document/form assignments
+- portal request backlog
+
 ## Technical changes
 
 - added `high_touchpoint` to `clients`
@@ -64,6 +74,7 @@ Status buckets remain separated by request type.
   - client mutations
   - scheduling mutations
   - timed dashboard refresh while visible
+- added drill-down detail payloads and modal actions without creating a new dashboard surface id
 - rebuilt the served web bundle and refreshed `apps/web/public/index.html`
 
 ## Validation
@@ -72,5 +83,6 @@ Status buckets remain separated by request type.
 - `pnpm --filter @faith/api exec node --check src/index.js`
 - `pnpm lint`
 - `pnpm --filter @faith/web build`
-- `pnpm test:e2e`
-- `pnpm test:launch-readiness`
+- `pnpm test:e2e` — passed (`10/10`)
+- `pnpm test:launch-readiness` — passed (`3/3`)
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin can drill into dashboard queues and open actionable client details|practice admin dashboard renders the upgraded operations summary cards and payload shape"`

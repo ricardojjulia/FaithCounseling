@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Tabs, Text, Stack, Title, Paper } from '@mantine/core';
 import PortalTab from './tabs/PortalTab.jsx';
 import DocumentsStudioTab from './tabs/DocumentsStudioTab.jsx';
@@ -18,10 +18,14 @@ const STUDIO_TABS = [
   { id: 'portal', labelKey: 'studio.tab.portal' },
 ];
 
-export default function WorkspaceStudioPage({ onSchedulePortalRequest }) {
+export default function WorkspaceStudioPage({ initialTab = 'portal', onSchedulePortalRequest }) {
   const { t } = useI18n();
-  const [activeTab, setActiveTab] = useState('portal');
+  const [activeTab, setActiveTab] = useState(initialTab || 'portal');
   const activeSurfaceId = `studio.${activeTab === 'documentsStudio' ? 'documents' : activeTab}`;
+
+  useEffect(() => {
+    setActiveTab(initialTab || 'portal');
+  }, [initialTab]);
 
   useSurfaceTelemetry(activeSurfaceId, {
     surfaceKind: 'tab',

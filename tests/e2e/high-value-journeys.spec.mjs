@@ -24,6 +24,29 @@ test.describe('high-value UI journeys', () => {
     expect(Array.isArray(payload.summary.todaySchedule.workload)).toBeTruthy();
   });
 
+  test('practice admin can drill into dashboard queues and open actionable client details', async ({ page }) => {
+    const suffix = String(Date.now()).slice(-6);
+    const firstName = `Touch${suffix}`;
+    const lastName = 'Dashboard';
+
+    await signInAs(page, 'practice_admin');
+    await page.getByRole('button', { name: /New Client|Nuevo cliente/i }).click();
+    await page.getByLabel('First name').fill(firstName);
+    await page.getByLabel('Last name').fill(lastName);
+    await page.getByLabel('Faith background').fill('Christian');
+    await page.getByLabel('High touchpoint').check();
+    await page.getByRole('button', { name: /Create Client|Crear cliente/i }).click();
+
+    await expect(page.getByRole('button', { name: /High-touchpoint clients/i })).toBeVisible();
+    await page.getByRole('button', { name: /High-touchpoint clients/i }).click();
+    const drilldownDialog = page.getByRole('dialog');
+    await expect(drilldownDialog).toContainText(`${firstName} ${lastName}`);
+    const clientRow = drilldownDialog.locator('.mantine-Paper-root').filter({ hasText: `${firstName} ${lastName}` }).first();
+    await clientRow.getByRole('button', { name: /Open client/i }).click();
+    await expect(page.getByRole('tab', { name: /Demographics|Datos demográficos/i })).toBeVisible();
+    await expect(page.getByText(`${firstName} ${lastName}`)).toBeVisible();
+  });
+
   test('shared sign-in gate links new clients into the portal create-account flow', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#loginEmail')).toBeVisible();

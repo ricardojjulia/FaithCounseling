@@ -11354,7 +11354,7 @@ async function loadOperationsSummaryData(request, session) {
 
   const tenantId = callerTenant(request, session);
   const [clientRows, notesRows, staff, allAppointments, docs, forms, publicRequests, appointmentRequests, templateRows, overrides] = await Promise.all([
-    pool.query('SELECT id, status, high_touchpoint FROM clients WHERE tenant_id = ?', [tenantId]),
+    pool.query('SELECT id, first_name_enc, last_name_enc, status, high_touchpoint FROM clients WHERE tenant_id = ?', [tenantId]),
     pool.query('SELECT client_id, locked, signed_at, created_at FROM progress_notes WHERE tenant_id = ?', [tenantId]),
     listStaff(tenantId),
     listAppointments(tenantId),
@@ -11368,6 +11368,8 @@ async function loadOperationsSummaryData(request, session) {
 
   const clientsData = clientRows[0].map((row) => ({
     id: row.id,
+    firstName: row.first_name_enc ? decrypt(row.first_name_enc) : '',
+    lastName: row.last_name_enc ? decrypt(row.last_name_enc) : '',
     status: row.status,
     highTouchpoint: Boolean(row.high_touchpoint),
     tenantId,
@@ -11406,6 +11408,7 @@ async function buildOperationsSummary(request, timezone, session) {
     .sort((left, right) => String(getAppointmentStart(left)).localeCompare(String(getAppointmentStart(right))));
   const todayAppointments = tenantAppointments.filter((item) => dateKeyInTimezone(getAppointmentStart(item), timezone) === todayKey);
   const notesByClient = buildNotesByClient(data.notes);
+  const clientById = Object.fromEntries((data.clients ?? []).map((client) => [client.id, client]));
 
   const counselors = [
     ...(data.staff ?? []).filter((item) => OPERATIONS_COUNSELOR_ROLES.has(item.role)),
@@ -11459,8 +11462,15 @@ async function buildOperationsSummary(request, timezone, session) {
       && new Date(getAppointmentStart(appointment)).getTime() >= Date.now()
     ))
   ));
+  const unscheduledClientItems = clientsWithoutScheduledAppointment.map((client) => ({
+    clientId: client.id,
+    clientName: [client.firstName, client.lastName].filter(Boolean).join(' ').trim() || client.id,
+    status: client.status,
+    highTouchpoint: Boolean(client.highTouchpoint),
+  }));
 
   const noteGapClients = { over1Day: 0, over3Days: 0, over7Days: 0 };
+  const noteGapItems = [];
   const latestRelevantAppointmentByClient = {};
   for (const appointment of tenantAppointments) {
     if (appointment.status !== 'completed' && appointment.status !== 'checked_in') continue;
@@ -11474,6 +11484,14 @@ async function buildOperationsSummary(request, timezone, session) {
   Object.values(latestRelevantAppointmentByClient).forEach((appointment) => {
     const ageDays = unresolvedLatestSessionAgeDays(appointment, notesByClient[appointment.clientId] ?? []);
     if (ageDays === null) return;
+    const client = clientById[appointment.clientId] ?? null;
+    noteGapItems.push({
+      clientId: appointment.clientId,
+      clientName: client ? [client.firstName, client.lastName].filter(Boolean).join(' ').trim() : (appointment.clientName || appointment.clientId),
+      counselorName: appointment.counselorName || null,
+      latestAppointmentAt: getAppointmentStart(appointment),
+      daysWithoutNote: Number(ageDays.toFixed(1)),
+    });
     if (ageDays >= 1) noteGapClients.over1Day += 1;
     if (ageDays >= 3) noteGapClients.over3Days += 1;
     if (ageDays >= 7) noteGapClients.over7Days += 1;
@@ -11482,8 +11500,62 @@ async function buildOperationsSummary(request, timezone, session) {
   const incompleteDocuments = (data.documentAssignments ?? []).filter((item) => item.status !== 'completed' && item.status !== 'signed');
   const incompleteForms = (data.formAssignments ?? []).filter((item) => item.status !== 'completed');
   const highTouchpointClients = (data.clients ?? []).filter((client) => client.highTouchpoint).length;
+  const highTouchpointItems = (data.clients ?? [])
+    .filter((client) => client.highTouchpoint)
+    .map((client) => ({
+      clientId: client.id,
+      clientName: [client.firstName, client.lastName].filter(Boolean).join(' ').trim() || client.id,
+      status: client.status,
+    }));
+  const outstandingAssignmentItems = [
+    ...incompleteDocuments.map((item) => {
+      const client = clientById[item.assigneeId] ?? null;
+      return {
+        kind: 'document',
+        id: item.id,
+        clientId: item.assigneeId,
+        clientName: client ? [client.firstName, client.lastName].filter(Boolean).join(' ').trim() : item.assigneeId,
+        title: item.templateTitle ?? item.templateId ?? 'Document assignment',
+        status: item.status,
+      };
+    }),
+    ...incompleteForms.map((item) => {
+      const client = clientById[item.clientId] ?? null;
+      return {
+        kind: 'form',
+        id: item.id,
+        clientId: item.clientId,
+        clientName: client ? [client.firstName, client.lastName].filter(Boolean).join(' ').trim() : item.clientId,
+        title: item.formTitle ?? item.formKey ?? 'Form assignment',
+        status: item.status,
+      };
+    }),
+  ];
   const publicRegistrationStatuses = aggregateStatusCounts(data.portalRegistrationRequests);
   const appointmentRequestStatuses = aggregateStatusCounts(data.portalAppointmentRequests);
+  const portalRequestItems = [
+    ...(data.portalRegistrationRequests ?? []).map((item) => ({
+      kind: 'public_registration',
+      id: item.id,
+      clientId: null,
+      displayName: [item.firstName, item.lastName].filter(Boolean).join(' ').trim() || item.id,
+      requestType: item.requestType,
+      status: item.status,
+      requestedAt: item.createdAt,
+    })),
+    ...(data.portalAppointmentRequests ?? []).map((item) => {
+      const client = clientById[item.clientId] ?? null;
+      return {
+        kind: 'portal_appointment',
+        id: item.id,
+        clientId: item.clientId,
+        displayName: client ? [client.firstName, client.lastName].filter(Boolean).join(' ').trim() : item.clientId,
+        requestType: item.requestedType ?? 'session',
+        status: item.status,
+        requestedAt: item.createdAt,
+      };
+    }),
+  ].sort((left, right) => String(right.requestedAt ?? '').localeCompare(String(left.requestedAt ?? '')));
   const counselorsWithEntries = new Set(todayAppointments.map((item) => item.counselorId || item.counselorName).filter(Boolean)).size;
   const oneHourGapsTotal = counselorWorkload.reduce((sum, item) => sum + item.oneHourGapCount, 0);
 
@@ -11524,22 +11596,27 @@ async function buildOperationsSummary(request, timezone, session) {
       highTouchpointClients,
       description: 'Count of clients marked as high touchpoint for closer operational follow-up.',
       flagAvailable: true,
+      items: highTouchpointItems,
     },
     complianceWatch: {
       noteGapClients,
+      noteGapItems,
       outstandingAssignments: {
         total: incompleteDocuments.length + incompleteForms.length,
         documents: incompleteDocuments.length,
         forms: incompleteForms.length,
+        items: outstandingAssignmentItems,
       },
     },
     clientsBox: {
       totalClients: (data.clients ?? []).length,
       withoutScheduledAppointment: clientsWithoutScheduledAppointment.length,
+      unscheduledClientItems,
       portalRequests: {
         total: (data.portalRegistrationRequests?.length ?? 0) + (data.portalAppointmentRequests?.length ?? 0),
         publicRegistrationStatuses,
         appointmentRequestStatuses,
+        items: portalRequestItems,
       },
     },
     counts: {

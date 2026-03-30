@@ -23,21 +23,33 @@ Upgrades the Operations Dashboard from placeholder cards to a real staff-facing 
   - `complianceWatch`
   - `clientsBox`
 - dashboard regression coverage for the upgraded operations summary payload and cards
+- dashboard drill-down queues for:
+  - high-touchpoint clients
+  - note-gap compliance items
+  - outstanding assigned work
+  - unscheduled clients
+  - portal request backlog
 
 ### Changed
 
 - `apps/api/src/index.js`
   - replaced the old placeholder operations summary with DB-aware counselor workload, note-gap, assignment, and portal-request aggregation
+  - added dashboard-safe detail arrays so the UI can open targeted drill-down queues without extra fetches
 - `apps/web/src/App.jsx`
   - added staff-side operations-summary fetch and timed dashboard refresh
+  - added navigation callbacks for dashboard drill-down actions into Documents and Workspace Studio Portal
 - `apps/web/src/components/WorkspaceGrid.jsx`
   - replaced placeholder cards and the dashboard client roster with metrics-focused summary cards
+  - added actionable dashboard drill-down modals and row-level action buttons
 - `apps/web/src/components/SchedulingPage.jsx`
   - now notifies the dashboard summary after appointment mutations
 - `apps/web/src/components/ClientForm.jsx`
   - added `High touchpoint` staff editing support
+- `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx`
+  - now accepts an initial tab so dashboard drill-downs can open the Portal queue directly
 - `packages/i18n/src/index.js`
   - added dashboard summary labels and explanations for the new cards
+  - added drill-down modal labels and action text
 
 ### Validation
 
@@ -45,8 +57,9 @@ Upgrades the Operations Dashboard from placeholder cards to a real staff-facing 
 - `pnpm --filter @faith/api exec node --check src/index.js` — passed
 - `pnpm lint` — passed
 - `pnpm --filter @faith/web build` — passed
-- `pnpm test:e2e` — passed (`9/9`)
+- `pnpm test:e2e` — passed (`10/10`)
 - `pnpm test:launch-readiness` — passed (`3/3`)
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin can drill into dashboard queues and open actionable client details|practice admin dashboard renders the upgraded operations summary cards and payload shape"` — passed
 
 ## v4.7.0 — Expanded Counseling Form Library
 

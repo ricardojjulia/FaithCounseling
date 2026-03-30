@@ -161,3 +161,43 @@ Final documentation outputs:
 - [PLANS/OPERATIONS-DASHBOARD-UPGRADE.md](../PLANS/OPERATIONS-DASHBOARD-UPGRADE.md)
 - [docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md](./OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md)
 - [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](./OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
+
+### Step 5 — Dashboard drill-down workflows completed
+
+Implemented:
+
+- added actionable drill-down rows to `GET /v1/operations/summary` for:
+  - high-touchpoint clients
+  - note-gap compliance clients
+  - outstanding documents/forms
+  - unscheduled clients
+  - portal request backlog
+- added dashboard drill-down modals so staff can open detail lists without leaving the dashboard immediately
+- added targeted actions from drill-down rows to:
+  - open client detail
+  - open scheduling for unscheduled clients
+  - open Documents for assignment backlog review
+  - open Workspace Studio Portal for portal-request review
+- kept drill-down data inside the existing `dashboard` monitored surface without introducing PHI-bearing telemetry labels or a new surface id
+
+Files touched in this step:
+
+- `apps/api/src/index.js`
+- `apps/web/src/App.jsx`
+- `apps/web/src/components/WorkspaceGrid.jsx`
+- `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx`
+- `packages/i18n/src/index.js`
+- `tests/e2e/high-value-journeys.spec.mjs`
+
+Validation results for this step:
+
+- `pnpm --filter @faith/api exec node --check src/index.js` — passed
+- `pnpm lint` — passed
+- `pnpm --filter @faith/web build` — passed
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin can drill into dashboard queues and open actionable client details|practice admin dashboard renders the upgraded operations summary cards and payload shape"` — passed
+- `pnpm test:e2e` — passed (`10/10`)
+- `pnpm test:launch-readiness` — passed (`3/3`)
+
+Operational note:
+
+- full Playwright suites were rerun serially because both target the shared `3001/3002` local stack; concurrent startup still produces expected `EADDRINUSE` contention

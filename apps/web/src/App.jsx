@@ -121,6 +121,7 @@ export default function App() {
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [selectedCounselorId, setSelectedCounselorId] = useState(null);
   const [currentView, setCurrentView] = useState('dashboard');
+  const [workspaceStudioInitialTab, setWorkspaceStudioInitialTab] = useState('portal');
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [schedulingState, setSchedulingState] = useState({
     composerOpen: false,
@@ -317,6 +318,15 @@ export default function App() {
     setCurrentView('scheduling');
     closeNav();
   };
+  const handleOpenDocuments = () => {
+    setCurrentView('documents');
+    closeNav();
+  };
+  const handleOpenWorkspaceStudio = (initialTab = 'portal') => {
+    setWorkspaceStudioInitialTab(initialTab);
+    setCurrentView('workspace-studio');
+    closeNav();
+  };
 
   const handlePortalRequestScheduled = async (portalRequest) => {
     if (!portalRequest?.id) return;
@@ -457,6 +467,7 @@ export default function App() {
           />
         ) : showWorkspaceStudio ? (
           <WorkspaceStudioPage
+            initialTab={workspaceStudioInitialTab}
             onSchedulePortalRequest={(clientId, portalRequest) => handleOpenScheduling({
               composerOpen: true,
               initialClientId: clientId,
@@ -487,6 +498,8 @@ export default function App() {
                   initialClientId: clientId,
                   initialView: defaultCalendarView(userRole),
                 })}
+                onOpenDocuments={handleOpenDocuments}
+                onOpenPortalQueue={() => handleOpenWorkspaceStudio('portal')}
               />
             ) : null}
           </>
