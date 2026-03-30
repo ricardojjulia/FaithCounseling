@@ -240,3 +240,39 @@ Validation results for this step:
 - `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin can drill into dashboard queues and open actionable client details|practice admin dashboard renders the upgraded operations summary cards and payload shape"` — passed
 - `pnpm test:e2e` — passed (`10/10`)
 - `pnpm test:launch-readiness` — passed (`3/3`)
+
+### Step 7 — 7-day trend visibility completed
+
+Implemented:
+
+- added 7-day trend payloads for:
+  - counselor utilization
+  - documentation backlog
+  - portal request inflow vs resolved volume
+  - unscheduled-client backlog
+- added compact bar-based dashboard visuals without introducing a chart library
+- used real historical dates already present in appointments, notes, and portal request records
+- kept the trend display inside the existing `dashboard` surface and reused the existing operations-summary fetch path
+
+Trend model in this pass:
+
+- counselor utilization uses booked minutes divided by available minutes per day across tracked counselors
+- documentation trend tracks unresolved latest-session note gaps as day-based snapshots for `1`, `3`, and `7` day thresholds
+- portal trend tracks requests created per day and requests resolved per day
+- unscheduled-client trend tracks active/waitlist clients without an upcoming appointment for each day in the 7-day window
+
+Files touched in this step:
+
+- `apps/api/src/index.js`
+- `apps/web/src/components/WorkspaceGrid.jsx`
+- `packages/i18n/src/index.js`
+- `tests/e2e/high-value-journeys.spec.mjs`
+
+Validation results for this step:
+
+- `pnpm lint` — passed
+- `pnpm --filter @faith/api exec node --check src/index.js` — passed
+- `pnpm --filter @faith/web build` — passed
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin dashboard renders the upgraded operations summary cards and payload shape|practice admin can drill into dashboard queues and open actionable client details"` — passed
+- `pnpm test:e2e` — passed (`10/10`)
+- `pnpm test:launch-readiness` — passed (`3/3`)

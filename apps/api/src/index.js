@@ -11356,6 +11356,167 @@ function unresolvedLatestSessionAgeDays(appointment, clientNotes) {
   return (Date.now() - endsAtMs) / (24 * 60 * 60 * 1000);
 }
 
+function trailingDayKeys(days, timezone) {
+  const results = [];
+  for (let offset = days - 1; offset >= 0; offset -= 1) {
+    results.push(dateKeyInTimezone(new Date(Date.now() - (offset * 24 * 60 * 60 * 1000)).toISOString(), timezone));
+  }
+  return results;
+}
+
+function dayLabelForKey(dayKey, timezone) {
+  const date = new Date(`${dayKey}T12:00:00Z`);
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    weekday: 'short',
+  }).format(date);
+}
+
+function diffDaysBetweenKeys(laterDayKey, earlierDayKey) {
+  const later = new Date(`${laterDayKey}T12:00:00Z`).getTime();
+  const earlier = new Date(`${earlierDayKey}T12:00:00Z`).getTime();
+  if (!Number.isFinite(later) || !Number.isFinite(earlier)) return null;
+  return Math.max(0, Math.round((later - earlier) / (24 * 60 * 60 * 1000)));
+}
+
+function inferPortalRegistrationResolvedAt(item) {
+  const terminalStatuses = new Set(['approved', 'declined', 'completed']);
+  if (!terminalStatuses.has(String(item?.status ?? '').toLowerCase())) return null;
+  return item?.updatedAt ?? null;
+}
+
+function buildOperationsTrends({
+  timezone,
+  dayKeys,
+  counselors,
+  data,
+  tenantAppointments,
+  notesByClient,
+}) {
+  const daySet = new Set(dayKeys);
+  const dayEntries = dayKeys.map((dayKey) => ({ dayKey, label: dayLabelForKey(dayKey, timezone) }));
+
+  const scheduleTrend = dayEntries.map(({ dayKey, label }) => {
+    const appointmentsForDay = tenantAppointments.filter((item) => dateKeyInTimezone(getAppointmentStart(item), timezone) === dayKey);
+    const workloadRows = counselors.map((staff) => {
+      const baseWindows = buildAvailabilityWindowsForDay(data.availabilityTemplatesByStaffId?.[staff.id] ?? [], dayKey, timezone);
+      const overrides = (data.availabilityOverrides ?? []).filter((item) => item.staffId === staff.id && item.overrideDate === dayKey);
+      const availableWindows = applyAvailabilityOverrides(baseWindows, overrides);
+      const counselorAppointments = appointmentsForDay.filter((item) => item.counselorId === staff.id || item.counselorName === `${staff.firstName} ${staff.lastName}`.trim());
+      const scheduledMinutes = counselorAppointments.reduce((sum, item) => sum + intervalDuration(appointmentIntervalForDate(item, dayKey, timezone) ?? { start: 0, end: 0 }), 0);
+      const availableMinutes = availableWindows.reduce((sum, interval) => sum + intervalDuration(interval), 0);
+      return {
+        scheduledMinutes,
+        availableMinutes,
+      };
+    });
+    const totalScheduledMinutes = workloadRows.reduce((sum, row) => sum + row.scheduledMinutes, 0);
+    const totalAvailableMinutes = workloadRows.reduce((sum, row) => sum + row.availableMinutes, 0);
+    return {
+      dayKey,
+      label,
+      totalAppointments: appointmentsForDay.length,
+      counselorsWithEntries: new Set(appointmentsForDay.map((item) => item.counselorId || item.counselorName).filter(Boolean)).size,
+      scheduledMinutes: totalScheduledMinutes,
+      availableMinutes: totalAvailableMinutes,
+      utilizationPct: totalAvailableMinutes ? Number(((totalScheduledMinutes / totalAvailableMinutes) * 100).toFixed(1)) : 0,
+    };
+  });
+
+  const latestRelevantAppointments = tenantAppointments
+    .filter((item) => item.clientId && (item.status === 'completed' || item.status === 'checked_in'))
+    .sort((left, right) => String(getAppointmentStart(left)).localeCompare(String(getAppointmentStart(right))));
+
+  const complianceTrend = dayEntries.map(({ dayKey, label }) => {
+    const snapshot = { over1Day: 0, over3Days: 0, over7Days: 0 };
+    const latestByClient = {};
+    for (const appointment of latestRelevantAppointments) {
+      const appointmentDayKey = dateKeyInTimezone(getAppointmentStart(appointment), timezone);
+      if (appointmentDayKey > dayKey) continue;
+      latestByClient[appointment.clientId] = appointment;
+    }
+    Object.values(latestByClient).forEach((appointment) => {
+      const appointmentDayKey = dateKeyInTimezone(getAppointmentStart(appointment), timezone);
+      const hasLockedNote = (notesByClient[appointment.clientId] ?? []).some((note) => {
+        if (!note?.locked) return false;
+        const noteDayKey = dateKeyInTimezone(note.signedAt ?? note.createdAt ?? note.signed_at ?? note.created_at, timezone);
+        return noteDayKey >= appointmentDayKey && noteDayKey <= dayKey;
+      });
+      if (hasLockedNote) return;
+      const ageDays = diffDaysBetweenKeys(dayKey, appointmentDayKey);
+      if (ageDays === null) return;
+      if (ageDays >= 1) snapshot.over1Day += 1;
+      if (ageDays >= 3) snapshot.over3Days += 1;
+      if (ageDays >= 7) snapshot.over7Days += 1;
+    });
+    return {
+      dayKey,
+      label,
+      ...snapshot,
+    };
+  });
+
+  const portalCreatedByDay = {};
+  const portalResolvedByDay = {};
+  const portalTimelineItems = [
+    ...(data.portalRegistrationRequests ?? []).map((item) => ({
+      createdAt: item.createdAt,
+      resolvedAt: inferPortalRegistrationResolvedAt(item),
+    })),
+    ...(data.portalAppointmentRequests ?? []).map((item) => ({
+      createdAt: item.createdAt,
+      resolvedAt: item.resolvedAt ?? null,
+    })),
+  ];
+
+  portalTimelineItems.forEach((item) => {
+    const createdDayKey = item.createdAt ? dateKeyInTimezone(item.createdAt, timezone) : null;
+    if (createdDayKey && daySet.has(createdDayKey)) portalCreatedByDay[createdDayKey] = (portalCreatedByDay[createdDayKey] ?? 0) + 1;
+    const resolvedDayKey = item.resolvedAt ? dateKeyInTimezone(item.resolvedAt, timezone) : null;
+    if (resolvedDayKey && daySet.has(resolvedDayKey)) portalResolvedByDay[resolvedDayKey] = (portalResolvedByDay[resolvedDayKey] ?? 0) + 1;
+  });
+
+  const portalTrend = dayEntries.map(({ dayKey, label }) => {
+    const backlog = portalTimelineItems.filter((item) => {
+      const createdDayKey = item.createdAt ? dateKeyInTimezone(item.createdAt, timezone) : null;
+      if (!createdDayKey || createdDayKey > dayKey) return false;
+      const resolvedDayKey = item.resolvedAt ? dateKeyInTimezone(item.resolvedAt, timezone) : null;
+      return !resolvedDayKey || resolvedDayKey > dayKey;
+    }).length;
+    return {
+      dayKey,
+      label,
+      created: portalCreatedByDay[dayKey] ?? 0,
+      resolved: portalResolvedByDay[dayKey] ?? 0,
+      backlog,
+    };
+  });
+
+  const unscheduledTrend = dayEntries.map(({ dayKey, label }) => {
+    const count = (data.clients ?? []).filter((client) => {
+      const clientCreatedDayKey = client.createdAt ? dateKeyInTimezone(client.createdAt, timezone) : null;
+      if (clientCreatedDayKey && clientCreatedDayKey > dayKey) return false;
+      if (!['active', 'waitlist'].includes(client.status)) return false;
+      return !tenantAppointments.some((appointment) => (
+        appointment.clientId === client.id
+        && dateKeyInTimezone(getAppointmentStart(appointment), timezone) >= dayKey
+      ));
+    }).length;
+    return {
+      dayKey,
+      label,
+      count,
+    };
+  });
+
+  return {
+    schedule: scheduleTrend,
+    compliance: complianceTrend,
+    portalRequests: portalTrend,
+    clients: unscheduledTrend,
+  };
+}
+
 async function loadOperationsSummaryData(request, session) {
   if (!process.env.DB_NAME) {
     const tenantId = callerTenant(request, session);
@@ -11376,7 +11537,7 @@ async function loadOperationsSummaryData(request, session) {
 
   const tenantId = callerTenant(request, session);
   const [clientRows, notesRows, staff, allAppointments, docs, forms, publicRequests, appointmentRequests, templateRows, overrides] = await Promise.all([
-    pool.query('SELECT id, first_name_enc, last_name_enc, status, high_touchpoint FROM clients WHERE tenant_id = ?', [tenantId]),
+    pool.query('SELECT id, first_name_enc, last_name_enc, status, high_touchpoint, created_at FROM clients WHERE tenant_id = ?', [tenantId]),
     pool.query('SELECT client_id, locked, signed_at, created_at FROM progress_notes WHERE tenant_id = ?', [tenantId]),
     listStaff(tenantId),
     listAppointments(tenantId),
@@ -11394,6 +11555,7 @@ async function loadOperationsSummaryData(request, session) {
     lastName: row.last_name_enc ? decrypt(row.last_name_enc) : '',
     status: row.status,
     highTouchpoint: Boolean(row.high_touchpoint),
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     tenantId,
   }));
   const notesData = notesRows[0].map((row) => ({
@@ -11431,6 +11593,7 @@ async function buildOperationsSummary(request, timezone, session) {
   const todayAppointments = tenantAppointments.filter((item) => dateKeyInTimezone(getAppointmentStart(item), timezone) === todayKey);
   const notesByClient = buildNotesByClient(data.notes);
   const clientById = Object.fromEntries((data.clients ?? []).map((client) => [client.id, client]));
+  const dayKeys = trailingDayKeys(7, timezone);
 
   const counselors = [
     ...(data.staff ?? []).filter((item) => OPERATIONS_COUNSELOR_ROLES.has(item.role)),
@@ -11660,6 +11823,14 @@ async function buildOperationsSummary(request, timezone, session) {
       detail: `${incompleteDocuments.length + incompleteForms.length} documents or forms remain assigned but incomplete.`,
     },
   ];
+  const trends = buildOperationsTrends({
+    timezone,
+    dayKeys,
+    counselors,
+    data,
+    tenantAppointments,
+    notesByClient,
+  });
 
   return {
     timezone,
@@ -11717,6 +11888,7 @@ async function buildOperationsSummary(request, timezone, session) {
       thresholds,
       items: alerts,
     },
+    trends,
     priorityItems,
     complianceItems,
   };

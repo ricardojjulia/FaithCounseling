@@ -10,6 +10,9 @@ test.describe('high-value UI journeys', () => {
     await expect(page.getByText(/Priority Queue|Cola prioritaria/i)).toBeVisible();
     await expect(page.getByText(/Compliance Watch|Vigilancia de cumplimiento/i)).toBeVisible();
     await expect(page.getByText(/^Portal requests$|^Solicitudes del portal$/i)).toBeVisible();
+    await expect(page.getByText(/7-day trends/i)).toBeVisible();
+    await expect(page.getByText(/Counselor utilization/i)).toBeVisible();
+    await expect(page.getByText(/Portal request flow/i)).toBeVisible();
 
     const payload = await page.evaluate(async () => {
       const response = await fetch('/api/v1/operations/summary', { credentials: 'include' });
@@ -21,7 +24,12 @@ test.describe('high-value UI journeys', () => {
     expect(payload.summary.priorityQueue).toBeTruthy();
     expect(payload.summary.complianceWatch).toBeTruthy();
     expect(payload.summary.clientsBox).toBeTruthy();
+    expect(payload.summary.trends).toBeTruthy();
     expect(Array.isArray(payload.summary.todaySchedule.workload)).toBeTruthy();
+    expect(Array.isArray(payload.summary.trends.schedule)).toBeTruthy();
+    expect(Array.isArray(payload.summary.trends.compliance)).toBeTruthy();
+    expect(Array.isArray(payload.summary.trends.portalRequests)).toBeTruthy();
+    expect(Array.isArray(payload.summary.trends.clients)).toBeTruthy();
   });
 
   test('practice admin can drill into dashboard queues and open actionable client details', async ({ page }) => {

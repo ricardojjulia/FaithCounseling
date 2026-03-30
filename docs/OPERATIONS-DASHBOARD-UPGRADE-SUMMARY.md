@@ -1,7 +1,7 @@
 # Operations Dashboard Upgrade Summary
 
 **Date:** March 30, 2026
-**Status:** Implemented, validated, and extended with dashboard drill-downs and alert thresholds
+**Status:** Implemented, validated, and extended with drill-downs, alert thresholds, and 7-day trends
 **Plan:** [PLANS/OPERATIONS-DASHBOARD-UPGRADE.md](../PLANS/OPERATIONS-DASHBOARD-UPGRADE.md)
 **Implementation log:** [docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md](./OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md)
 
@@ -9,7 +9,7 @@
 
 The Operations Dashboard is now backed by a real operations-summary API instead of placeholder text.
 
-It also now supports in-dashboard drill-down workflows so staff can open the underlying queues directly from the summary metrics, plus operational alerts when key thresholds are crossed.
+It also now supports in-dashboard drill-down workflows so staff can open the underlying queues directly from the summary metrics, operational alerts when key thresholds are crossed, and 7-day trend context so operators can see whether conditions are stabilizing or getting worse.
 
 ### Today's Schedule
 
@@ -83,6 +83,22 @@ Default thresholds in this release:
 
 Thresholds are backend-configured with environment variables, while the dashboard alert strip stays on the existing `dashboard` surface.
 
+### 7-day Trends
+
+The dashboard now includes a compact 7-day trend section for:
+
+- counselor utilization
+- documentation backlog
+- portal request flow
+- unscheduled-client backlog
+
+Trend behavior in this release:
+
+- utilization is derived from booked vs available counselor minutes per day
+- documentation uses snapshot counts of unresolved latest-session note gaps
+- portal flow shows request creation vs resolution volume
+- unscheduled-client trend shows active/waitlist clients who still lack an upcoming appointment
+
 ## Technical changes
 
 - added `high_touchpoint` to `clients`
@@ -96,6 +112,7 @@ Thresholds are backend-configured with environment variables, while the dashboar
   - timed dashboard refresh while visible
 - added drill-down detail payloads and modal actions without creating a new dashboard surface id
 - added backend-derived alert objects and env-backed threshold configuration
+- added 7-day trend payloads and compact bar-style dashboard visuals
 - rebuilt the served web bundle and refreshed `apps/web/public/index.html`
 
 ## Validation

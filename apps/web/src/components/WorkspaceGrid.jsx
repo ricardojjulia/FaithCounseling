@@ -86,6 +86,79 @@ function DrilldownItemCard({ title, subtitle, meta, actions }) {
   );
 }
 
+function TrendBars({ series = [], color = 'var(--mantine-color-brand-6)', valueAccessor = (entry) => entry?.value ?? 0 }) {
+  const values = series.map((entry) => Math.max(0, Number(valueAccessor(entry) ?? 0)));
+  const maxValue = Math.max(...values, 1);
+
+  return (
+    <Group align="flex-end" gap={6} wrap="nowrap" style={{ minHeight: 72 }}>
+      {series.map((entry, index) => {
+        const value = values[index];
+        const height = Math.max(10, Math.round((value / maxValue) * 64));
+        return (
+          <Stack key={`${entry.dayKey}-${index}`} gap={4} align="center" style={{ flex: 1 }}>
+            <Box
+              style={{
+                width: '100%',
+                maxWidth: 18,
+                height,
+                borderRadius: 999,
+                background: color,
+                opacity: value > 0 ? 0.95 : 0.28,
+              }}
+            />
+            <Text c="dimmed" fz="10px">{entry.label}</Text>
+          </Stack>
+        );
+      })}
+    </Group>
+  );
+}
+
+function DualTrendBars({ series = [], leftAccessor, rightAccessor }) {
+  const values = series.flatMap((entry) => [
+    Math.max(0, Number(leftAccessor(entry) ?? 0)),
+    Math.max(0, Number(rightAccessor(entry) ?? 0)),
+  ]);
+  const maxValue = Math.max(...values, 1);
+
+  return (
+    <Group align="flex-end" gap={6} wrap="nowrap" style={{ minHeight: 72 }}>
+      {series.map((entry, index) => {
+        const leftValue = Math.max(0, Number(leftAccessor(entry) ?? 0));
+        const rightValue = Math.max(0, Number(rightAccessor(entry) ?? 0));
+        const leftHeight = Math.max(10, Math.round((leftValue / maxValue) * 64));
+        const rightHeight = Math.max(10, Math.round((rightValue / maxValue) * 64));
+        return (
+          <Stack key={`${entry.dayKey}-${index}`} gap={4} align="center" style={{ flex: 1 }}>
+            <Group gap={3} align="flex-end" wrap="nowrap">
+              <Box style={{ width: 7, height: leftHeight, borderRadius: 999, background: 'var(--mantine-color-blue-6)', opacity: leftValue > 0 ? 0.95 : 0.28 }} />
+              <Box style={{ width: 7, height: rightHeight, borderRadius: 999, background: 'var(--mantine-color-green-6)', opacity: rightValue > 0 ? 0.95 : 0.28 }} />
+            </Group>
+            <Text c="dimmed" fz="10px">{entry.label}</Text>
+          </Stack>
+        );
+      })}
+    </Group>
+  );
+}
+
+function TrendCard({ title, subtitle, footer, legend, children }) {
+  return (
+    <Paper withBorder radius="md" p="sm">
+      <Stack gap="xs">
+        <div>
+          <Text fw={600} fz="sm">{title}</Text>
+          {subtitle ? <Text c="dimmed" fz="xs">{subtitle}</Text> : null}
+        </div>
+        {children}
+        {legend ? <Text c="dimmed" fz="xs">{legend}</Text> : null}
+        {footer ? <Text c="dimmed" fz="xs">{footer}</Text> : null}
+      </Stack>
+    </Paper>
+  );
+}
+
 export default function WorkspaceGrid({
   operationsSummaryData,
   onClientsUpdated,
@@ -113,6 +186,10 @@ export default function WorkspaceGrid({
   const outstandingAssignments = complianceWatch?.outstandingAssignments ?? {};
   const portalRequests = clientsBox?.portalRequests ?? {};
   const alertItems = Array.isArray(summary?.alerts?.items) ? summary.alerts.items : [];
+  const trendSchedule = Array.isArray(summary?.trends?.schedule) ? summary.trends.schedule : [];
+  const trendCompliance = Array.isArray(summary?.trends?.compliance) ? summary.trends.compliance : [];
+  const trendPortal = Array.isArray(summary?.trends?.portalRequests) ? summary.trends.portalRequests : [];
+  const trendClients = Array.isArray(summary?.trends?.clients) ? summary.trends.clients : [];
 
   const openDrilldown = (type, title, items = []) => {
     setDrilldown({ type, title, items: Array.isArray(items) ? items : [] });
@@ -412,6 +489,67 @@ export default function WorkspaceGrid({
               ))}
             </Stack>
           )
+        )}
+      </Paper>
+
+      <Paper withBorder radius="md" p="md">
+        <Group justify="space-between" mb="sm">
+          <Title order={3} fz="md">{t('dashboard.trends.title')}</Title>
+          <Badge variant="light">{t('dashboard.trends.window')}</Badge>
+        </Group>
+
+        {renderSummaryState() || (
+          <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
+            <TrendCard
+              title={t('dashboard.trends.utilizationTitle')}
+              subtitle={t('dashboard.trends.utilizationSubtitle')}
+              footer={t('dashboard.trends.utilizationFooter', {
+                pct: Number(trendSchedule.at(-1)?.utilizationPct ?? 0).toFixed(1),
+                appointments: trendSchedule.at(-1)?.totalAppointments ?? 0,
+              })}
+            >
+              <TrendBars series={trendSchedule} valueAccessor={(entry) => entry.utilizationPct} />
+            </TrendCard>
+
+            <TrendCard
+              title={t('dashboard.trends.noteGapTitle')}
+              subtitle={t('dashboard.trends.noteGapSubtitle')}
+              footer={t('dashboard.trends.noteGapFooter', {
+                oneDay: trendCompliance.at(-1)?.over1Day ?? 0,
+                threeDay: trendCompliance.at(-1)?.over3Days ?? 0,
+                oneWeek: trendCompliance.at(-1)?.over7Days ?? 0,
+              })}
+            >
+              <TrendBars series={trendCompliance} color="var(--mantine-color-orange-6)" valueAccessor={(entry) => entry.over1Day} />
+            </TrendCard>
+
+            <TrendCard
+              title={t('dashboard.trends.portalTitle')}
+              subtitle={t('dashboard.trends.portalSubtitle')}
+              legend={t('dashboard.trends.portalLegend')}
+              footer={t('dashboard.trends.portalFooter', {
+                created: trendPortal.reduce((sum, entry) => sum + Number(entry.created ?? 0), 0),
+                resolved: trendPortal.reduce((sum, entry) => sum + Number(entry.resolved ?? 0), 0),
+                backlog: trendPortal.at(-1)?.backlog ?? 0,
+              })}
+            >
+              <DualTrendBars
+                series={trendPortal}
+                leftAccessor={(entry) => entry.created}
+                rightAccessor={(entry) => entry.resolved}
+              />
+            </TrendCard>
+
+            <TrendCard
+              title={t('dashboard.trends.unscheduledTitle')}
+              subtitle={t('dashboard.trends.unscheduledSubtitle')}
+              footer={t('dashboard.trends.unscheduledFooter', {
+                count: trendClients.at(-1)?.count ?? 0,
+              })}
+            >
+              <TrendBars series={trendClients} color="var(--mantine-color-grape-6)" valueAccessor={(entry) => entry.count} />
+            </TrendCard>
+          </SimpleGrid>
         )}
       </Paper>
 

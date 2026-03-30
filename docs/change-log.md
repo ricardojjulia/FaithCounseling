@@ -34,6 +34,11 @@ Upgrades the Operations Dashboard from placeholder cards to a real staff-facing 
   - note-gap backlog
   - same-day counselor capacity exhaustion
   - portal request backlog
+- dashboard 7-day trends for:
+  - counselor utilization
+  - note-gap backlog
+  - portal request flow
+  - unscheduled clients
 
 ### Changed
 
@@ -48,6 +53,7 @@ Upgrades the Operations Dashboard from placeholder cards to a real staff-facing 
   - replaced placeholder cards and the dashboard client roster with metrics-focused summary cards
   - added actionable dashboard drill-down modals and row-level action buttons
   - added operational alert strip with severity badges and queue/calendar actions
+  - added compact 7-day trend cards using bar-based visuals instead of a chart dependency
 - `apps/web/src/components/SchedulingPage.jsx`
   - now notifies the dashboard summary after appointment mutations
 - `apps/web/src/components/ClientForm.jsx`
@@ -58,6 +64,7 @@ Upgrades the Operations Dashboard from placeholder cards to a real staff-facing 
   - added dashboard summary labels and explanations for the new cards
   - added drill-down modal labels and action text
   - added dashboard alert titles, descriptions, severity labels, and action text
+  - added trend section labels, subtitles, legends, and footers
 
 ### Validation
 
