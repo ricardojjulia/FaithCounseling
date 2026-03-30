@@ -32,6 +32,34 @@ test.describe('high-value UI journeys', () => {
     expect(Array.isArray(payload.summary.trends.clients)).toBeTruthy();
   });
 
+  test('practice admin sees a dedicated client workspace instead of the dashboard grid', async ({ page }) => {
+    await signInAs(page, 'practice_admin');
+
+    await expect(page.getByText(/Today's Schedule|Programa de hoy/i)).toBeVisible();
+    await openPrimaryNav(page, 'clients');
+
+    await expect(page.getByRole('heading', { name: /Clients|Clientes/i })).toBeVisible();
+    await expect(page.getByLabel(/Search clients|Buscar clientes/i)).toBeVisible();
+    await expect(page.getByRole('textbox', { name: /Status filter|Filtro de estado/i })).toBeVisible();
+    await expect(page.getByText(/Today's Schedule|Programa de hoy/i)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /New Client|Nuevo cliente/i })).toBeVisible();
+  });
+
+  test('practice admin edit from clients workspace opens the detailed client record screen', async ({ page }) => {
+    await signInAs(page, 'practice_admin');
+    await openPrimaryNav(page, 'clients');
+
+    const firstEditableClient = page.locator('.mantine-Paper-root').filter({ has: page.getByRole('button', { name: /^Edit$|^Editar$/i }) }).first();
+    await expect(firstEditableClient).toBeVisible();
+    await firstEditableClient.getByRole('button', { name: /^Edit$|^Editar$/i }).click();
+
+    await expect(page.getByRole('tab', { name: /Demographics|Datos demográficos/i })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /Insurance|Seguro/i })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /Contacts|Contactos/i })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /Clinical|Clínico|Clinico/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Clients|Clientes/i })).toBeVisible();
+  });
+
   test('practice admin can drill into dashboard queues and open actionable client details', async ({ page }) => {
     const suffix = String(Date.now()).slice(-6);
     const firstName = `Touch${suffix}`;
@@ -87,8 +115,9 @@ test.describe('high-value UI journeys', () => {
     const suffix = String(Date.now()).slice(-6);
     const firstName = `Step${suffix}`;
     const lastName = 'Journey';
-    const start = futureDateTimeLocal({ days: 1, hours: 10, minutes: 0 });
-    const end = futureDateTimeLocal({ days: 1, hours: 11, minutes: 0 });
+    const slotMinutes = Number(suffix.slice(-2)) % 50;
+    const start = futureDateTimeLocal({ days: 1, hours: 10, minutes: slotMinutes });
+    const end = futureDateTimeLocal({ days: 1, hours: 11, minutes: slotMinutes });
     const day = start.slice(0, 10);
 
     await signInAs(page, 'practice_admin');
@@ -96,6 +125,8 @@ test.describe('high-value UI journeys', () => {
     await expect(page.getByText(/Today's Sessions|Sesiones de hoy/i)).toBeVisible();
     await openPrimaryNav(page, 'clients');
     await expect(page.getByRole('heading', { name: /Clients|Clientes/i })).toBeVisible();
+    await expect(page.getByLabel(/Search clients|Buscar clientes/i)).toBeVisible();
+    await expect(page.getByText(/Today's Schedule|Programa de hoy/i)).toHaveCount(0);
 
     await page.getByRole('button', { name: /New Client|Nuevo cliente/i }).click();
     await page.getByLabel('First name').fill(firstName);
@@ -103,11 +134,11 @@ test.describe('high-value UI journeys', () => {
     await page.getByLabel('Faith background').fill('Evangelical');
     await page.getByRole('button', { name: /Create Client|Crear cliente/i }).click();
 
-    await page.getByRole('button', { name: /New Appointment|Nueva cita/i }).click();
+    await expect(page.getByText(`${firstName} ${lastName}`)).toBeVisible();
+    const createdClientCard = page.locator('.mantine-Paper-root').filter({ hasText: `${firstName} ${lastName}` }).first();
+    await createdClientCard.getByRole('button', { name: /Schedule|Programar/i }).click();
     await expect(page.getByRole('dialog', { name: /New Appointment|Nueva cita/i })).toBeVisible();
-    await page.getByRole('textbox', { name: 'Client' }).click();
-    await page.getByRole('textbox', { name: 'Client' }).fill(firstName);
-    await page.getByRole('option', { name: new RegExp(`${firstName} ${lastName}`, 'i') }).click();
+    await expect(page.getByRole('textbox', { name: 'Client' })).toHaveValue(new RegExp(firstName, 'i'));
     await page.getByRole('textbox', { name: 'Counselor' }).click();
     await page.getByRole('textbox', { name: 'Counselor' }).fill('Journey');
     await page.getByRole('option', { name: /Journey Counselor/i }).click();
@@ -116,9 +147,16 @@ test.describe('high-value UI journeys', () => {
     await page.getByLabel('Location').fill('Journey Room');
     await page.getByRole('button', { name: /Create Appointment|Crear cita/i }).click();
 
-    await expect(page.getByText(/Appointment created|Cita creada/i)).toBeVisible();
-    await page.getByLabel('Day').fill(day);
-    await expect(page.getByRole('table')).toContainText(`${firstName} ${lastName}`);
+    await expect.poll(async () => page.evaluate(async ({ fullName, dayPrefix }) => {
+      const response = await fetch('/api/v1/appointments', { credentials: 'include' });
+      const payload = await response.json();
+      return (payload.items || []).some((item) => {
+        const startsAt = String(item?.startsAt ?? item?.starts_at ?? '');
+        return item?.clientName === fullName && startsAt.startsWith(dayPrefix);
+      });
+    }, { fullName: `${firstName} ${lastName}`, dayPrefix: day }), {
+      message: 'expected created appointment to appear in the authenticated appointments feed',
+    }).toBeTruthy();
   });
 
   test('practice admin can open workspace studio, monitoring, and operations surfaces used in daily operations', async ({ page }) => {

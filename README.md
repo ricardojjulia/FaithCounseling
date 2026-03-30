@@ -4,9 +4,9 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## At a Glance
 
-- Version: `4.7.0`
+- Version: `5.0.0`
 - Status: `Beta Ready`
-- Release summary: [docs/v4.7.0-RELEASE-SUMMARY.md](docs/v4.7.0-RELEASE-SUMMARY.md)
+- Release summary: [docs/v5.0.0-RELEASE-SUMMARY.md](docs/v5.0.0-RELEASE-SUMMARY.md)
 - Operations Dashboard summary: [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
 - Change log: [docs/change-log.md](docs/change-log.md)
 - Spanish translation report: [docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md](docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md)
@@ -16,6 +16,7 @@ Christian counseling practice management SaaS for solo counselors, group practic
 - practice operations workspace for counselors, managers, and admins
 - upgraded Operations Dashboard with counselor workload, 1-hour gap visibility, compliance note-gap tracking, portal request rollups, operational alert thresholds, and 7-day trend visibility
 - dashboard drill-down workflows that open the affected client, document, scheduling, and portal-review queues directly from summary metrics
+- dedicated Clients workspace for client maintenance, lookup, filtering, quick edit, and direct chart/scheduling handoff
 - scheduling with appointments, waitlist, reminders, recurring workflows, and utilization support
 - client and counselor management with richer portal, profile, and operational views
 - authenticated client portal with onboarding, documents, uploads, data rights, counselor, financial, and resources surfaces
@@ -24,11 +25,11 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Current Release Focus
 
-The current build adds a real Operations Dashboard summary for staff and makes those metrics actionable. Today’s Schedule shows counselor workload and remaining 1-hour gaps, Priority Queue is driven by a real high-touchpoint client flag, Compliance Watch tracks unresolved note gaps and incomplete assigned work, and the Clients card focuses on totals, unscheduled clients, and portal request statuses. Staff can now drill straight into those queues from the dashboard, the dashboard raises alerts when thresholds are crossed for unscheduled high-touchpoint clients, documentation backlog, exhausted counselor capacity, or portal backlog growth, and the new 7-day trend section shows whether utilization, note gaps, portal flow, and unscheduled-client backlog are improving or worsening.
+The current build turns the operations and client-maintenance split back into a first-class workflow boundary. The Operations Dashboard now owns the real operational summary, drill-down queues, alert thresholds, and 7-day trends, while the Clients navigation surface is once again a dedicated workspace for client lookup, maintenance, quick edits, and direct handoff into the detailed multi-tab client record. Existing-client `Edit` now returns to the full record with demographics, insurance, contacts, clinical, diagnoses, faith, and legal tabs instead of dropping staff into the lightweight modal.
 
 ## Key Docs
 
-- Release summary: [docs/v4.7.0-RELEASE-SUMMARY.md](docs/v4.7.0-RELEASE-SUMMARY.md)
+- Release summary: [docs/v5.0.0-RELEASE-SUMMARY.md](docs/v5.0.0-RELEASE-SUMMARY.md)
 - Operations Dashboard summary: [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
 - Operations Dashboard implementation log: [docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md](docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md)
 - Spanish translation report: [docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md](docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md)
@@ -54,6 +55,35 @@ pnpm agent:translation:run
 ```
 
 The service listens on `http://127.0.0.1:8098` by default.
+
+## v5.0.0 — Operations Dashboard + Client Workspace Separation (March 30, 2026)
+
+### v5.0.0 Overview
+
+This release draws a clean boundary between the Operations Dashboard and the Clients workspace. The dashboard remains the daily operational command surface with summary metrics, drill-down queues, alert thresholds, and 7-day trends, while the Clients screen is once again a dedicated client-maintenance workspace. Existing-client `Edit` now routes back into the full detailed client record instead of the lightweight modal.
+
+### v5.0.0 — What Changed
+
+- restored a dedicated Clients workspace for:
+  - search
+  - status filtering
+  - summary counts
+  - quick edit
+  - direct scheduling handoff
+- restored the detailed client record as the primary edit path for existing clients
+- updated top bar copy so the Clients screen is visibly distinct from the Operations Dashboard
+- kept the dashboard summary, alerts, trends, and drill-down behavior intact
+- added browser regression coverage for:
+  - dedicated Clients workspace rendering
+  - detailed client edit entry from the Clients screen
+
+### v5.0.0 — Validation
+
+- `pnpm lint`
+- `pnpm --filter @faith/web build`
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin sees a dedicated client workspace instead of the dashboard grid|practice admin edit from clients workspace opens the detailed client record screen"`
+- `pnpm test:e2e`
+- `pnpm test:launch-readiness`
 
 ## v4.7.0 — Expanded Counseling Form Library (March 29, 2026)
 

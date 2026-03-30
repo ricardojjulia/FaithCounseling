@@ -11,6 +11,8 @@ The Operations Dashboard is now backed by a real operations-summary API instead 
 
 It also now supports in-dashboard drill-down workflows so staff can open the underlying queues directly from the summary metrics, operational alerts when key thresholds are crossed, and 7-day trend context so operators can see whether conditions are stabilizing or getting worse.
 
+As a follow-on correction, the `Clients` navigation surface has also been separated back out from the dashboard grid. Staff now land on a dedicated client-maintenance workspace for lookup, filtering, create/edit work, and direct handoff into chart and scheduling actions. Existing-client `Edit` again opens the full detailed client record instead of the lightweight modal.
+
 ### Today's Schedule
 
 - total appointments for the day
@@ -113,6 +115,8 @@ Trend behavior in this release:
 - added drill-down detail payloads and modal actions without creating a new dashboard surface id
 - added backend-derived alert objects and env-backed threshold configuration
 - added 7-day trend payloads and compact bar-style dashboard visuals
+- restored a dedicated `Clients` workspace so the client-maintenance surface no longer aliases the dashboard
+- restored the detailed client record as the primary edit path for existing clients
 - rebuilt the served web bundle and refreshed `apps/web/public/index.html`
 
 ## Validation

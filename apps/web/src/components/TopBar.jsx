@@ -1,13 +1,31 @@
 import { Burger, Group, Select, Text, Box, Button } from '@mantine/core';
 import { useI18n } from '../lib/i18nContext.jsx';
 
-export default function TopBar({ opened, onMenuToggle, onSignOut, currentUser }) {
+function resolveTopBarCopy(currentView, isClient, t) {
+  if (isClient) {
+    return {
+      title: t('topbar.portal.title'),
+      subtitle: t('topbar.portal.subtitle'),
+    };
+  }
+
+  if (currentView === 'clients') {
+    return {
+      title: t('topbar.clients.title'),
+      subtitle: t('topbar.clients.subtitle'),
+    };
+  }
+
+  return {
+    title: t('topbar.title'),
+    subtitle: t('topbar.subtitle'),
+  };
+}
+
+export default function TopBar({ opened, onMenuToggle, onSignOut, currentUser, currentView }) {
   const { locale, locales, setLocale, t, loading } = useI18n();
   const isClient = currentUser?.role === 'client';
-  const title = isClient ? 'Client Portal' : t('topbar.title');
-  const subtitle = isClient
-    ? 'Appointments, forms, billing, and secure profile updates in one place.'
-    : t('topbar.subtitle');
+  const copy = resolveTopBarCopy(currentView, isClient, t);
 
   return (
     <Group className="workspace-topbar" h="100%" px="md" justify="space-between" wrap="nowrap">
@@ -27,9 +45,9 @@ export default function TopBar({ opened, onMenuToggle, onSignOut, currentUser })
         </Box>
         <Box className="workspace-topbar-copy">
           <Text className="workspace-topbar-kicker">{t('topbar.kicker')}</Text>
-          <Text component="h1" className="workspace-topbar-title" style={{ margin: 0 }}>{title}</Text>
+          <Text component="h1" className="workspace-topbar-title" style={{ margin: 0 }}>{copy.title}</Text>
           <Text className="workspace-topbar-subtitle">
-            {subtitle}
+            {copy.subtitle}
           </Text>
         </Box>
       </Group>

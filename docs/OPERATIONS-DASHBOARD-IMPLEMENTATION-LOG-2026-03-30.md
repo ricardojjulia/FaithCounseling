@@ -276,3 +276,43 @@ Validation results for this step:
 - `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin dashboard renders the upgraded operations summary cards and payload shape|practice admin can drill into dashboard queues and open actionable client details"` — passed
 - `pnpm test:e2e` — passed (`10/10`)
 - `pnpm test:launch-readiness` — passed (`3/3`)
+
+### Step 8 — Clients surface separation regression fixed
+
+Issue found:
+
+- `currentView === 'clients'` was still rendering the shared dashboard `WorkspaceGrid`, which made the dashboard and client screen look effectively identical and hid the intended client-maintenance workflow
+- the staff top bar still labeled the clients surface as `Operations Dashboard`, which reinforced the regression
+
+Implemented:
+
+- restored a dedicated `Clients` workspace surface with:
+  - client search
+  - status filtering
+  - summary counts
+  - create flow
+  - detailed edit entry for existing clients
+  - quick edit modal for lightweight updates
+  - direct schedule-client actions
+- updated the app routing so only `dashboard` renders the operations-summary grid
+- updated the top bar copy so the clients workspace identifies itself as a client-maintenance surface instead of the dashboard
+- restored existing-client `Edit` to open the full detailed client record with demographics, insurance, contacts, clinical, diagnoses, faith, and legal tabs
+
+Files touched in this step:
+
+- `apps/web/src/App.jsx`
+- `apps/web/src/components/ClientsPage.jsx`
+- `apps/web/src/components/TopBar.jsx`
+- `packages/i18n/src/index.js`
+- `apps/api/data/i18n/en.json`
+- `apps/api/data/i18n/es.json`
+- `tests/e2e/high-value-journeys.spec.mjs`
+
+Validation results for this step:
+
+- `pnpm lint` — passed
+- `pnpm --filter @faith/web build` — passed
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin sees a dedicated client workspace instead of the dashboard grid|practice admin can create a client and schedule an appointment from the current workspace flow"` — passed
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin sees a dedicated client workspace instead of the dashboard grid|practice admin edit from clients workspace opens the detailed client record screen"` — passed
+- `pnpm test:e2e` — passed (`12/12`) after the detailed edit restoration and scheduling regression hardening
+- `pnpm test:launch-readiness` — passed (`3/3`)

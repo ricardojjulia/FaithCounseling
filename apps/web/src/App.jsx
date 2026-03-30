@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import Metrics from './components/Metrics';
 import WorkspaceGrid from './components/WorkspaceGrid';
+import ClientsPage from './components/ClientsPage.jsx';
 import ClientDetailPage from './components/ClientDetail/ClientDetailPage.jsx';
 import CounselorDetailPage from './components/CounselorDetail/CounselorDetailPage.jsx';
 import UserMaintenance from './components/UserMaintenance.jsx';
@@ -344,11 +345,12 @@ export default function App() {
   const showDashboard        = currentView === 'dashboard';
   const showUsers            = currentView === 'users';
   const showCounselors       = currentView === 'counselors';
+  const showClients          = currentView === 'clients';
   const showScheduling       = currentView === 'scheduling';
   const showWorkspaceStudio  = currentView === 'workspace-studio';
   const showDocuments        = currentView === 'documents';
   const showPortal           = currentView === 'portal';
-  const showClientsWorkspace = currentView === 'clients' || (!showDashboard && !showUsers && !showCounselors && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal);
+  const showFallbackWorkspace = !showDashboard && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal;
   const topLevelSurfaceId = !isAuthenticated
     ? 'auth'
     : selectedClientId || selectedCounselorId
@@ -357,6 +359,8 @@ export default function App() {
         ? 'users'
         : showCounselors
           ? 'counselors'
+          : showClients
+            ? 'clients'
           : showScheduling
             ? 'scheduling'
             : showWorkspaceStudio
@@ -409,6 +413,7 @@ export default function App() {
           onMenuToggle={toggleNav}
           onSignOut={handleSignOut}
           currentUser={currentUser}
+          currentView={currentView}
         />
       </AppShell.Header>
 
@@ -477,12 +482,26 @@ export default function App() {
           />
         ) : showDocuments ? (
           <DocumentsPage />
+        ) : showClients ? (
+          <ClientsPage
+            clientsData={clientsData}
+            onClientsUpdated={() => {
+              setRefreshClientsKey((k) => k + 1);
+              setRefreshOperationsKey((value) => value + 1);
+            }}
+            onViewClient={handleOpenClient}
+            onScheduleClient={(clientId) => handleOpenScheduling({
+              composerOpen: true,
+              initialClientId: clientId,
+              initialView: defaultCalendarView(userRole),
+            })}
+          />
         ) : showPortal ? (
           <ClientPortalPage currentUser={currentUser} clients={clientsData.items} onSignOut={handleSignOut} />
         ) : (
           <>
             {showDashboard ? <Metrics data={metricsData} currentUser={currentUser} /> : null}
-            {showClientsWorkspace || showDashboard ? (
+            {showFallbackWorkspace || showDashboard ? (
               <WorkspaceGrid
                 clientsData={clientsData}
                 operationsSummaryData={operationsSummaryData}

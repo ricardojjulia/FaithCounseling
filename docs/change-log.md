@@ -2,6 +2,71 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v5.0.0 — Operations Dashboard + Client Workspace Separation
+
+**Date:** March 30, 2026
+**Type:** Major release
+
+### Summary
+
+Promotes the Operations Dashboard upgrade and the restored client-maintenance workflow into a major release boundary. The dashboard remains the operations summary surface, while the `Clients` navigation surface is once again a dedicated client-maintenance workspace. Existing-client `Edit` now opens the full detailed client record instead of the lightweight modal.
+
+### Added
+
+- `docs/v5.0.0-RELEASE-SUMMARY.md` — consolidated release summary for the dashboard/client-workspace split
+- browser regression coverage for:
+  - dedicated Clients workspace rendering
+  - detailed client edit entry from the Clients workspace
+
+### Changed
+
+- `apps/web/src/App.jsx`
+  - preserves the dashboard as the operations-summary surface
+  - routes `clients` into a dedicated client-maintenance page
+- `apps/web/src/components/ClientsPage.jsx`
+  - adds the dedicated Clients workspace with:
+    - search
+    - status filtering
+    - summary counts
+    - quick edit modal
+    - direct schedule handoff
+  - restores existing-client `Edit` as the entry point into the detailed client record
+- `apps/web/src/components/TopBar.jsx`
+  - distinguishes the Clients workspace from the Operations Dashboard in the top bar title and subtitle
+- `packages/i18n/src/index.js`
+  - adds Clients workspace copy for top bar and actions
+- `apps/api/data/i18n/en.json`
+  - adds English strings for the restored Clients workspace behavior
+- `apps/api/data/i18n/es.json`
+  - adds Spanish strings for the restored Clients workspace behavior
+- `README.md`
+  - updated top-level release references to `v5.0.0`
+  - added the new major-release summary section
+- `docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md`
+  - records the client-workspace separation regression fix and detailed edit restoration
+- `docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md`
+  - records the restored Clients workspace and detailed edit path
+
+### Validation
+
+- `pnpm lint` — passed
+- `pnpm --filter @faith/web build` — passed
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin sees a dedicated client workspace instead of the dashboard grid|practice admin edit from clients workspace opens the detailed client record screen"` — passed
+- `pnpm test:e2e` — passed (`12/12`)
+- `pnpm test:launch-readiness` — passed (`3/3`)
+
+### Version bump
+
+Updated package versions from `4.7.0` to `5.0.0`:
+
+- `package.json`
+- `apps/api/package.json`
+- `apps/web/package.json`
+- `apps/worker/package.json`
+- `packages/domain/package.json`
+- `packages/i18n/package.json`
+- `packages/telemetry/package.json`
+
 ## v4.7.0 — Operations Dashboard Upgrade
 
 **Date:** March 30, 2026
@@ -49,11 +114,18 @@ Upgrades the Operations Dashboard from placeholder cards to a real staff-facing 
 - `apps/web/src/App.jsx`
   - added staff-side operations-summary fetch and timed dashboard refresh
   - added navigation callbacks for dashboard drill-down actions into Documents and Workspace Studio Portal
+  - restored the `clients` route as a dedicated client-maintenance surface instead of reusing the dashboard grid
+- `apps/web/src/components/ClientsPage.jsx`
+  - added a dedicated clients workspace with search, status filtering, create action, detailed edit entry, quick edit modal, and direct schedule actions
 - `apps/web/src/components/WorkspaceGrid.jsx`
   - replaced placeholder cards and the dashboard client roster with metrics-focused summary cards
   - added actionable dashboard drill-down modals and row-level action buttons
   - added operational alert strip with severity badges and queue/calendar actions
   - added compact 7-day trend cards using bar-based visuals instead of a chart dependency
+- `apps/web/src/components/TopBar.jsx`
+  - now shows clients-specific top bar title and subtitle so the client-maintenance surface is visually distinct from the Operations Dashboard
+- `apps/web/src/components/ClientDetail/*`
+  - existing client detail tabs remain the full detailed edit surface reached from the restored `Edit` action on the Clients workspace
 - `apps/web/src/components/SchedulingPage.jsx`
   - now notifies the dashboard summary after appointment mutations
 - `apps/web/src/components/ClientForm.jsx`
