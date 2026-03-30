@@ -44,8 +44,8 @@ export default function OfferingsTab() {
       setLoadError(null);
       try {
         const [settingsData, summaryData] = await Promise.all([
-          apiFetch('/v1/portal/settings'),
-          apiFetch('/v1/offerings/summary'),
+          apiFetch('/api/v1/portal/settings'),
+          apiFetch('/api/v1/offerings/summary'),
         ]);
         if (!cancelled) {
           const cents = settingsData?.item?.suggestedOfferingCents ?? 0;
@@ -74,7 +74,7 @@ export default function OfferingsTab() {
     setSaving(true);
     try {
       const amountCents = Math.round((suggestedDraft ?? 0) * 100);
-      await apiFetch('/v1/portal/settings', {
+      await apiFetch('/api/v1/portal/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({

@@ -4,9 +4,9 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## At a Glance
 
-- Version: `5.2.0`
+- Version: `5.2.1`
 - Status: `Beta Ready`
-- Release summary: [docs/v5.2.0-RELEASE-SUMMARY.md](docs/v5.2.0-RELEASE-SUMMARY.md)
+- Release summary: [docs/v5.2.1-RELEASE-SUMMARY.md](docs/v5.2.1-RELEASE-SUMMARY.md)
 - UI Baseline agent run report: [docs/UI-BASELINE-AGENT-RUN-2026-03-30.md](docs/UI-BASELINE-AGENT-RUN-2026-03-30.md)
 - Operations Dashboard summary: [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
 - Change log: [docs/change-log.md](docs/change-log.md)
@@ -28,11 +28,11 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Current Release Focus
 
-The current build replaces the billing model with a faith-based voluntary offering system. The Billing navigation item is now Offerings; the client portal Financials tab is now Giving; the Insurance client-detail tab has been removed from the UI (schema data preserved). A globally configured suggested offering amount and ministry note replace invoice and balance concepts. Staff can record offerings from the Offerings workspace, and clients see their giving history and the ministry's suggested amount in the portal. A comprehensive product plans overview now documents all active and delivered plans in `PLANS/`.
+The current build ships the offerings model with a patch fix for the first release regression on the new surfaces. The Offerings workspace and Workspace Studio Offerings tab now resolve their labels from the frontend i18n catalog correctly, and their data requests now flow through the `/api/v1/...` proxy instead of falling through to the web server HTML shell. That removes the raw `nav.offerings` / `topbar.offerings.*` key output and the `Unexpected token '<'` JSON parse failure seen on first launch.
 
 ## Key Docs
 
-- Release summary: [docs/v5.2.0-RELEASE-SUMMARY.md](docs/v5.2.0-RELEASE-SUMMARY.md)
+- Release summary: [docs/v5.2.1-RELEASE-SUMMARY.md](docs/v5.2.1-RELEASE-SUMMARY.md)
 - Operations Dashboard summary: [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
 - Operations Dashboard implementation log: [docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md](docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md)
 - Spanish translation report: [docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md](docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md)
@@ -81,6 +81,31 @@ pnpm agent:translation:run
 ```
 
 The service listens on `http://127.0.0.1:8098` by default.
+
+## v5.2.1 — Offerings UI Hotfix (March 30, 2026)
+
+### v5.2.1 Overview
+
+This patch fixes the first-release regressions on the new Offerings surfaces. The main app was rendering raw translation keys like `nav.offerings` and `topbar.offerings.title` because those strings were added to the API locale JSON instead of the frontend message catalog. The two Offerings screens were also calling `/v1/...` directly, which returned the web HTML shell instead of JSON when loaded through the frontend server.
+
+### v5.2.1 — What Changed
+
+- added the missing frontend i18n keys for:
+  - `nav.offerings`
+  - `topbar.offerings.*`
+  - `studio.tab.offerings`
+  - `offerings.*`
+  - `portal.tab.giving`
+  - `portal.giving.*`
+- switched the Offerings workspace and Workspace Studio Offerings tab to `/api/v1/...` requests so they use the same-origin proxy correctly
+- rebuilt the served web bundle so the fix is live from the production asset entrypoint
+
+### v5.2.1 — Validation
+
+```bash
+pnpm lint
+pnpm --filter @faith/web build
+```
 
 ## v5.2.0 — Offerings Model — Voluntary Giving System (March 30, 2026)
 

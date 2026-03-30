@@ -2,6 +2,37 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v5.2.1 — Offerings UI Hotfix
+
+**Date:** March 30, 2026
+**Type:** Patch release
+
+### Summary
+
+Fixes the first-release regressions on the new Offerings screens. The frontend app was showing raw translation keys because the new offerings labels had only been added to the API locale JSON, while the React shell reads from `packages/i18n/src/index.js`. The new Offerings data requests were also bypassing the `/api` proxy and hitting `/v1/...` directly, causing the web server to return HTML and the UI to fail with `Unexpected token '<'`.
+
+### Changed
+
+- `packages/i18n/src/index.js`
+  - added the missing frontend labels for `nav.offerings`, `topbar.offerings.*`, `studio.tab.offerings`, `offerings.*`, `portal.tab.giving`, and `portal.giving.*`
+- `apps/web/src/components/Offerings/OfferingsPage.jsx`
+  - switched offerings list and summary requests to `/api/v1/offerings` and `/api/v1/offerings/summary`
+- `apps/web/src/components/WorkspaceStudio/tabs/OfferingsTab.jsx`
+  - switched portal-settings and offerings-summary requests to `/api/v1/...`
+- `apps/web/public/index.html`
+  - updated the built asset entry to the rebuilt hotfix bundle
+- workspace package manifests
+  - bumped version from `5.2.0` to `5.2.1`
+
+### Validation
+
+```bash
+pnpm lint
+pnpm --filter @faith/web build
+```
+
+---
+
 ## v5.2.0 — Offerings Model — Voluntary Giving System
 
 **Date:** March 30, 2026

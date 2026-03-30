@@ -51,8 +51,8 @@ export default function OfferingsPage({ clients = [] }) {
     setLoadError(null);
     try {
       const [offeringsData, summaryData] = await Promise.all([
-        apiFetch('/v1/offerings'),
-        apiFetch('/v1/offerings/summary'),
+        apiFetch('/api/v1/offerings'),
+        apiFetch('/api/v1/offerings/summary'),
       ]);
       setOfferings(offeringsData?.items ?? []);
       setSummary(summaryData);
@@ -74,7 +74,7 @@ export default function OfferingsPage({ clients = [] }) {
     }
     setRecording(true);
     try {
-      await apiFetch('/v1/offerings', {
+      await apiFetch('/api/v1/offerings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({
