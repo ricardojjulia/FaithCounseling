@@ -9,7 +9,7 @@ const NAV_ITEMS = [
   { key: 'scheduling', labelKey: 'nav.scheduling' },
   { key: 'clinical', labelKey: 'nav.clinical' },
   { key: 'documents', labelKey: 'nav.documents' },
-  { key: 'billing', labelKey: 'nav.billing' },
+  { key: 'offerings', labelKey: 'nav.offerings' },
   { key: 'portal', labelKey: 'nav.portal' },
   { key: 'workspace-studio', labelKey: 'nav.workspaceStudio' },
   { key: 'operations', labelKey: 'nav.operationsStudio', href: '/operations.html' },

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Tabs, Text, Stack, Title, Paper } from '@mantine/core';
 import PortalTab from './tabs/PortalTab.jsx';
 import DocumentsStudioTab from './tabs/DocumentsStudioTab.jsx';
+import OfferingsTab from './tabs/OfferingsTab.jsx';
 import { useSurfaceTelemetry } from '../../lib/useSurfaceTelemetry.js';
 import { useI18n } from '../../lib/i18nContext.jsx';
 
@@ -14,7 +15,7 @@ const STUDIO_TABS = [
   { id: 'documentsStudio', labelKey: 'studio.tab.documentsStudio' },
   { id: 'clients', labelKey: 'studio.tab.clients' },
   { id: 'appointments', labelKey: 'studio.tab.appointments' },
-  { id: 'billing', labelKey: 'studio.tab.billing' },
+  { id: 'offerings', labelKey: 'studio.tab.offerings' },
   { id: 'portal', labelKey: 'studio.tab.portal' },
 ];
 
@@ -51,6 +52,8 @@ export default function WorkspaceStudioPage({ initialTab = 'portal', onScheduleP
                 <PortalTab onSchedulePortalRequest={onSchedulePortalRequest} />
               ) : tab.id === 'documentsStudio' ? (
                 <DocumentsStudioTab />
+              ) : tab.id === 'offerings' ? (
+                <OfferingsTab />
               ) : (
                 <Text c="dimmed" fz="sm">{t('studio.placeholderForTab', { tab: t(tab.labelKey) })}</Text>
               )}

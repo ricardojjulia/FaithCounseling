@@ -652,7 +652,9 @@ CREATE TABLE IF NOT EXISTS portal_settings (
   allow_care_requests             TINYINT(1)   NOT NULL DEFAULT 1,
   allow_scheduling_requests       TINYINT(1)   NOT NULL DEFAULT 1,
   show_public_counselor_directory TINYINT(1)   NOT NULL DEFAULT 0,
-  financial_mode                  VARCHAR(64)  NOT NULL DEFAULT 'billing',
+  financial_mode                  VARCHAR(64)  NOT NULL DEFAULT 'offerings',
+  suggested_offering_cents        INT          NOT NULL DEFAULT 0,
+  offering_ministry_note          TEXT         NULL,
   contact_preference_options      JSON         NULL,
   default_signup_form_keys        JSON         NULL,
   created_at                      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1119,6 +1121,25 @@ CREATE TABLE IF NOT EXISTS portal_registration_requests (
   updated_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   INDEX idx_portal_reg_tenant_status (tenant_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Offerings ───────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS offerings (
+  id              VARCHAR(64)  NOT NULL,
+  tenant_id       VARCHAR(64)  NOT NULL,
+  client_id       VARCHAR(64)  NOT NULL,
+  counselor_id    VARCHAR(64)  NULL,
+  amount_cents    INT          NOT NULL DEFAULT 0,
+  received_on     DATE         NOT NULL,
+  note            VARCHAR(500) NULL,
+  created_by      VARCHAR(64)  NULL,
+  created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_offerings_tenant_client (tenant_id, client_id),
+  INDEX idx_offerings_tenant_received (tenant_id, received_on),
+  CONSTRAINT fk_offerings_client FOREIGN KEY (client_id) REFERENCES clients (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─── Faith: note templates ────────────────────────────────────────────────────

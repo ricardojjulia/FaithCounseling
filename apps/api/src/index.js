@@ -881,13 +881,17 @@ const portalSettingsRecords = [
     allowCareRequests: true,
     allowSchedulingRequests: true,
     showPublicCounselorDirectory: false,
-    financialMode: 'billing',
+    financialMode: 'offerings',
+    suggestedOfferingCents: 12000,
+    offeringMinistryNote: 'Your gift helps sustain this counseling ministry and expand care for others.',
     contactPreferenceOptions: ['email', 'sms', 'phone', 'portal_message'],
     defaultSignupFormKeys: [],
     createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
     updatedAt: new Date().toISOString(),
   },
 ];
+
+const offeringsRecords = [];
 
 const portalResources = [
   {
@@ -1460,6 +1464,16 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === '/v1/portal/public-requests') {
       await handlePortalPublicRequests(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/offerings') {
+      await handleOfferings(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/offerings/summary') {
+      await handleOfferingsSummary(request, response, session);
       return;
     }
 
@@ -6292,14 +6306,7 @@ async function handlePortalSettings(request, response, session) {
     }
   }
 
-  let financialMode = current.financialMode;
-  if (payload.financialMode !== undefined) {
-    financialMode = normalizePortalFinancialMode(payload.financialMode);
-    if (!financialMode) {
-      writeJson(response, 400, { error: 'financialMode must be valid' });
-      return;
-    }
-  }
+  const financialMode = 'offerings';
 
   const contactPreferenceOptions = payload.contactPreferenceOptions !== undefined
     ? normalizePortalContactPreferenceOptions(payload.contactPreferenceOptions)
@@ -6332,6 +6339,12 @@ async function handlePortalSettings(request, response, session) {
       ? Boolean(payload.showPublicCounselorDirectory)
       : current.showPublicCounselorDirectory,
     financialMode,
+    suggestedOfferingCents: typeof payload.suggestedOfferingCents === 'number' && Number.isInteger(payload.suggestedOfferingCents) && payload.suggestedOfferingCents >= 0
+      ? payload.suggestedOfferingCents
+      : (current.suggestedOfferingCents ?? 0),
+    offeringMinistryNote: payload.offeringMinistryNote !== undefined
+      ? sanitizeStr(payload.offeringMinistryNote ?? '', 1000)
+      : (current.offeringMinistryNote ?? ''),
     contactPreferenceOptions,
     defaultSignupFormKeys,
   };
@@ -6377,7 +6390,6 @@ async function handlePortalOverview(request, response, requestUrl, session) {
   let forms = [];
   let assignedForms = [];
   let documents = [];
-  let balanceItems = [];
   let resources = [];
   let messageThreads = [];
   let appointmentRequests = [];
@@ -6385,13 +6397,20 @@ async function handlePortalOverview(request, response, requestUrl, session) {
   let assignedCounselor = null;
   let counselorDirectory = [];
   let paymentHistory = [];
+  let offeringStats = {
+    thisMonthCents: 0,
+    yearToDateCents: 0,
+    totalCents: 0,
+    count: 0,
+    averageCents: 0,
+  };
+  let pastSessionCount = 0;
 
   if (process.env.DB_NAME) {
     account = await getPortalAccount(client.id, client.tenantId);
     forms = await listFormAssignments(client.tenantId, { clientId: client.id });
     assignedForms = forms.filter((item) => item.status !== 'completed');
     documents = await listDocumentAssignments(client.tenantId, { clientId: client.id });
-    balanceItems = await listInvoices(client.tenantId, client.id);
     resources = (await listPortalResources(client.tenantId))
       .filter((item) => ['all', 'client', 'clients'].includes(item.audience ?? 'all'));
     const threads = await listPortalMessageThreads(client.tenantId, client.id);
@@ -6412,6 +6431,22 @@ async function handlePortalOverview(request, response, requestUrl, session) {
         return new Date(item.startsAt).getTime() >= Date.now() - (12 * 60 * 60 * 1000);
       })
       .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
+    pastSessionCount = allAppointments
+      .filter((item) => item.clientId === client.id)
+      .filter((item) => item.status !== 'cancelled' && item.status !== 'canceled')
+      .filter((item) => item.startsAt && new Date(item.startsAt).getTime() < Date.now())
+      .length;
+    const offerings = await listOfferingsForTenant(client.tenantId, { clientId: client.id });
+    offeringStats = summarizeOfferings(offerings);
+    paymentHistory = offerings.map((item) => ({
+      id: item.id,
+      amount: item.amountCents,
+      amountCents: item.amountCents,
+      receivedAt: item.receivedOn,
+      paymentMethod: 'offering',
+      reference: null,
+      note: item.note ?? null,
+    }));
 
     const assignedCounselorId = upcomingAppointments.find((item) => item.counselorId)?.counselorId ?? null;
     if (assignedCounselorId) {
@@ -6440,13 +6475,6 @@ async function handlePortalOverview(request, response, requestUrl, session) {
           supervisionStatus: item.supervisionStatus ?? '',
         }));
     }
-    const invoiceIds = balanceItems.map((item) => item.id);
-    if (invoiceIds.length) {
-      const tenantPayments = await listPayments(client.tenantId);
-      paymentHistory = tenantPayments
-        .filter((item) => item.clientId === client.id || invoiceIds.includes(item.invoiceId))
-        .sort((left, right) => String(right.receivedAt).localeCompare(String(left.receivedAt)));
-    }
   } else {
     account = portalAccounts.find((item) => item.clientId === client.id && item.tenantId === client.tenantId) ?? null;
     forms = intakePackets.filter((item) => item.clientId === client.id && item.tenantId === client.tenantId);
@@ -6458,7 +6486,6 @@ async function handlePortalOverview(request, response, requestUrl, session) {
         ...item,
         templateTitle: documentTemplates.find((template) => template.id === item.templateId)?.title ?? 'Document',
       }));
-    balanceItems = invoices.filter((item) => item.clientId === client.id && item.tenantId === client.tenantId);
     resources = portalResources.filter((item) => item.tenantId === client.tenantId && item.clientId === client.id);
     messageThreads = portalMessageThreads
       .filter((item) => item.tenantId === client.tenantId && item.clientId === client.id)
@@ -6472,6 +6499,24 @@ async function handlePortalOverview(request, response, requestUrl, session) {
       .filter((item) => item.tenantId === client.tenantId && item.clientId === client.id)
       .filter((item) => item.status !== 'cancelled' && item.status !== 'canceled')
       .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
+    pastSessionCount = appointments
+      .filter((item) => item.tenantId === client.tenantId && item.clientId === client.id)
+      .filter((item) => item.status !== 'cancelled' && item.status !== 'canceled')
+      .filter((item) => item.startsAt && new Date(item.startsAt).getTime() < Date.now())
+      .length;
+    const offerings = offeringsRecords
+      .filter((item) => item.tenantId === client.tenantId && item.clientId === client.id)
+      .sort((left, right) => String(right.receivedOn).localeCompare(String(left.receivedOn)));
+    offeringStats = summarizeOfferings(offerings);
+    paymentHistory = offerings.map((item) => ({
+      id: item.id,
+      amount: item.amountCents,
+      amountCents: item.amountCents,
+      receivedAt: item.receivedOn,
+      paymentMethod: 'offering',
+      reference: null,
+      note: item.note ?? null,
+    }));
 
     const nextCounselorName = upcomingAppointments.find((item) => item.counselorName)?.counselorName ?? null;
     if (nextCounselorName) {
@@ -6500,10 +6545,11 @@ async function handlePortalOverview(request, response, requestUrl, session) {
           supervisionStatus: item.supervisionStatus ?? '',
         }));
     }
-    paymentHistory = payments
-      .filter((item) => item.tenantId === client.tenantId && item.clientId === client.id)
-      .sort((left, right) => String(right.receivedAt).localeCompare(String(left.receivedAt)));
   }
+
+  const suggestedOfferingCents = settings?.suggestedOfferingCents ?? 0;
+  const totalSuggestedCents = pastSessionCount * suggestedOfferingCents;
+  const outstandingCents = Math.max(totalSuggestedCents - offeringStats.totalCents, 0);
 
   emitAudit(request, 'portal.overview.read', 'portal', client.id);
   writeJson(response, 200, {
@@ -6523,15 +6569,17 @@ async function handlePortalOverview(request, response, requestUrl, session) {
       ? {
         practiceName: settings.practiceName,
         financialMode: settings.financialMode,
+        suggestedOfferingCents: settings.suggestedOfferingCents ?? 0,
+        offeringMinistryNote: settings.offeringMinistryNote ?? '',
         contactPreferenceOptions: settings.contactPreferenceOptions ?? [],
         showPublicCounselorDirectory: Boolean(settings.showPublicCounselorDirectory),
       }
       : null,
     balances: {
-      total: normalizeCurrency(balanceItems.reduce((sum, item) => sum + normalizeCurrency(item.total), 0)),
-      paid: normalizeCurrency(balanceItems.reduce((sum, item) => sum + normalizeCurrency(item.amountPaid), 0)),
-      outstanding: normalizeCurrency(balanceItems.reduce((sum, item) => sum + normalizeCurrency(item.balance), 0)),
-      items: balanceItems,
+      total: normalizeCurrency(totalSuggestedCents),
+      paid: normalizeCurrency(offeringStats.totalCents),
+      outstanding: normalizeCurrency(outstandingCents),
+      items: paymentHistory,
     },
     paymentHistory,
     resources,
@@ -8024,6 +8072,152 @@ async function handlePortalResources(request, response, requestUrl, session) {
   telemetry.recordMutation('portal.resource.create');
   emitAudit(request, 'portal.resource.create', 'portal_resource', item.id);
   writeJson(response, 201, { item });
+}
+
+function rowToOffering(row) {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    clientId: row.client_id,
+    counselorId: row.counselor_id ?? null,
+    amountCents: Number(row.amount_cents ?? 0),
+    receivedOn: row.received_on,
+    note: row.note ?? null,
+    createdBy: row.created_by ?? null,
+    createdAt: row.created_at,
+  };
+}
+
+function summarizeOfferings(items) {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  const yearStart = `${now.getFullYear()}-01-01`;
+  const sum = (entries) => entries.reduce((acc, entry) => acc + Number(entry.amountCents ?? 0), 0);
+  const thisMonth = items.filter((item) => String(item.receivedOn) >= monthStart);
+  const thisYear = items.filter((item) => String(item.receivedOn) >= yearStart);
+  const totalCents = sum(items);
+  return {
+    thisMonthCents: sum(thisMonth),
+    yearToDateCents: sum(thisYear),
+    totalCents,
+    count: items.length,
+    averageCents: items.length ? Math.round(totalCents / items.length) : 0,
+  };
+}
+
+async function listOfferingsForTenant(tenantId, { clientId = '' } = {}) {
+  if (process.env.DB_NAME) {
+    const args = [tenantId];
+    let sql = 'SELECT * FROM offerings WHERE tenant_id = ?';
+    if (clientId) {
+      sql += ' AND client_id = ?';
+      args.push(clientId);
+    }
+    sql += ' ORDER BY received_on DESC, created_at DESC';
+    const [rows] = await pool.query(sql, args);
+    return rows.map(rowToOffering);
+  }
+
+  return offeringsRecords
+    .filter((item) => item.tenantId === tenantId)
+    .filter((item) => !clientId || item.clientId === clientId)
+    .sort((left, right) => String(right.receivedOn).localeCompare(String(left.receivedOn)));
+}
+
+async function summarizeOfferingsForTenant(tenantId, { clientId = '' } = {}) {
+  const items = await listOfferingsForTenant(tenantId, { clientId });
+  return summarizeOfferings(items);
+}
+
+async function createOfferingRecord(item) {
+  if (process.env.DB_NAME) {
+    await pool.query(
+      `INSERT INTO offerings
+        (id, tenant_id, client_id, counselor_id, amount_cents, received_on, note, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        item.id,
+        item.tenantId,
+        item.clientId,
+        item.counselorId,
+        item.amountCents,
+        item.receivedOn,
+        item.note,
+        item.createdBy,
+      ],
+    );
+    return item;
+  }
+
+  offeringsRecords.push(item);
+  return item;
+}
+
+async function handleOfferings(request, response, requestUrl, session) {
+  if (requireRole(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+  const role = callerRole(request, session);
+
+  if (request.method === 'GET') {
+    let clientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50);
+    if (role === 'client') {
+      const portalClient = await resolvePortalClient(request, response, clientId, session);
+      if (!portalClient) return;
+      clientId = portalClient.id;
+    }
+    const items = await listOfferingsForTenant(tenantId, { clientId });
+    emitAudit(request, 'offerings.list', 'offering', tenantId, session);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    if (role === 'client') {
+      writeJson(response, 403, { error: 'Insufficient permissions' });
+      return;
+    }
+    const payload = await readJsonBody(request);
+    const clientId = sanitizeStr(payload.clientId ?? '', 50);
+    if (!clientId) {
+      writeJson(response, 400, { error: 'clientId is required' });
+      return;
+    }
+    const receivedOn = sanitizeStr(payload.receivedOn ?? '', 10) || new Date().toISOString().slice(0, 10);
+    const amountCents = typeof payload.amountCents === 'number' && Number.isInteger(payload.amountCents) && payload.amountCents >= 0
+      ? payload.amountCents : 0;
+    const item = {
+      id: genId('off'),
+      tenantId,
+      clientId,
+      counselorId: sanitizeStr(payload.counselorId ?? '', 50) || null,
+      amountCents,
+      receivedOn,
+      note: sanitizeStr(payload.note ?? '', 500) || null,
+      createdBy: callerRole(request, session) || 'staff',
+      createdAt: new Date().toISOString(),
+    };
+    await createOfferingRecord(item);
+    telemetry.recordMutation('offerings.record');
+    emitAudit(request, 'offerings.record', 'offering', item.id, session);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleOfferingsSummary(request, response, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (requireRole(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+
+  const summary = await summarizeOfferingsForTenant(tenantId);
+
+  emitAudit(request, 'offerings.summary.read', 'offering', tenantId, session);
+  writeJson(response, 200, summary);
 }
 
 async function handleFaithOverview(request, response, requestUrl) {
@@ -10659,7 +10853,9 @@ function buildDefaultPortalSettings(tenantId = 'system') {
     allowCareRequests: true,
     allowSchedulingRequests: true,
     showPublicCounselorDirectory: false,
-    financialMode: 'billing',
+    financialMode: 'offerings',
+    suggestedOfferingCents: 12000,
+    offeringMinistryNote: 'Your gift helps sustain this counseling ministry and expand care for others.',
     contactPreferenceOptions: [...portalContactPreferenceOptions],
     defaultSignupFormKeys: [],
     createdAt: null,
@@ -10696,6 +10892,8 @@ function toPortalPublicConfig(settings) {
     allowSchedulingRequests: settings.allowSchedulingRequests,
     showPublicCounselorDirectory: settings.showPublicCounselorDirectory,
     financialMode: settings.financialMode,
+    suggestedOfferingCents: settings.suggestedOfferingCents ?? 0,
+    offeringMinistryNote: settings.offeringMinistryNote ?? '',
     contactPreferenceOptions: settings.contactPreferenceOptions,
   };
 }

@@ -46,7 +46,7 @@ const PORTAL_TAB_SURFACES = {
   appointments: 'portal.appointments',
   documents: 'portal.documents',
   counselor: 'portal.counselor',
-  financials: 'portal.financials',
+  financials: 'portal.giving',
   resources: 'portal.resources',
   dataRights: 'portal.data_rights',
 };
@@ -146,16 +146,6 @@ function documentStatusColor(status) {
     completed: 'green',
     assigned: 'yellow',
     in_progress: 'blue',
-  }[status] ?? 'gray';
-}
-
-function invoiceStatusColor(status) {
-  return {
-    paid: 'green',
-    partially_paid: 'yellow',
-    issued: 'blue',
-    draft: 'gray',
-    void: 'red',
   }[status] ?? 'gray';
 }
 
@@ -353,7 +343,6 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
   const openRequests = Array.isArray(overview?.appointmentRequests)
     ? overview.appointmentRequests.filter((item) => item.status === 'requested').length
     : 0;
-  const financialMode = overview?.settings?.financialMode ?? 'billing';
   const dataRightsSummary = portalData.dataRights.summary;
 
   async function reloadPortalData() {
@@ -769,7 +758,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
             <Tabs.Tab value="appointments">{t('portal.tab.appointments')}</Tabs.Tab>
             <Tabs.Tab value="documents">{t('portal.tab.documents')}</Tabs.Tab>
             <Tabs.Tab value="counselor">{t('portal.tab.counselor')}</Tabs.Tab>
-            <Tabs.Tab value="financials">{t('portal.tab.financials')}</Tabs.Tab>
+            <Tabs.Tab value="financials">{t('portal.tab.giving')}</Tabs.Tab>
             <Tabs.Tab value="resources">{t('portal.tab.resources')}</Tabs.Tab>
             <Tabs.Tab value="dataRights">{t('portal.tab.dataRights')}</Tabs.Tab>
           </Tabs.List>
@@ -796,9 +785,9 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                 </Card>
                 <Card withBorder radius="md" p="md">
                   <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                    {financialMode === 'offerings' ? t('portal.dashboard.suggestedOffering') : t('portal.dashboard.outstandingBalance')}
+                    {t('portal.dashboard.suggestedOffering')}
                   </Text>
-                  <Text fw={700} mt={8}>{formatCurrency(overview?.balances?.outstanding ?? 0)}</Text>
+                  <Text fw={700} mt={8}>{formatCurrency(overview?.settings?.suggestedOfferingCents ?? 0)}</Text>
                   <Text size="sm" c="dimmed" mt={4}>{openRequests} open appointment request(s).</Text>
                 </Card>
               </SimpleGrid>
@@ -1340,83 +1329,46 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
 
           <Tabs.Panel value="financials" pt="md">
             <Stack gap="md">
+              <Paper withBorder radius="md" p="md">
+                <Text c="dimmed" size="sm">{overview?.settings?.offeringMinistryNote || t('portal.giving.ministryNote')}</Text>
+                <Text fw={600} mt={4}>{t('portal.giving.suggestedPerSession', { amount: formatCurrency(overview?.settings?.suggestedOfferingCents ?? 0) })}</Text>
+              </Paper>
               <SimpleGrid cols={{ base: 1, md: 3 }}>
                 <Card withBorder radius="md" p="md">
-                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                    {financialMode === 'offerings' ? t('portal.financials.suggestedOffering') : t('portal.financials.outstandingBalance')}
-                  </Text>
-                  <Text fw={700} mt={8}>{formatCurrency(overview?.balances?.outstanding ?? 0)}</Text>
+                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>{t('portal.giving.suggestedOffering')}</Text>
+                  <Text fw={700} mt={8}>{formatCurrency(overview?.settings?.suggestedOfferingCents ?? 0)}</Text>
                 </Card>
                 <Card withBorder radius="md" p="md">
-                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                    {financialMode === 'offerings' ? t('portal.financials.receivedOfferings') : t('portal.financials.paymentsReceived')}
-                  </Text>
+                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>{t('portal.giving.receivedOfferings')}</Text>
                   <Text fw={700} mt={8}>{formatCurrency(overview?.balances?.paid ?? 0)}</Text>
                 </Card>
                 <Card withBorder radius="md" p="md">
-                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                    {financialMode === 'offerings' ? t('portal.financials.totalSuggested') : t('portal.financials.totalInvoiced')}
-                  </Text>
+                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>{t('portal.giving.totalSuggested')}</Text>
                   <Text fw={700} mt={8}>{formatCurrency(overview?.balances?.total ?? 0)}</Text>
                 </Card>
               </SimpleGrid>
 
-              <SimpleGrid cols={{ base: 1, lg: 2 }}>
-                <Paper withBorder radius="md" p="md">
-                  <Title order={4}>{financialMode === 'offerings' ? t('portal.financials.offeringsTitle') : t('portal.financials.invoicesTitle')}</Title>
-                  <Stack gap="sm" mt="md">
-                    {overview?.balances?.items?.length ? overview.balances.items.map((invoice) => (
-                      <Paper key={invoice.id} withBorder radius="sm" p="sm">
-                        <Group justify="space-between" align="flex-start">
-                          <Box>
-                            <Text fw={600}>{invoice.lineItems?.[0]?.description || 'Session charge'}</Text>
-                            <Text size="sm" c="dimmed">
-                              Issued {formatDate(invoice.issuedAt)}
-                              {invoice.dueAt ? ` • due ${formatDate(invoice.dueAt)}` : ''}
-                            </Text>
-                            <Text size="sm" mt={6}>
-                              {financialMode === 'offerings'
-                                ? `Suggested amount ${formatCurrency(invoice.total)}`
-                                : `Balance ${formatCurrency(invoice.balance)} of ${formatCurrency(invoice.total)}`}
-                            </Text>
-                          </Box>
-                          <Badge color={invoiceStatusColor(invoice.status)} variant="light">{invoice.status}</Badge>
-                        </Group>
-                      </Paper>
-                    )) : (
-                      <Text c="dimmed" size="sm">No billing items are available in the portal yet.</Text>
-                    )}
-                  </Stack>
-                </Paper>
-
-                <Paper withBorder radius="md" p="md">
-                  <Title order={4}>{financialMode === 'offerings' ? t('portal.financials.recentOfferingsTitle') : t('portal.financials.paymentsTitle')}</Title>
-                  <Stack gap="sm" mt="md">
-                    {overview?.paymentHistory?.length ? overview.paymentHistory.map((payment) => (
-                      <Paper key={payment.id} withBorder radius="sm" p="sm">
-                        <Group justify="space-between" align="flex-start">
-                          <Box>
-                            <Text fw={600}>{formatCurrency(payment.amount)}</Text>
-                            <Text size="sm" c="dimmed">
-                              {formatDateTime(payment.receivedAt || payment.paidAt)} • {(payment.paymentMethod || payment.method || 'payment').replaceAll('_', ' ')}
-                            </Text>
-                            {payment.reference ? <Text size="sm" mt={6}>Reference: {payment.reference}</Text> : null}
-                          </Box>
-                          <Badge variant="light">
-                            {financialMode === 'offerings' ? 'received' : 'posted'}
-                          </Badge>
-                        </Group>
-                      </Paper>
-                    )) : (
-                      <Text c="dimmed" size="sm">
-                        {financialMode === 'offerings'
-                          ? 'No offerings have been recorded yet.'
-                          : 'No payment history has been recorded yet.'}
-                      </Text>
-                    )}
-                  </Stack>
-                </Paper>
-              </SimpleGrid>
+              <Paper withBorder radius="md" p="md">
+                <Title order={4}>{t('portal.giving.recentOfferingsTitle')}</Title>
+                <Stack gap="sm" mt="md">
+                  {overview?.paymentHistory?.length ? overview.paymentHistory.map((payment) => (
+                    <Paper key={payment.id} withBorder radius="sm" p="sm">
+                      <Group justify="space-between" align="flex-start">
+                        <Box>
+                          <Text fw={600}>{formatCurrency(payment.amount)}</Text>
+                          <Text size="sm" c="dimmed">
+                            {formatDateTime(payment.receivedAt || payment.paidAt)} • {(payment.paymentMethod || payment.method || 'offering').replaceAll('_', ' ')}
+                          </Text>
+                          {payment.reference ? <Text size="sm" mt={6}>Reference: {payment.reference}</Text> : null}
+                        </Box>
+                        <Badge variant="light">received</Badge>
+                      </Group>
+                    </Paper>
+                  )) : (
+                    <Text c="dimmed" size="sm">No offerings have been recorded yet.</Text>
+                  )}
+                </Stack>
+              </Paper>
             </Stack>
           </Tabs.Panel>
 

@@ -8,7 +8,7 @@ export const SURFACE_DEFINITIONS = Object.freeze([
   { id: 'workspace_studio', kind: 'view' },
   { id: 'clinical', kind: 'view' },
   { id: 'documents', kind: 'view' },
-  { id: 'billing', kind: 'view' },
+  { id: 'offerings', kind: 'view' },
   { id: 'portal', kind: 'view' },
   { id: 'faith', kind: 'view' },
   { id: 'portal.dashboard', kind: 'tab' },
@@ -16,7 +16,7 @@ export const SURFACE_DEFINITIONS = Object.freeze([
   { id: 'portal.appointments', kind: 'tab' },
   { id: 'portal.documents', kind: 'tab' },
   { id: 'portal.counselor', kind: 'tab' },
-  { id: 'portal.financials', kind: 'tab' },
+  { id: 'portal.giving', kind: 'tab' },
   { id: 'portal.resources', kind: 'tab' },
   { id: 'portal.data_rights', kind: 'tab' },
 
@@ -25,7 +25,6 @@ export const SURFACE_DEFINITIONS = Object.freeze([
   { id: 'monitor', kind: 'page' },
 
   { id: 'client.demographics', kind: 'tab' },
-  { id: 'client.insurance', kind: 'tab' },
   { id: 'client.contacts', kind: 'tab' },
   { id: 'client.clinical', kind: 'tab' },
   { id: 'client.diagnoses', kind: 'tab' },
@@ -48,7 +47,7 @@ export const SURFACE_DEFINITIONS = Object.freeze([
   { id: 'studio.documents', kind: 'tab' },
   { id: 'studio.clients', kind: 'tab' },
   { id: 'studio.appointments', kind: 'tab' },
-  { id: 'studio.billing', kind: 'tab' },
+  { id: 'studio.offerings', kind: 'tab' },
   { id: 'studio.portal', kind: 'tab' },
 
   { id: 'scheduling.appointments', kind: 'tab' },

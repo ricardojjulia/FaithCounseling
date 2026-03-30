@@ -403,17 +403,6 @@ function PortalSettingsSection({
           />
         </SimpleGrid>
 
-        <Select
-          label="Financial Presentation"
-          data={[
-            { value: 'billing', label: 'Billing balances and payments' },
-            { value: 'offerings', label: 'Voluntary offerings' },
-          ]}
-          value={settingsDraft.financialMode ?? 'billing'}
-          onChange={(value) => onSettingsChange('financialMode', value ?? 'billing')}
-          maw={360}
-        />
-
         <Group gap="lg" wrap="wrap">
           <Switch
             label="Show Create Account"
@@ -903,7 +892,9 @@ export default function PortalTab({ onSchedulePortalRequest }) {
     allowCareRequests: true,
     allowSchedulingRequests: true,
     showPublicCounselorDirectory: false,
-    financialMode: 'billing',
+    financialMode: 'offerings',
+    suggestedOfferingCents: 12000,
+    offeringMinistryNote: 'Your gift helps sustain this counseling ministry and expand care for others.',
     contactPreferenceOptions: ['email', 'sms', 'phone', 'portal_message'],
     defaultSignupFormKeys: [],
   });

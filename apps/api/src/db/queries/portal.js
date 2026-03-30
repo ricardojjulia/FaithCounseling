@@ -174,7 +174,9 @@ function rowToPortalSettings(row) {
     allowCareRequests: Boolean(row.allow_care_requests),
     allowSchedulingRequests: Boolean(row.allow_scheduling_requests),
     showPublicCounselorDirectory: Boolean(row.show_public_counselor_directory),
-    financialMode: row.financial_mode ?? 'billing',
+    financialMode: row.financial_mode ?? 'offerings',
+    suggestedOfferingCents: Number(row.suggested_offering_cents ?? 0),
+    offeringMinistryNote: row.offering_ministry_note ?? '',
     contactPreferenceOptions: parseJsonArray(row.contact_preference_options),
     defaultSignupFormKeys: parseJsonArray(row.default_signup_form_keys),
     createdAt: row.created_at,
@@ -321,6 +323,8 @@ export async function upsertPortalSettings({
   allowSchedulingRequests,
   showPublicCounselorDirectory,
   financialMode,
+  suggestedOfferingCents,
+  offeringMinistryNote,
   contactPreferenceOptions,
   defaultSignupFormKeys,
 }) {
@@ -334,8 +338,8 @@ export async function upsertPortalSettings({
     `INSERT INTO portal_settings
       (id, tenant_id, practice_name, logo_url, brand_color, accent_color, welcome_headline, welcome_message, help_message,
        support_email_enc, registration_mode, allow_create_account, allow_care_requests, allow_scheduling_requests,
-       show_public_counselor_directory, financial_mode, contact_preference_options, default_signup_form_keys)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       show_public_counselor_directory, financial_mode, suggested_offering_cents, offering_ministry_note, contact_preference_options, default_signup_form_keys)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        practice_name = VALUES(practice_name),
        logo_url = VALUES(logo_url),
@@ -351,6 +355,8 @@ export async function upsertPortalSettings({
        allow_scheduling_requests = VALUES(allow_scheduling_requests),
        show_public_counselor_directory = VALUES(show_public_counselor_directory),
        financial_mode = VALUES(financial_mode),
+       suggested_offering_cents = VALUES(suggested_offering_cents),
+       offering_ministry_note = VALUES(offering_ministry_note),
        contact_preference_options = VALUES(contact_preference_options),
        default_signup_form_keys = VALUES(default_signup_form_keys)`,
     [
@@ -370,6 +376,8 @@ export async function upsertPortalSettings({
       allowSchedulingRequests ? 1 : 0,
       showPublicCounselorDirectory ? 1 : 0,
       financialMode,
+      suggestedOfferingCents ?? 0,
+      offeringMinistryNote ?? '',
       JSON.stringify(contactPreferenceOptions ?? []),
       JSON.stringify(defaultSignupFormKeys ?? []),
     ],

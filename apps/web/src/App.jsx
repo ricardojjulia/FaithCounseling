@@ -16,6 +16,7 @@ import WorkspaceStudioPage from './components/WorkspaceStudio/WorkspaceStudioPag
 import SchedulingPage from './components/SchedulingPage.jsx';
 import DocumentsPage from './components/Documents/DocumentsPage.jsx';
 import ClientPortalPage from './components/Portal/ClientPortalPage.jsx';
+import OfferingsPage from './components/Offerings/OfferingsPage.jsx';
 import { csrfHeaders } from './lib/csrf.js';
 import { fetchOperationsSummary } from './lib/clientApi.js';
 import { frontendTelemetry } from './lib/frontendTelemetry.js';
@@ -350,7 +351,8 @@ export default function App() {
   const showWorkspaceStudio  = currentView === 'workspace-studio';
   const showDocuments        = currentView === 'documents';
   const showPortal           = currentView === 'portal';
-  const showFallbackWorkspace = !showDashboard && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal;
+  const showOfferings        = currentView === 'offerings';
+  const showFallbackWorkspace = !showDashboard && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal && !showOfferings;
   const topLevelSurfaceId = !isAuthenticated
     ? 'auth'
     : selectedClientId || selectedCounselorId
@@ -376,7 +378,7 @@ export default function App() {
   useSurfaceTelemetry(topLevelSurfaceId, {
     surfaceKind: 'view',
     workflow: 'navigation',
-    emptyState: ['clinical', 'billing', 'faith'].includes(topLevelSurfaceId) ? 'placeholder' : null,
+    emptyState: ['clinical', 'offerings', 'faith'].includes(topLevelSurfaceId) ? 'placeholder' : null,
   });
 
   useEffect(() => {
@@ -498,6 +500,8 @@ export default function App() {
           />
         ) : showPortal ? (
           <ClientPortalPage currentUser={currentUser} clients={clientsData.items} onSignOut={handleSignOut} />
+        ) : showOfferings ? (
+          <OfferingsPage clients={clientsData.items} />
         ) : (
           <>
             {showDashboard ? <Metrics data={metricsData} currentUser={currentUser} /> : null}

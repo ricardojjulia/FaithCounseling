@@ -4,13 +4,14 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## At a Glance
 
-- Version: `5.1.0`
+- Version: `5.2.0`
 - Status: `Beta Ready`
-- Release summary: [docs/v5.0.0-RELEASE-SUMMARY.md](docs/v5.0.0-RELEASE-SUMMARY.md)
+- Release summary: [docs/v5.2.0-RELEASE-SUMMARY.md](docs/v5.2.0-RELEASE-SUMMARY.md)
 - UI Baseline agent run report: [docs/UI-BASELINE-AGENT-RUN-2026-03-30.md](docs/UI-BASELINE-AGENT-RUN-2026-03-30.md)
 - Operations Dashboard summary: [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
 - Change log: [docs/change-log.md](docs/change-log.md)
 - Spanish translation report: [docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md](docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md)
+- Product plans overview: [docs/PRODUCT-PLANS-OVERVIEW.md](docs/PRODUCT-PLANS-OVERVIEW.md)
 
 ## What This Includes
 
@@ -21,23 +22,26 @@ Christian counseling practice management SaaS for solo counselors, group practic
 - dedicated Clients workspace for client maintenance, lookup, filtering, quick edit, and direct chart/scheduling handoff
 - scheduling with appointments, waitlist, reminders, recurring workflows, and utilization support
 - client and counselor management with richer portal, profile, and operational views
-- authenticated client portal with onboarding, documents, uploads, data rights, counselor, financial, and resources surfaces
+- authenticated client portal with onboarding, documents, uploads, data rights, counselor, giving, and resources surfaces
 - electronic documents library with 39 forms spanning intake, consent, assessment, treatment planning, worksheets, and faith-integrated tools
 - monitoring, audit, security, and launch-readiness coverage across the main visible surfaces
 
 ## Current Release Focus
 
-The current build turns the operations and client-maintenance split back into a first-class workflow boundary. The Operations Dashboard now owns the real operational summary, drill-down queues, alert thresholds, and 7-day trends, while the Clients navigation surface is once again a dedicated workspace for client lookup, maintenance, quick edits, and direct handoff into the detailed multi-tab client record. Existing-client `Edit` now returns to the full record with demographics, insurance, contacts, clinical, diagnoses, faith, and legal tabs instead of dropping staff into the lightweight modal. The monitor page now separates current, recent, and historical surface issues, and the top bar titles track the active workspace instead of defaulting back to the dashboard title.
+The current build replaces the billing model with a faith-based voluntary offering system. The Billing navigation item is now Offerings; the client portal Financials tab is now Giving; the Insurance client-detail tab has been removed from the UI (schema data preserved). A globally configured suggested offering amount and ministry note replace invoice and balance concepts. Staff can record offerings from the Offerings workspace, and clients see their giving history and the ministry's suggested amount in the portal. A comprehensive product plans overview now documents all active and delivered plans in `PLANS/`.
 
 ## Key Docs
 
-- Release summary: [docs/v5.0.0-RELEASE-SUMMARY.md](docs/v5.0.0-RELEASE-SUMMARY.md)
+- Release summary: [docs/v5.2.0-RELEASE-SUMMARY.md](docs/v5.2.0-RELEASE-SUMMARY.md)
 - Operations Dashboard summary: [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
 - Operations Dashboard implementation log: [docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md](docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md)
 - Spanish translation report: [docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md](docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md)
+- Product plans overview: [docs/PRODUCT-PLANS-OVERVIEW.md](docs/PRODUCT-PLANS-OVERVIEW.md)
 - Operations Dashboard plan: [PLANS/OPERATIONS-DASHBOARD-UPGRADE.md](PLANS/OPERATIONS-DASHBOARD-UPGRADE.md)
 - Form library plan: [PLANS/FORM-LIBRARY-EXPANSION.md](PLANS/FORM-LIBRARY-EXPANSION.md)
 - Portal plan: [PLANS/CLIENT-PORTAL-EXPANSION.md](PLANS/CLIENT-PORTAL-EXPANSION.md)
+- Calendar/scheduling plan: [PLANS/CALENDAR.md](PLANS/CALENDAR.md)
+- Schedule ops plan: [PLANS/ScheduleOps.md](PLANS/ScheduleOps.md)
 - Monitoring baseline: [PLANS/FULL-SURFACE-MONITORING.md](PLANS/FULL-SURFACE-MONITORING.md)
 - Security baseline: [PLANS/FULL-SECURITY-AND-AUDITING.md](PLANS/FULL-SECURITY-AND-AUDITING.md)
 - UI Baseline run report: [docs/UI-BASELINE-AGENT-RUN-2026-03-30.md](docs/UI-BASELINE-AGENT-RUN-2026-03-30.md)
@@ -53,7 +57,10 @@ Latest baseline run report:
 To capture a new baseline:
 
 ```bash
-node tests/e2e/ui-baseline.mjs
+node --check apps/api/src/index.js
+node --check apps/api/src/db/queries/portal.js
+pnpm lint
+pnpm --filter @faith/web build
 ```
 
 The agent requires the web and API servers to be running. See `start-servers.js` or `ops/start-all.mjs` for the standard dev startup.
@@ -74,6 +81,31 @@ pnpm agent:translation:run
 ```
 
 The service listens on `http://127.0.0.1:8098` by default.
+
+## v5.2.0 — Offerings Model — Voluntary Giving System (March 30, 2026)
+
+### v5.2.0 Overview
+
+This release replaces the billing model with a faith-based voluntary offering system. The Billing sidebar entry is now Offerings, the portal Financials tab is now Giving, and the Insurance client tab has been removed from the UI (schema data is preserved). A practice-wide suggested offering amount is set once in Workspace Studio and shown to clients in the portal alongside a customisable ministry note. Staff can record individual offerings from the main Offerings workspace. All telemetry surface IDs, i18n keys, and governance documentation have been updated to match.
+
+### v5.2.0 — What Changed
+
+- renamed Billing navigation item to Offerings throughout (sidebar, top bar, i18n, surfaces)
+- renamed Financials portal tab to Giving; rewrote giving panel with ministry note, suggested amount, three stat cards, and recent offerings list
+- removed Insurance tab from client detail (UI only; schema and data are preserved)
+- added `offerings` table and `GET/POST /v1/offerings` + `GET /v1/offerings/summary` API routes
+- added `suggested_offering_cents` and `offering_ministry_note` to `portal_settings`
+- created `OfferingsPage.jsx` — main workspace for recording and reviewing offerings
+- created `OfferingsTab.jsx` — Workspace Studio tab for setting global suggested amount
+- hard-locked portal financial mode to `'offerings'` (Financial Presentation toggle removed from Studio)
+- updated `PLANS/FULL-SURFACE-MONITORING.md` surface inventory and `docs/domain-model.md` permissions and entities
+- added `docs/PRODUCT-PLANS-OVERVIEW.md` — comprehensive summary of all planning files
+
+### v5.2.0 — Validation
+
+```bash
+node tests/e2e/ui-baseline.mjs
+```
 
 ## v5.1.0 — UI Baseline & Regression Verification Agent (March 30, 2026)
 

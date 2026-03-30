@@ -18,7 +18,7 @@ function resolveTopBarCopy(currentView, isClient, t) {
     documents: 'documents',
     'workspace-studio': 'workspaceStudio',
     clinical: 'clinical',
-    billing: 'billing',
+    offerings: 'offerings',
     portal: 'portal',
     faith: 'faith',
   };

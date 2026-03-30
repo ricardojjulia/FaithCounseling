@@ -9,7 +9,7 @@
 - Documents and Forms
 - Assessments and Inventories
 - Scheduling
-- Billing
+- Offerings (voluntary giving — replaces billing model)
 - Client Portal
 - Audit and Compliance
 
@@ -54,14 +54,13 @@
 - `AssessmentTemplate`: structured instrument definition, scoring rules, version
 - `AssessmentResponse`: subject, answers, calculated scores, reviewer status
 
-### Scheduling and billing
+### Scheduling and offerings
 
 - `AvailabilityTemplate`: recurring availability rules
-- `AppointmentType`: duration, location mode, billing defaults
+- `AppointmentType`: duration, location mode, suggested offering amount
 - `Appointment`: client, counselor, location, remote flag, status, reminders
-- `Invoice`: line items, totals, status, due dates
-- `Superbill`: appointment grouping, diagnosis metadata, status
-- `Payment`: source, amount, settlement status
+- `Offering`: voluntary contribution record — client, counselor, date received, amount in cents, optional note
+- `PortalSettings.suggestedOfferingCents`: global suggested giving amount shown to clients in the portal
 
 ### Portal and communication
 
@@ -77,15 +76,15 @@
 
 ## Permissions Model
 
-| Role | Practice Admin | Staff Admin | Client Chart | Scheduling | Billing | Portal Admin | Platform Ops |
+| Role | Practice Admin | Staff Admin | Client Chart | Scheduling | Offerings | Portal Admin | Platform Ops |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Platform admin | No tenant default access | No | No | No | No | No | Yes |
 | Practice owner | Yes | Yes | Yes | Yes | Yes | Yes | No |
 | Practice admin | Yes | Yes | Limited by tenant | Yes | Optional | Optional | No |
-| Counselor | Limited | No | Assigned clients | Own calendar | Optional | No | No |
+| Counselor | Limited | No | Assigned clients | Own calendar | Record only | No | No |
 | Intern or supervisee | No | No | Assigned clients with supervision rules | Own calendar | No | No | No |
-| Scheduler or biller | Limited | No | Minimum necessary | Yes | Yes | No | No |
-| Client | No | No | Portal-scoped only | Requests and own appointments | Own balances only | Self only | No |
+| Scheduler or biller | Limited | No | Minimum necessary | Yes | Record only | No | No |
+| Client | No | No | Portal-scoped only | Requests and own appointments | View suggested amount | Self only | No |
 
 ## Design Constraints
 

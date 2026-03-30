@@ -74,7 +74,7 @@ Required boundary rules:
 - `workspace_studio`
 - `clinical`
 - `documents`
-- `billing`
+- `offerings`
 - `portal`
 - `faith`
 - `audit_intelligence`
@@ -92,7 +92,7 @@ Required boundary rules:
 - `portal.appointments`
 - `portal.documents`
 - `portal.counselor`
-- `portal.financials`
+- `portal.giving`
 - `portal.resources`
 - `portal.data_rights`
 
@@ -107,7 +107,6 @@ Required boundary rules:
 ### Client detail tabs
 
 - `client.demographics`
-- `client.insurance`
 - `client.contacts`
 - `client.clinical`
 - `client.diagnoses`
@@ -134,7 +133,7 @@ Required boundary rules:
 - `studio.documents`
 - `studio.clients`
 - `studio.appointments`
-- `studio.billing`
+- `studio.offerings`
 - `studio.portal`
 
 ### Scheduling subviews

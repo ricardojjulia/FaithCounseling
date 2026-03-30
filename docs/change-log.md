@@ -2,6 +2,49 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v5.2.0 — Offerings Model — Voluntary Giving System
+
+**Date:** March 30, 2026
+**Type:** Feature / Model change
+
+### Summary
+
+Replaces the billing model with a faith-based voluntary offering system throughout the application. The Billing nav item becomes Offerings, the Financials portal tab becomes Giving, and the Insurance client tab is removed from the UI (schema data preserved). A globally configured suggested offering amount and ministry note replace invoice and balance concepts. New API routes handle recording and summarising offerings. New components provide the full Offerings workspace and a Workspace Studio Offerings tab for practice-level settings.
+
+### Added
+
+- `apps/web/src/components/Offerings/OfferingsPage.jsx` — full Offerings workspace with summary cards, offering history list, and Record Offering modal
+- `apps/web/src/components/WorkspaceStudio/tabs/OfferingsTab.jsx` — Workspace Studio tab to set the global suggested offering amount and view aggregate summary
+- `apps/api/src/index.js` — `GET/POST /v1/offerings` and `GET /v1/offerings/summary` routes
+- `apps/api/src/db/schema.sql` — `offerings` table; `suggested_offering_cents` and `offering_ministry_note` columns on `portal_settings`
+- `docs/v5.2.0-RELEASE-SUMMARY.md` — full release summary
+- `docs/PRODUCT-PLANS-OVERVIEW.md` — new file summarising all PLANS files
+
+### Changed
+
+- `apps/api/data/i18n/en.json` — renamed `nav.billing` → `nav.offerings`, `studio.tab.billing` → `studio.tab.offerings`, `portal.tab.financials` → `portal.tab.giving`; replaced `portal.financials.*` block with `portal.giving.*`; removed `client.tab.insurance`; added `offerings.*` and `topbar.offerings.*` key blocks
+- `packages/telemetry/src/surfaces.js` — `billing` → `offerings`, `portal.financials` → `portal.giving`, removed `client.insurance`, `studio.billing` → `studio.offerings`
+- `apps/web/src/components/Sidebar.jsx` — `billing` → `offerings`
+- `apps/web/src/components/TopBar.jsx` — `billing` → `offerings` in viewKeyMap
+- `apps/web/src/App.jsx` — added OfferingsPage, `showOfferings` branch, updated emptyState
+- `apps/web/src/components/ClientDetail/ClientDetailTabs.jsx` — removed Insurance tab (import, TABS entry, surface map, panel)
+- `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx` — wired OfferingsTab, renamed `billing` → `offerings` in STUDIO_TABS
+- `apps/web/src/components/WorkspaceStudio/tabs/PortalTab.jsx` — removed Financial Presentation mode Select
+- `apps/web/src/components/Portal/ClientPortalPage.jsx` — renamed surface map entry, updated tab label, rewrote giving panel with ministry note + suggested amount + stat cards
+- `PLANS/FULL-SURFACE-MONITORING.md` — updated surface inventory for all four renamed/removed surfaces
+- `docs/domain-model.md` — Billing module → Offerings; updated entities, permissions table
+
+### Validation
+
+```bash
+node --check apps/api/src/index.js
+node --check apps/api/src/db/queries/portal.js
+pnpm lint
+pnpm --filter @faith/web build
+```
+
+---
+
 ## v5.1.0 — UI Baseline & Regression Verification Agent
 
 **Date:** March 30, 2026
