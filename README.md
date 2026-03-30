@@ -2,10 +2,33 @@
 
 Christian counseling practice management SaaS for solo counselors, group practices, and multi-location clinics.
 
-## Version
+## At a Glance
 
-- Current release: `4.7.0`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh + versioned web asset delivery + UI enhancements across main shell, monitoring, and operations surfaces + desktop sidebar toggle fix + sidebar options icon refresh + schema fixes for availability_overrides and appointment_series + utilization GROUP BY fix + appointment identity integrity for renamed counselors and clients + repaired Workspace Studio document assignment workflow + synced tracked web build artifacts + lint-clean documentation and generated monitoring outputs + a 39-form Electronic Documents library spanning intake, consent, assessments, treatment planning, therapeutic worksheets, and faith-integrated tools + deeper public portal onboarding with structured intake and instant activation support + authenticated client portal completion across profile, appointments, documents, uploads, data rights, counselor, financials, and resources + localized portal auth and client shell + policy-aware portal deletion review and fulfillment + validated security, localization, launch-readiness, and expanded Documents coverage)
+- Version: `4.7.0`
+- Status: `Beta Ready`
+- Release summary: [docs/v4.7.0-RELEASE-SUMMARY.md](docs/v4.7.0-RELEASE-SUMMARY.md)
+- Change log: [docs/change-log.md](docs/change-log.md)
+
+## What This Includes
+
+- practice operations workspace for counselors, managers, and admins
+- scheduling with appointments, waitlist, reminders, recurring workflows, and utilization support
+- client and counselor management with richer portal, profile, and operational views
+- authenticated client portal with onboarding, documents, uploads, data rights, counselor, financial, and resources surfaces
+- electronic documents library with 39 forms spanning intake, consent, assessment, treatment planning, worksheets, and faith-integrated tools
+- monitoring, audit, security, and launch-readiness coverage across the main visible surfaces
+
+## Current Release Focus
+
+`v4.7.0` expands the Documents module into a fuller counseling toolkit. The system now includes intake and consent paperwork, deeper clinical assessments, treatment-planning templates, therapeutic worksheets, and additional Christian counseling reflection forms, all powered by the shared browser-based form engine.
+
+## Key Docs
+
+- Release summary: [docs/v4.7.0-RELEASE-SUMMARY.md](docs/v4.7.0-RELEASE-SUMMARY.md)
+- Form library plan: [PLANS/FORM-LIBRARY-EXPANSION.md](PLANS/FORM-LIBRARY-EXPANSION.md)
+- Portal plan: [PLANS/CLIENT-PORTAL-EXPANSION.md](PLANS/CLIENT-PORTAL-EXPANSION.md)
+- Monitoring baseline: [PLANS/FULL-SURFACE-MONITORING.md](PLANS/FULL-SURFACE-MONITORING.md)
+- Security baseline: [PLANS/FULL-SECURITY-AND-AUDITING.md](PLANS/FULL-SECURITY-AND-AUDITING.md)
 
 ## Translation Guardian Agent
 
