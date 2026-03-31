@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from '@mantine/form';
+import { DatePickerInput, MonthPickerInput } from '@mantine/dates';
 import {
   Alert,
   Badge,
+  Box,
   Button,
   Card,
   Checkbox,
@@ -61,8 +63,42 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function todayMonthKey() {
+  return todayKey().slice(0, 7);
+}
+
 function detectTimezone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
+}
+
+function padDatePart(value) {
+  return String(value).padStart(2, '0');
+}
+
+function toDatePickerValue(day) {
+  if (!day) return null;
+  const date = new Date(`${day}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toMonthPickerValue(monthKey) {
+  if (!monthKey) return null;
+  const date = new Date(`${monthKey}-01T12:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toDayKey(value) {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
+}
+
+function toMonthKey(value) {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}`;
 }
 
 function toLocalDateTimeInputValue(iso) {
@@ -88,6 +124,16 @@ function formatDateLabel(day) {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function formatMonthLabel(monthKey) {
+  if (!monthKey) return 'Selected month';
+  const date = new Date(`${monthKey}-01T12:00:00`);
+  if (Number.isNaN(date.getTime())) return monthKey;
+  return date.toLocaleDateString(undefined, {
+    month: 'long',
     year: 'numeric',
   });
 }
@@ -393,9 +439,17 @@ function AppointmentComposer({
   );
 }
 
-function AppointmentTable({ appointments, timezone, onOpenClient, onEdit, onDelete, onStatusChange }) {
+function AppointmentTable({
+  appointments,
+  timezone,
+  onOpenClient,
+  onEdit,
+  onDelete,
+  onStatusChange,
+  emptyMessage = 'No appointments scheduled for this day.',
+}) {
   if (!appointments.length) {
-    return <Text c="dimmed" fz="sm">No appointments scheduled for this day.</Text>;
+    return <Text c="dimmed" fz="sm">{emptyMessage}</Text>;
   }
 
   return (
@@ -526,6 +580,42 @@ function PracticeOperationsView({ calendars, locations, timezone }) {
           )) : <Text c="dimmed" fz="sm">No location activity for this day.</Text>}
         </SimpleGrid>
       </Paper>
+    </Stack>
+  );
+}
+
+function MonthlyAgenda({ appointments, timezone, onOpenClient, onEdit, onJumpToDay }) {
+  if (!appointments.length) {
+    return <Text c="dimmed" fz="sm">No appointments scheduled for this month.</Text>;
+  }
+
+  const grouped = appointments.reduce((acc, appointment) => {
+    const key = appointment.startsAt?.slice(0, 10) || 'unknown';
+    if (!acc.has(key)) acc.set(key, []);
+    acc.get(key).push(appointment);
+    return acc;
+  }, new Map());
+
+  return (
+    <Stack gap="md">
+      {[...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([day, dayItems]) => (
+        <Paper key={day} withBorder radius="md" p="md">
+          <Group justify="space-between" mb="sm">
+            <div>
+              <Text fw={600}>{formatDateLabel(day)}</Text>
+              <Text c="dimmed" fz="sm">{dayItems.length} appointments</Text>
+            </div>
+            <Button size="xs" variant="default" onClick={() => onJumpToDay?.(day)}>Open day</Button>
+          </Group>
+          <AppointmentTable
+            appointments={dayItems}
+            timezone={timezone}
+            onOpenClient={onOpenClient}
+            onEdit={onEdit}
+            emptyMessage="No appointments scheduled for this day."
+          />
+        </Paper>
+      ))}
     </Stack>
   );
 }
@@ -1211,7 +1301,9 @@ export default function SchedulingPage({
   const timezone = detectTimezone();
   const canManageAll = GLOBAL_SCHEDULING_ROLES.has(currentUser?.role || '');
   const [activeTab, setActiveTab] = useState('appointments');
+  const [scheduleScope, setScheduleScope] = useState('day');
   const [selectedDay, setSelectedDay] = useState(todayKey());
+  const [selectedMonth, setSelectedMonth] = useState(todayMonthKey());
   const [view, setView] = useState(initialView || (canManageAll ? 'practice' : 'counselor'));
   const [composerOpen, setComposerOpen] = useState(initialComposerOpen);
   const [composerMode, setComposerMode] = useState('create');
@@ -1222,6 +1314,7 @@ export default function SchedulingPage({
   const [appointments, setAppointments] = useState([]);
   const [appointmentTypes, setAppointmentTypes] = useState([]);
   const [staff, setStaff] = useState([]);
+  const [didAutoAlignDay, setDidAutoAlignDay] = useState(false);
   const [calendarPayload, setCalendarPayload] = useState({
     counselorCalendars: [],
     locationCalendars: [],
@@ -1378,8 +1471,8 @@ export default function SchedulingPage({
     [counselors, selectedCounselorId],
   );
 
-  const dayAppointments = useMemo(() => (
-    appointments.filter((appointment) => appointment.startsAt?.slice(0, 10) === selectedDay)
+  const scopedAppointments = useMemo(() => (
+    appointments
       .filter((appointment) => (
         !selectedCounselorId
         || view !== 'counselor'
@@ -1387,14 +1480,61 @@ export default function SchedulingPage({
         || appointment.counselorName === selectedCounselorName
       ))
       .sort((left, right) => left.startsAt.localeCompare(right.startsAt))
-  ), [appointments, selectedCounselorId, selectedCounselorName, selectedDay, view]);
+  ), [appointments, selectedCounselorId, selectedCounselorName, view]);
+
+  const appointmentDayKeys = useMemo(() => (
+    new Set(scopedAppointments.map((appointment) => appointment.startsAt?.slice(0, 10)).filter(Boolean))
+  ), [scopedAppointments]);
+
+  const dayAppointments = useMemo(() => (
+    scopedAppointments.filter((appointment) => appointment.startsAt?.slice(0, 10) === selectedDay)
+  ), [scopedAppointments, selectedDay]);
+
+  const monthAppointments = useMemo(() => (
+    scopedAppointments.filter((appointment) => appointment.startsAt?.slice(0, 7) === selectedMonth)
+  ), [scopedAppointments, selectedMonth]);
+
+  const visibleAppointments = scheduleScope === 'month' ? monthAppointments : dayAppointments;
+
+  useEffect(() => {
+    if (loading || error || didAutoAlignDay) return;
+    if (selectedDay !== todayKey()) {
+      setDidAutoAlignDay(true);
+      return;
+    }
+    if (!scopedAppointments.length) {
+      setDidAutoAlignDay(true);
+      return;
+    }
+
+    const hasAppointmentsOnSelectedDay = scopedAppointments.some((appointment) => appointment.startsAt?.slice(0, 10) === selectedDay);
+    if (hasAppointmentsOnSelectedDay) {
+      setDidAutoAlignDay(true);
+      return;
+    }
+
+    const nextAppointmentDay = scopedAppointments
+      .map((appointment) => appointment.startsAt?.slice(0, 10) || null)
+      .filter(Boolean)
+      .filter((day) => day > selectedDay)
+      .sort()[0];
+
+    if (!nextAppointmentDay) {
+      setDidAutoAlignDay(true);
+      return;
+    }
+
+    setDidAutoAlignDay(true);
+    setSelectedMonth(nextAppointmentDay.slice(0, 7));
+    setSelectedDay(nextAppointmentDay);
+  }, [didAutoAlignDay, error, loading, scopedAppointments, selectedDay]);
 
   const metrics = useMemo(() => {
-    const scheduled = dayAppointments.filter((appointment) => appointment.status === 'scheduled').length;
-    const remote = dayAppointments.filter((appointment) => appointment.remoteSession).length;
-    const counselorsCount = new Set(dayAppointments.map((appointment) => appointment.counselorId || appointment.counselorName)).size;
-    return { total: dayAppointments.length, scheduled, remote, counselors: counselorsCount };
-  }, [dayAppointments]);
+    const scheduled = visibleAppointments.filter((appointment) => appointment.status === 'scheduled').length;
+    const remote = visibleAppointments.filter((appointment) => appointment.remoteSession).length;
+    const counselorsCount = new Set(visibleAppointments.map((appointment) => appointment.counselorId || appointment.counselorName)).size;
+    return { total: visibleAppointments.length, scheduled, remote, counselors: counselorsCount };
+  }, [visibleAppointments]);
 
   const filteredCounselorCalendars = useMemo(() => {
     if (!selectedCounselorId || view !== 'counselor') return calendarPayload.counselorCalendars;
@@ -1407,7 +1547,7 @@ export default function SchedulingPage({
   }, [calendarPayload.availability, selectedCounselorId, view]);
 
   const activeSchedulingSurface = activeTab === 'appointments'
-    ? `scheduling.${view}`
+    ? (scheduleScope === 'month' ? 'scheduling.month' : `scheduling.${view}`)
     : `scheduling.${activeTab}`;
   const emptyState = activeTab !== 'appointments'
     ? null
@@ -1415,7 +1555,7 @@ export default function SchedulingPage({
       ? null
       : error
         ? null
-        : dayAppointments.length === 0
+        : visibleAppointments.length === 0
           ? 'empty'
           : null;
 
@@ -1489,12 +1629,65 @@ export default function SchedulingPage({
 
             <Paper withBorder radius="md" p="md">
               <Group align="flex-end" gap="sm" wrap="wrap">
-                <TextInput
-                  label="Day"
-                  type="date"
-                  value={selectedDay}
-                  onChange={(event) => setSelectedDay(event.currentTarget.value)}
+                <Select
+                  label="Scope"
+                  data={[
+                    { value: 'day', label: 'Day' },
+                    { value: 'month', label: 'Month' },
+                  ]}
+                  value={scheduleScope}
+                  onChange={(value) => setScheduleScope(value || 'day')}
+                  w={140}
                 />
+                <Box maw={280}>
+                  <DatePickerInput
+                    label="Day"
+                    value={toDatePickerValue(selectedDay)}
+                    onChange={(value) => {
+                      const nextDay = toDayKey(value);
+                      if (!nextDay) return;
+                      setDidAutoAlignDay(true);
+                      setSelectedDay(nextDay);
+                      setSelectedMonth(nextDay.slice(0, 7));
+                      setScheduleScope('day');
+                    }}
+                    valueFormat="MM/DD/YYYY"
+                    renderDay={(date) => {
+                      const day = date.getDate();
+                      const dayKey = toDayKey(date);
+                      const hasAppointments = appointmentDayKeys.has(dayKey);
+                      return (
+                        <Box pos="relative" w={30} h={30}>
+                          <Box ta="center" pt={4}>{day}</Box>
+                          {hasAppointments ? (
+                            <Box
+                              pos="absolute"
+                              left="50%"
+                              bottom={4}
+                              w={6}
+                              h={6}
+                              bg="var(--mantine-color-blue-6)"
+                              style={{ borderRadius: '999px', transform: 'translateX(-50%)' }}
+                            />
+                          ) : null}
+                        </Box>
+                      );
+                    }}
+                  />
+                </Box>
+                <Box maw={220}>
+                  <MonthPickerInput
+                    label="Month"
+                    value={toMonthPickerValue(selectedMonth)}
+                    onChange={(value) => {
+                      const nextMonth = toMonthKey(value);
+                      if (!nextMonth) return;
+                      setSelectedMonth(nextMonth);
+                      setScheduleScope('month');
+                    }}
+                    valueFormat="MMMM YYYY"
+                  />
+                </Box>
                 <Select
                   label="Calendar View"
                   data={canManageAll
@@ -1520,7 +1713,9 @@ export default function SchedulingPage({
                   />
                 ) : null}
               </Group>
-              <Text c="dimmed" fz="sm" mt="sm">{formatDateLabel(selectedDay)}</Text>
+              <Text c="dimmed" fz="sm" mt="sm">
+                {scheduleScope === 'month' ? formatMonthLabel(selectedMonth) : formatDateLabel(selectedDay)}
+              </Text>
             </Paper>
 
             <SimpleGrid cols={{ base: 2, md: 4 }}>
@@ -1548,7 +1743,28 @@ export default function SchedulingPage({
               <Alert color="red" title="Unable to load scheduling data">{error}</Alert>
             ) : (
               <>
-                {view === 'practice' ? (
+                {scheduleScope === 'month' ? (
+                  <Stack gap="md">
+                    <Alert color="blue" title="Month view">
+                      Month view shows every session scheduled for {formatMonthLabel(selectedMonth)}. Daily counselor and location workload cards continue to render in day view.
+                    </Alert>
+                    <Paper withBorder radius="md" p="md">
+                      <Title order={3} fz="md" mb="sm">Monthly agenda</Title>
+                      <MonthlyAgenda
+                        appointments={monthAppointments}
+                        timezone={timezone}
+                        onOpenClient={onOpenClient}
+                        onEdit={handleEdit}
+                        onJumpToDay={(day) => {
+                          setDidAutoAlignDay(true);
+                          setSelectedDay(day);
+                          setSelectedMonth(day.slice(0, 7));
+                          setScheduleScope('day');
+                        }}
+                      />
+                    </Paper>
+                  </Stack>
+                ) : view === 'practice' ? (
                   <PracticeOperationsView
                     calendars={calendarPayload.counselorCalendars}
                     locations={calendarPayload.locationCalendars}
@@ -1571,21 +1787,6 @@ export default function SchedulingPage({
                 ) : (
                   <Paper withBorder radius="md" p="md">
                     <Title order={3} fz="md" mb="sm">General calendar</Title>
-                    <AppointmentTable
-                      appointments={dayAppointments}
-                      timezone={timezone}
-                      onOpenClient={onOpenClient}
-                      onEdit={handleEdit}
-                      onDelete={handleDelete}
-                      onStatusChange={handleStatusChange}
-                    />
-                  </Paper>
-                )}
-
-                <Divider />
-
-                <Paper withBorder radius="md" p="md">
-                  <Title order={3} fz="md" mb="sm">Agenda</Title>
                   <AppointmentTable
                     appointments={dayAppointments}
                     timezone={timezone}
@@ -1593,6 +1794,25 @@ export default function SchedulingPage({
                     onEdit={handleEdit}
                     onDelete={handleDelete}
                     onStatusChange={handleStatusChange}
+                    emptyMessage="No appointments scheduled for this day."
+                  />
+                  </Paper>
+                )}
+
+                <Divider />
+
+                <Paper withBorder radius="md" p="md">
+                  <Title order={3} fz="md" mb="sm">{scheduleScope === 'month' ? 'Month summary' : 'Agenda'}</Title>
+                  <AppointmentTable
+                    appointments={visibleAppointments}
+                    timezone={timezone}
+                    onOpenClient={onOpenClient}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onStatusChange={handleStatusChange}
+                    emptyMessage={scheduleScope === 'month'
+                      ? 'No appointments scheduled for this month.'
+                      : 'No appointments scheduled for this day.'}
                   />
                 </Paper>
               </>

@@ -2,6 +2,43 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## Unreleased — Demo Dataset Finalizer
+
+### Summary
+
+Adds a deterministic post-test database finalizer for human testing. The new `ops/demo-dataset` flow wipes mutable demo data for the `system` tenant, recreates the canonical staff/client/forms/offerings dataset, clears active auth sessions, and verifies exact invariants before commit. The finalizer explicitly leaves `audit_events` untouched.
+
+Also expands the Scheduling workspace so the day picker marks days with appointments and the workspace can switch into a month-scoped agenda that shows every session scheduled for the selected month.
+
+### Changed
+
+- `ops/demo-dataset/manifest.mjs`
+  - defines the fixed human-testing manifest: canonical counselors, 10 clients, default forms, offerings, billing subset, credentials, and future scheduled appointments
+- `ops/demo-dataset/common.mjs`
+  - implements transactional apply/verify logic for the `system` tenant
+  - rebuilds staff, clients, charting rows, form assignments/submissions, offerings, billing rows, portal profiles/accounts, and resets live sessions
+  - verifies exact counselor names/counts, client counts, form coverage, offering/payment counts, and cleared sessions before commit
+- `ops/demo-dataset/apply.mjs`
+  - CLI entry point for direct apply runs
+- `ops/demo-dataset/verify.mjs`
+  - CLI entry point for read-only invariant verification
+- `ops/demo-dataset/finalize.mjs`
+  - standard post-test finalizer entry point
+- `package.json`
+  - adds `pnpm demo:apply`, `pnpm demo:verify`, and `pnpm demo:finalize`
+- `README.md`
+  - documents the finalizer workflow and default credentials
+- `apps/web/src/components/SchedulingPage.jsx`
+  - marks appointment days in the date picker
+  - adds a month picker and month agenda view with month-level metrics
+  - exposes `scheduling.month` as a monitored scheduling subview
+- `packages/telemetry/src/surfaces.js`
+  - registers `scheduling.month` in the shared surface registry
+- `PLANS/FULL-SURFACE-MONITORING.md`
+  - adds `scheduling.month` to the canonical scheduling subview inventory
+
+---
+
 ## v5.3.2 — Clinical Chart Session Loading Fix ✅ Validated
 
 **Date:** March 30, 2026

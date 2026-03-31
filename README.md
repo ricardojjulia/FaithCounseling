@@ -12,6 +12,7 @@ Christian counseling practice management SaaS for solo counselors, group practic
 - Change log: [docs/change-log.md](docs/change-log.md)
 - Spanish translation report: [docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md](docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md)
 - Product plans overview: [docs/PRODUCT-PLANS-OVERVIEW.md](docs/PRODUCT-PLANS-OVERVIEW.md)
+- Demo data resiliency plan: [PLANS/DEMO-DATA-RESILIENCY.md](PLANS/DEMO-DATA-RESILIENCY.md)
 
 ## What This Includes
 
@@ -49,6 +50,7 @@ v5.3.2 fixes the clinical chart session loading bug from v5.3.1. When opening th
 - Schedule ops plan: [PLANS/ScheduleOps.md](PLANS/ScheduleOps.md)
 - Monitoring baseline: [PLANS/FULL-SURFACE-MONITORING.md](PLANS/FULL-SURFACE-MONITORING.md)
 - Security baseline: [PLANS/FULL-SECURITY-AND-AUDITING.md](PLANS/FULL-SECURITY-AND-AUDITING.md)
+- Demo data resiliency plan: [PLANS/DEMO-DATA-RESILIENCY.md](PLANS/DEMO-DATA-RESILIENCY.md)
 - UI Baseline run report: [docs/UI-BASELINE-AGENT-RUN-2026-03-30.md](docs/UI-BASELINE-AGENT-RUN-2026-03-30.md)
 
 ## UI Baseline & Regression Verification Agent
@@ -86,6 +88,41 @@ pnpm agent:translation:run
 ```
 
 The service listens on `http://127.0.0.1:8098` by default.
+
+## Demo Dataset Finalizer
+
+The deterministic human-testing dataset finalizer lives under `ops/demo-dataset`. It is intended to run only after fix validation, smoke coverage, and session/security testing have already passed.
+
+What it does for the `system` tenant:
+
+- keeps exactly one practice admin plus exactly two counselor accounts: `Ricardo Julia` and `Mercy Robles`
+- replaces all mutable client-facing demo rows with a fixed 10-client dataset
+- gives every client past appointments, two future scheduled appointments, a completed note-linked session, default signup form assignments, and demo submissions
+- seeds offerings for a subset of clients and paid billing rows for a smaller subset
+- clears active `sessions`, `portal_sessions`, and `portal_password_resets`
+- never touches `audit_events`
+
+Commands:
+
+```bash
+pnpm demo:verify
+pnpm demo:finalize
+```
+
+Default credentials after `pnpm demo:finalize`:
+
+- Practice admin: `admin@faithcounseling.local` / `ChangeMe!Dev2024#`
+- Counselors: `ricardo.julia@faithcounseling.local`, `mercy.robles@faithcounseling.local` / `ChangeMe!Counselor2026#`
+- Portal clients: each seeded client email / `ChangeMe!Client2026#`
+
+Recommended flow from repo root:
+
+```bash
+pnpm test:security
+pnpm test:e2e
+pnpm test:launch-readiness
+pnpm demo:finalize
+```
 
 ## v5.3.2 — Clinical Chart Session Loading Fix ✅ Validated (March 30, 2026)
 
@@ -1012,6 +1049,8 @@ This update makes linked IDs authoritative in the scheduling flow while still pr
 - Appointment composer now selects counselors by stable staff ID instead of counselor name text
 - Counselor calendar filtering now requests the schedule by `counselorId`, which avoids broken or empty filters after a counselor rename
 - Day-level metrics now count active counselors by stable ID when available instead of relying only on display names
+- The scheduling day picker now marks dates that contain appointments so seeded and live schedules are visible before opening a specific day
+- The workspace now includes a month picker and month agenda mode for reviewing every session scheduled in a selected month
 - Legacy appointments that still only carry a counselor display name remain visible and editable through a compatibility fallback
 
 ### v2.1.20 Validation

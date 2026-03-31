@@ -14,6 +14,7 @@ This document summarises every planning file in the `PLANS/` directory — what 
 |-----------|----------|--------|------|
 | [CALENDAR.md](#calendar--scheduling-module) | Feature | In progress | Scheduling |
 | [CLIENT-PORTAL-EXPANSION.md](#client-portal-expansion) | Feature | In progress | Portal |
+| [DEMO-DATA-RESILIENCY.md](#demo-data-resiliency) | Infrastructure | Implemented | Demo testing |
 | [ClientData.md](#client-data--enterprise-records) | Feature | Active planning | Client records |
 | [CounselorProfiling.md](#counselor-profiling-system) | Feature | Delivered | Staff / HR |
 | [FORM-LIBRARY-EXPANSION.md](#form-library-expansion) | Feature | Implemented | Documents |
@@ -71,6 +72,34 @@ Remaining scope:
 - published resource and mental health library content
 - GDPR-style data-rights export and account deletion
 - configurable portal branding with logo and colour overrides
+
+---
+
+### Demo Data Resiliency
+
+**File:** [PLANS/DEMO-DATA-RESILIENCY.md](../PLANS/DEMO-DATA-RESILIENCY.md)
+**Status:** Implemented
+**Prepared:** March 30, 2026
+
+Defines the canonical post-validation human-testing dataset and the deterministic workflow that restores it. This plan is intentionally operational rather than user-facing: it standardises how the `system` tenant is rebuilt after smoke/security/session testing so human testers always inherit the same starting state.
+
+Delivered scope:
+
+- fixed `system` tenant demo dataset with exactly two visible counselors: Ricardo Julia and Mercy Robles
+- one practice-admin login for operator access
+- exactly 10 canonical clients with full supporting records
+- three past appointment scenarios per client, including one completed session with a linked progress note
+- canonical default signup form assignments and submissions for every client
+- offerings for a subset of clients and paid billing rows for a smaller subset
+- transactional `pnpm demo:apply`, `pnpm demo:verify`, and `pnpm demo:finalize` workflow
+- explicit session clearing for `sessions`, `portal_sessions`, and `portal_password_resets`
+- invariant verification before commit
+
+Non-negotiable guardrails:
+
+- the finalizer runs after testing, not before
+- the workflow is deterministic and idempotent
+- `audit_events` is never modified by the reset path
 
 ---
 

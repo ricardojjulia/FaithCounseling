@@ -59,6 +59,7 @@ export const SURFACE_DEFINITIONS = Object.freeze([
   { id: 'scheduling.general', kind: 'subview' },
   { id: 'scheduling.counselor', kind: 'subview' },
   { id: 'scheduling.practice', kind: 'subview' },
+  { id: 'scheduling.month', kind: 'subview' },
 
   { id: 'modal.client_picker', kind: 'modal' },
   { id: 'modal.client_editor', kind: 'modal' },

@@ -141,6 +141,7 @@ Required boundary rules:
 - `scheduling.general`
 - `scheduling.counselor`
 - `scheduling.practice`
+- `scheduling.month`
 
 ### Modal and workflow surfaces
 
