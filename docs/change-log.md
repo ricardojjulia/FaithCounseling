@@ -2,6 +2,65 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v5.4.2 — Operations Studio AR Removal + Cache Stability ✅ Validated
+
+**Date:** March 31, 2026
+**Type:** Patch release
+
+### Summary
+
+Two follow-on fixes to the Operations Studio repair landed after `v5.4.1` was tagged. The Accounts Receivable section was removed — it displayed hardcoded data irrelevant to the practice's offerings-and-payment model — and a script-tag cache buster was added to prevent browsers from loading stale JavaScript that referenced the now-removed HTML elements.
+
+### Changed
+
+- `apps/web/public/operations.js`
+  - Removed entire AR renderer block from `renderPracticeReport`: outstanding balance, aging buckets, and client count columns no longer rendered
+- `apps/api/src/index.js`
+  - Removed `tenantInvoices` filter, `aging` computation, and `accountsReceivable` key from `buildReportingOverview` return object
+- `apps/web/public/operations.html`
+  - Removed `rptArCard` div and its children (`rptArOutstanding`, `rptArAging`, `rptArClients`)
+  - Script tag updated: `/operations.js` → `/operations.js?v=5.4.2` to force browser cache invalidation after element changes
+
+### Rationale — AR section removal
+
+The practice operates on an offerings/payment model: clients pay for counseling packages directly. There is no insurance billing, no CPT codes, and no claims-based AR aging. The `buildAgingReport` function powering the section drew from a hardcoded two-invoice in-memory array (including a `'BlueCross Placeholder'` payer) with no database backing — displaying fictitious numbers. Removing the section eliminates misleading data. The underlying `buildAgingReport` function is retained in `index.js` for the separate billing tab endpoint.
+
+### No schema changes
+
+All changes are frontend-only or remove a computation from a reporting helper. No database migrations required.
+
+---
+
+## v5.4.1 — Operations Studio Full Repair ✅ Validated
+
+**Date:** March 31, 2026
+**Type:** Patch release
+
+### Summary
+
+Operations Studio (`/operations.html`) was fully functional at the route and handler level but broken in every tab due to field-name mismatches accumulated between the API implementation and the frontend renderer. Additionally, the "End Session" action sent a `PATCH` with the session ID in the URL path but no matching route existed. All 12+ mismatches corrected and the missing route added.
+
+### Changed
+
+- `apps/web/public/operations.js`
+  - `renderPracticeReport`: corrected `utilization` fields (`sessionsInWindow`, `sessionsCompleted`, `remoteRate`), referral key (`referralSource`), assessment trend fields (`inventoryName`, `completedCount`), document completion shape (`requiresSignatureCount`, `signedDocuments`, `completionRate`), AR aging buckets expanded from 4 to 5 (`days1to30`, `days31to60`, `days61to90`, `over90`), and location identifier (`locationName`)
+  - `renderPlatformSummary` provisioning table: `r.tenantId` → `r.requestedTenantId`, `r.practiceName` → `r.requestedPracticeName`
+  - `renderPlatformSummary` impersonation table: `r.role` → `r.targetRole`; duration falls back to `endedAt − startedAt` when `durationMinutes` is null
+  - `renderPlatformSummary` exports table: `r.type` → `r.exportType`, `r.requestedBy` → `r.requestedByRole`
+  - `renderPlatformSummary` retention section: completely rewritten — renders `clinicalRecordsSchedule`, `billingSchedule`, `auditLogSchedule` as labeled pills with human-readable values; shows legal hold status
+  - Tenant provisioning POST body: `tenantId` / `practiceName` → `requestedTenantId` / `requestedPracticeName`
+  - Retention save: HTTP method `PUT` → `POST`; field names corrected to `clinicalRecordsSchedule`, `billingSchedule`, `auditLogSchedule`
+- `apps/api/src/index.js`
+  - Added route: `PATCH /v1/platform/impersonation-sessions/:id` dispatches to `handleSupportImpersonationSessionById`
+  - Added `handleSupportImpersonationSessionById`: extracts session ID from URL path, handles PATCH only, ends session in DB via `endImpersonationSession(sessionId)` with in-memory fallback
+  - `normalizePathname`: registered `/v1/platform/impersonation-sessions/:id` for OTEL path normalization
+
+### No schema changes
+
+All fixes are JavaScript-only (frontend renderers, form submission payloads, API routing). No database migrations required.
+
+---
+
 ## v5.4.0 — Client + Scheduling + Chart Integration ⚠️ UNTESTED — Under Review
 
 ### Summary

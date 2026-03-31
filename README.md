@@ -4,9 +4,10 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## At a Glance
 
-- Version: `5.3.2`
+- Version: `5.4.2`
 - Status: `✅ Validated`
-- Release summary: [docs/v5.3.2-RELEASE-SUMMARY.md](docs/v5.3.2-RELEASE-SUMMARY.md)
+- Release summary: [docs/v5.4.2-RELEASE-SUMMARY.md](docs/v5.4.2-RELEASE-SUMMARY.md)
+- Previous release: [docs/v5.4.1-RELEASE-SUMMARY.md](docs/v5.4.1-RELEASE-SUMMARY.md)
 - UI Baseline agent run report: [docs/UI-BASELINE-AGENT-RUN-2026-03-30.md](docs/UI-BASELINE-AGENT-RUN-2026-03-30.md)
 - Operations Dashboard summary: [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
 - Change log: [docs/change-log.md](docs/change-log.md)
@@ -30,14 +31,14 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Current Release Focus
 
-v5.3.2 fixes the clinical chart session loading bug from v5.3.1. When opening the note composer for any client, the appointments dropdown now correctly populates with that client's calendar sessions. A silent `catch {}` was swallowing all API errors, and all appointments were being fetched then filtered client-side — both issues are now resolved with server-side `?clientId=` filtering and proper error state.
+v5.4.2 is a two-fix patch on top of the Operations Studio full repair (v5.4.1). The Accounts Receivable section was removed from the Practice Reporting tab — the practice operates on an offerings-and-payment model and does not do insurance billing, so aging buckets and payer columns were displaying hardcoded placeholder data with no database backing. A script-tag cache buster (`?v=5.4.2`) was also added to `operations.html` to prevent browsers from loading stale JavaScript that referenced the now-removed AR elements and caused a null-element crash.
 
-> ✅ v5.3.2 is validated. See [docs/v5.3.2-RELEASE-SUMMARY.md](docs/v5.3.2-RELEASE-SUMMARY.md) for the full details.
+> ✅ v5.4.2 is validated. See [docs/v5.4.2-RELEASE-SUMMARY.md](docs/v5.4.2-RELEASE-SUMMARY.md) for the full details.
 
 ## Key Docs
 
-- Release summary: [docs/v5.3.2-RELEASE-SUMMARY.md](docs/v5.3.2-RELEASE-SUMMARY.md)
-- Previous release: [docs/v5.3.1-RELEASE-SUMMARY.md](docs/v5.3.1-RELEASE-SUMMARY.md)
+- Release summary: [docs/v5.4.2-RELEASE-SUMMARY.md](docs/v5.4.2-RELEASE-SUMMARY.md)
+- Previous release: [docs/v5.4.1-RELEASE-SUMMARY.md](docs/v5.4.1-RELEASE-SUMMARY.md)
 - Operations Dashboard summary: [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
 - Operations Dashboard implementation log: [docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md](docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md)
 - Spanish translation report: [docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md](docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md)
@@ -123,6 +124,24 @@ pnpm test:e2e
 pnpm test:launch-readiness
 pnpm demo:finalize
 ```
+
+## v5.4.2 — Operations Studio AR Removal + Cache Stability ✅ Validated (March 31, 2026)
+
+### v5.4.2 Overview
+
+Removed the Accounts Receivable section from the Operations Studio Practice Reporting tab. The practice operates on an offerings-and-payment model with no insurance billing — the AR aging display was sourced from a hardcoded two-invoice in-memory array with a `'BlueCross Placeholder'` payer, displaying fictitious numbers. Also added `?v=5.4.2` cache buster to the operations script tag, preventing null-element crashes caused by browsers loading the previous cached JS against the updated HTML.
+
+See [docs/v5.4.2-RELEASE-SUMMARY.md](docs/v5.4.2-RELEASE-SUMMARY.md) for full details.
+
+## v5.4.1 — Operations Studio Full Repair ✅ Validated (March 31, 2026)
+
+### v5.4.1 Overview
+
+Corrected 12+ field-name mismatches between the Operations Studio frontend renderers and the API response shapes across the Practice Reporting, Platform, and Audit tabs. Added the missing `PATCH /v1/platform/impersonation-sessions/:id` route and handler so "End Session" actions complete correctly. Registered the impersonation session path pattern in OTEL `normalizePathname` for clean telemetry.
+
+See [docs/v5.4.1-RELEASE-SUMMARY.md](docs/v5.4.1-RELEASE-SUMMARY.md) for full details.
+
+---
 
 ## v5.3.2 — Clinical Chart Session Loading Fix ✅ Validated (March 30, 2026)
 

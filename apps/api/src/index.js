@@ -1552,6 +1552,11 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname.startsWith('/v1/platform/impersonation-sessions/')) {
+      await handleSupportImpersonationSessionById(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/platform/data-exports') {
       await handleDataExportJobs(request, response, session);
       return;
@@ -9267,6 +9272,51 @@ async function handleSupportImpersonationSessions(request, response, session) {
   writeJson(response, 200, { item });
 }
 
+// Handles PATCH /v1/platform/impersonation-sessions/:id (ID in URL path)
+async function handleSupportImpersonationSessionById(request, response, requestUrl, session) {
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePlatformAdmin(request, response, session)) return;
+
+  const sessionId = sanitizeStr(requestUrl.pathname.split('/').pop(), 50);
+  if (!sessionId) {
+    writeJson(response, 400, { error: 'Session ID is required' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const status = normalizePlatformImpersonationStatus(payload.status ?? 'ended');
+  if (!status || status !== 'ended') {
+    writeJson(response, 400, { error: 'status must be ended' });
+    return;
+  }
+
+  if (process.env.DB_NAME) {
+    const item = await endImpersonationSession(sessionId);
+    if (!item) { writeJson(response, 404, { error: 'Impersonation session not found' }); return; }
+    telemetry.recordMutation('platform.impersonation.end');
+    emitAudit(request, 'platform.impersonation.end', 'support_impersonation_session', item.id, session);
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  const item = supportImpersonationSessions.find((entry) => entry.id === sessionId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Impersonation session not found' });
+    return;
+  }
+
+  item.status = 'ended';
+  item.endedAt = new Date().toISOString();
+
+  telemetry.recordMutation('platform.impersonation.end');
+  emitAudit(request, 'platform.impersonation.end', 'support_impersonation_session', item.id, session);
+  writeJson(response, 200, { item });
+}
+
 async function handleDataExportJobs(request, response, session) {
   if (request.method === 'GET') {
     if (process.env.DB_NAME) {
@@ -12271,7 +12321,6 @@ async function buildOperationsSummary(request, timezone, session) {
 
 function buildReportingOverview(request, days) {
   const tenantAppointments = filterByTenant(appointments, request);
-  const tenantInvoices = filterByTenant(invoices, request);
   const tenantAssignments = filterByTenant(documentAssignments, request);
   const tenantInventories = filterByTenant(inventoryAssignments, request);
   const tenantLifecycles = Object.values(clientLifecycles).filter((item) => {
@@ -12336,8 +12385,6 @@ function buildReportingOverview(request, days) {
     }))
     .sort((left, right) => right.totalSessions - left.totalSessions);
 
-  const aging = buildAgingReport(tenantInvoices, new Date().toISOString());
-
   return {
     generatedAt: new Date().toISOString(),
     windowDays: days,
@@ -12357,7 +12404,6 @@ function buildReportingOverview(request, days) {
       completionRate: documentCompletionRate,
     },
     assessmentTrends: assessmentByInventory,
-    accountsReceivable: aging,
     locationPerformance,
   };
 }
@@ -12687,6 +12733,7 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/platform/overview') return '/v1/platform/overview';
   if (pathname === '/v1/platform/tenant-provisioning') return '/v1/platform/tenant-provisioning';
   if (pathname === '/v1/platform/impersonation-sessions') return '/v1/platform/impersonation-sessions';
+  if (pathname.startsWith('/v1/platform/impersonation-sessions/')) return '/v1/platform/impersonation-sessions/:id';
   if (pathname === '/v1/platform/data-exports') return '/v1/platform/data-exports';
   if (pathname === '/v1/platform/retention-policies') return '/v1/platform/retention-policies';
   if (pathname.startsWith('/v1/clients/')) return '/v1/clients/:id';

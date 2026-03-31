@@ -364,3 +364,52 @@ export function createInventoryAssignmentRecord(record) {
     completedAt: record.completedAt ?? null,
   });
 }
+
+// ─── Faithful Workflows ──────────────────────────────────────────────────────
+
+export const workflowCategories = Object.freeze([
+  'safety',
+  'clinical_caution',
+  'session_focus',
+  'homework',
+  'relationship',
+  'spiritual',
+  'coordination',
+  'monitoring',
+]);
+
+export const workflowUrgencyLevels = Object.freeze([
+  'critical',
+  'high',
+  'moderate',
+  'routine',
+]);
+
+export const workflowRecommendationStatuses = Object.freeze([
+  'pending',
+  'complete',
+  'deferred',
+  'hidden',
+]);
+
+export const workflowActionTypes = Object.freeze([
+  'generate_session_agenda',
+  'generate_note_prep',
+  'suggest_verses',
+  'create_prayer_prompt',
+  'create_cbt_exercise',
+  'create_journal_prompt',
+  'draft_followup_message',
+  'add_reminder_task',
+  'create_treatment_plan_update',
+  'mark_complete',
+  'defer',
+  'hide',
+]);
+
+export const workflowTrends = Object.freeze([
+  'improving',
+  'stable',
+  'declining',
+  'unknown',
+]);

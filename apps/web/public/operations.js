@@ -214,79 +214,60 @@ function statusBadgeHtml(status) {
 
 function renderPracticeReport(s) {
   const u = s.utilization ?? {};
-  // Stat cards
-  el('rptSessions').textContent   = u.totalSessions ?? '—';
+  // Stat cards — API returns sessionsInWindow, sessionsCompleted, remoteRate (already %)
+  el('rptSessions').textContent   = u.sessionsInWindow ?? u.totalSessions ?? '—';
   el('rptSessionsSub').textContent = `in ${s.windowDays ?? '?'}-day window`;
-  el('rptCompleted').textContent  = u.completedSessions ?? '—';
-  el('rptRemoteRate').textContent = fmtPct(u.remoteSessionRate);
+  el('rptCompleted').textContent  = u.sessionsCompleted ?? u.completedSessions ?? '—';
+  const remoteRateRaw = u.remoteRate ?? u.remoteSessionRate;
+  el('rptRemoteRate').textContent = remoteRateRaw != null
+    ? (typeof remoteRateRaw === 'number' && remoteRateRaw <= 1
+        ? fmtPct(remoteRateRaw)
+        : remoteRateRaw.toFixed(1) + '%')
+    : '—';
   const counselors = (s.counselorProductivity ?? []).length;
+  const totalSess = u.sessionsInWindow ?? u.totalSessions ?? 0;
   el('rptAvgPerCounselor').textContent = counselors > 0
-    ? ((u.totalSessions ?? 0) / counselors).toFixed(1) : '—';
+    ? (totalSess / counselors).toFixed(1) : '—';
   el('rptUtilRow').style.display = '';
 
-  // Referral bars
-  rptBars('rptReferralBars', s.referralSources ?? [], 'source', 'count',
+  // Referral bars — API key is 'referralSource', not 'source'
+  rptBars('rptReferralBars', s.referralSources ?? [], 'referralSource', 'count',
     (s.referralSources ?? []).reduce((a, r) => a + r.count, 0));
 
   // Document completion progress bar
+  // API returns: signedDocuments, requiresSignatureCount, completionRate
   const dc = s.documentCompletion ?? {};
-  const docTotal = (dc.completed ?? 0) + (dc.pending ?? 0) + (dc.overdue ?? 0);
-  const docPct   = docTotal > 0 ? Math.round((dc.completed / docTotal) * 100) : 0;
+  const signed  = dc.signedDocuments ?? dc.completed ?? 0;
+  const total   = dc.requiresSignatureCount ?? (signed + (dc.pending ?? 0) + (dc.overdue ?? 0));
+  const pending = total - signed;
+  const docPct  = dc.completionRate ?? (total > 0 ? Math.round((signed / total) * 100) : 0);
   el('rptDocCompletion').innerHTML = `
     <div style="display:flex;justify-content:space-between;font-size:12px;color:#64748b;margin-bottom:4px">
-      <span>${dc.completed ?? 0} completed</span>
-      <span>${dc.pending ?? 0} pending · ${dc.overdue ?? 0} overdue</span>
+      <span>${signed} completed</span>
+      <span>${pending > 0 ? pending : 0} pending</span>
     </div>
     <div style="background:#f1f5f9;border-radius:4px;height:10px;overflow:hidden">
       <div style="background:#22c55e;width:${docPct}%;height:100%;border-radius:4px;transition:width .4s"></div>
     </div>
     <div style="font-size:11px;color:#64748b;margin-top:4px">${docPct}% completion rate</div>`;
 
-  // Assessment trends bars
-  const aItems = (s.assessmentTrends ?? []).map(a => ({ name: a.type, count: a.count }));
+  // Assessment trends bars — API keys: inventoryName, completedCount
+  const aItems = (s.assessmentTrends ?? []).map(a => ({
+    name: a.inventoryName ?? a.type ?? a.inventoryId ?? '—',
+    count: a.completedCount ?? a.count ?? 0,
+  }));
   rptBars('rptAssessmentBars', aItems, 'name', 'count',
     aItems.reduce((a, r) => a + r.count, 0));
   el('rptMidRow').style.display = '';
 
-  // AR section
-  const ar = s.accountsReceivable ?? {};
-  const totals = ar.totals ?? {};
-  el('rptArOutstanding').innerHTML =
-    `<span style="font-size:13px;font-weight:600;color:#ef4444;margin-left:8px">${fmtMoney(totals.outstanding)}</span>`;
-
-  const aging = [
-    { label: 'Current',  val: totals.current },
-    { label: '30–60d',   val: totals.thirtyToSixty },
-    { label: '60–90d',   val: totals.sixtyToNinety },
-    { label: '90d+',     val: totals.ninetyPlus },
-  ];
-  el('rptArAging').innerHTML = aging.map((a, i) => {
-    const dangerCls = i >= 3 ? ' danger' : i >= 2 ? ' warn' : '';
-    return `<div class="rpt-aging-cell">
-      <div class="rpt-aging-label">${a.label}</div>
-      <div class="rpt-aging-val${dangerCls}">${fmtMoney(a.val)}</div>
-    </div>`;
-  }).join('');
-
-  const clients = ar.clients ?? [];
-  el('rptArClients').innerHTML = clients.length
-    ? clients.map(c =>
-        `<tr>
-          <td style="font-family:monospace;font-size:12px">${escapeHtml(c.clientId)}</td>
-          <td style="text-align:right;color:#ef4444">${fmtMoney(c.outstanding)}</td>
-          <td style="text-align:right;color:#64748b">${c.invoiceCount ?? '—'}</td>
-        </tr>`).join('')
-    : '<tr><td colspan="3" style="text-align:center;color:#94a3b8;padding:12px">No outstanding AR</td></tr>';
-  el('rptArCard').style.display = '';
-
-  // Location performance
+  // Location performance — API key is 'locationName', not 'locationId'
   const locs = s.locationPerformance ?? [];
   el('rptLocBody').innerHTML = locs.length
     ? locs.map(l => {
         const pct = l.totalSessions > 0
           ? fmtPct(l.completedSessions / l.totalSessions) : '—';
         return `<tr>
-          <td>${escapeHtml(l.locationId)}</td>
+          <td>${escapeHtml(l.locationName ?? l.locationId)}</td>
           <td style="text-align:right">${l.totalSessions ?? 0}</td>
           <td style="text-align:right">${l.completedSessions ?? 0}</td>
           <td style="text-align:right">${l.remoteSessions ?? 0}</td>
@@ -330,8 +311,8 @@ function renderPlatformSummary(s) {
   el('platProvBody').innerHTML = provRecent.length
     ? provRecent.map(r =>
         `<tr>
-          <td style="font-family:monospace;font-size:11px">${escapeHtml(r.tenantId)}</td>
-          <td>${escapeHtml(r.practiceName ?? '—')}</td>
+          <td style="font-family:monospace;font-size:11px">${escapeHtml(r.requestedTenantId ?? r.tenantId)}</td>
+          <td>${escapeHtml(r.requestedPracticeName ?? r.practiceName ?? '—')}</td>
           <td>${statusBadgeHtml(r.status)}</td>
           <td style="color:#64748b;font-size:12px">${fmtRelTime(r.requestedAt)}</td>
           <td style="color:#64748b;font-size:12px">${r.completedAt ? fmtRelTime(r.completedAt) : '—'}</td>
@@ -351,11 +332,11 @@ function renderPlatformSummary(s) {
     ? impRecent.map(r =>
         `<tr>
           <td style="font-family:monospace;font-size:11px">${escapeHtml(r.targetTenantId)}</td>
-          <td>${escapeHtml(r.role ?? '—')}</td>
+          <td>${escapeHtml(r.targetRole ?? r.role ?? '—')}</td>
           <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.reason ?? '—')}</td>
           <td>${statusBadgeHtml(r.status)}</td>
           <td style="color:#64748b;font-size:12px">${fmtRelTime(r.startedAt)}</td>
-          <td style="color:#64748b;font-size:12px">${r.durationMinutes != null ? r.durationMinutes + 'm' : '—'}</td>
+          <td style="color:#64748b;font-size:12px">${r.durationMinutes != null ? r.durationMinutes + 'm' : (r.endedAt && r.startedAt ? Math.round((new Date(r.endedAt) - new Date(r.startedAt)) / 60000) + 'm' : '—')}</td>
         </tr>`).join('')
     : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:12px">No recent sessions</td></tr>';
 
@@ -371,27 +352,36 @@ function renderPlatformSummary(s) {
   el('platExportBody').innerHTML = expRecent.length
     ? expRecent.map(r =>
         `<tr>
-          <td>${escapeHtml(r.type ?? '—')}</td>
+          <td>${escapeHtml(r.exportType ?? r.type ?? '—')}</td>
           <td>${escapeHtml(r.format ?? '—')}</td>
-          <td style="font-family:monospace;font-size:11px">${escapeHtml(r.requestedBy ?? '—')}</td>
+          <td style="font-family:monospace;font-size:11px">${escapeHtml(r.requestedByRole ?? r.requestedBy ?? '—')}</td>
           <td>${statusBadgeHtml(r.status)}</td>
           <td style="color:#64748b;font-size:12px">${fmtRelTime(r.requestedAt)}</td>
           <td style="color:#64748b;font-size:12px">${r.completedAt ? fmtRelTime(r.completedAt) : '—'}</td>
         </tr>`).join('')
     : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:12px">No recent exports</td></tr>';
 
-  // Retention policy
+  // Retention policy — API returns object with schedule enum fields (clinicalRecordsSchedule, etc.)
   const ret = s.retentionPolicy ?? {};
-  el('platRetentionUpdated').textContent = ret.asOf ? `updated ${fmtRelTime(ret.asOf)}` : '';
-  const policies = ret.policies ?? Object.entries(ret).filter(([k]) => k !== 'asOf').map(([k, v]) => ({ type: k, ...v }));
-  el('platRetentionGrid').innerHTML = policies.length
-    ? policies.map(p =>
-        `<div class="plat-policy-item">
-          <div class="plat-policy-item-label">${escapeHtml(p.type ?? p.dataType ?? '—')}</div>
-          <div class="plat-policy-item-value">${p.retentionDays ?? p.days ?? '—'} <span style="font-size:11px;color:#94a3b8;font-weight:400">days</span></div>
-          <div style="font-size:11px;color:#94a3b8;margin-top:4px">${p.purgeable ? 'purgeable' : ''}</div>
-        </div>`).join('')
-    : '<div style="color:#94a3b8;font-size:13px;padding:8px">No retention policies configured</div>';
+  el('platRetentionUpdated').textContent = (ret.updatedAt || ret.asOf)
+    ? `updated ${fmtRelTime(ret.updatedAt ?? ret.asOf)}` : '';
+  const scheduleLabels = {
+    clinicalRecordsSchedule: 'Clinical Records',
+    billingSchedule:         'Billing Records',
+    auditLogSchedule:        'Audit Log',
+  };
+  const scheduleKeys = Object.keys(scheduleLabels).filter((k) => ret[k]);
+  if (scheduleKeys.length) {
+    el('platRetentionGrid').innerHTML = scheduleKeys.map((k) =>
+      `<div class="plat-policy-item">
+        <div class="plat-policy-item-label">${escapeHtml(scheduleLabels[k])}</div>
+        <div class="plat-policy-item-value" style="font-size:13px">${escapeHtml(String(ret[k]).replace(/_/g, ' '))}</div>
+        ${k === 'clinicalRecordsSchedule' && ret.legalHoldEnabled ? '<div style="font-size:11px;color:#ef4444;margin-top:4px">legal hold active</div>' : ''}
+      </div>`).join('') +
+      (ret.legalHoldEnabled ? '<div class="plat-policy-item" style="border-top-color:#ef4444"><div class="plat-policy-item-label">Legal Hold</div><div class="plat-policy-item-value" style="color:#ef4444;font-size:13px">ENABLED</div></div>' : '');
+  } else {
+    el('platRetentionGrid').innerHTML = '<div style="color:#94a3b8;font-size:13px;padding:8px">No retention policies configured</div>';
+  }
 
   el('platCard').style.display = '';
 }
@@ -431,11 +421,12 @@ function initReporting() {
 function initPlatform() {
   el('createTenantBtn')?.addEventListener('click', async () => {
     const btn = el('createTenantBtn');
-    const tenantId    = el('tenantId')?.value.trim();
-    const practiceName = el('practiceName')?.value.trim();
+    // API expects requestedTenantId and requestedPracticeName
+    const requestedTenantId    = el('tenantId')?.value.trim();
+    const requestedPracticeName = el('practiceName')?.value.trim();
     const ownerEmail  = el('ownerEmail')?.value.trim();
 
-    if (!tenantId || !practiceName || !ownerEmail) {
+    if (!requestedTenantId || !requestedPracticeName || !ownerEmail) {
       setStatus('tenantStatus', 'Tenant ID, practice name, and owner email are all required.', 'error');
       return;
     }
@@ -443,7 +434,7 @@ function initPlatform() {
     setBusy(btn, true);
     clearStatus('tenantStatus');
     try {
-      const data = await apiPost('/v1/platform/tenant-provisioning', { tenantId, practiceName, ownerEmail });
+      const data = await apiPost('/v1/platform/tenant-provisioning', { requestedTenantId, requestedPracticeName, ownerEmail });
       const id = data.item?.id ?? data.id ?? 'OK';
       setStatus('tenantStatus', `Provisioning request created (ID: ${id}).`, 'success');
       showToast(`Tenant provisioning queued: ${id}`, 'success');
@@ -534,10 +525,11 @@ function initData() {
     setBusy(btn, true);
     clearStatus('retentionStatus');
     try {
-      await apiPut('/v1/platform/retention-policies', {
-        clinicalRecords:         el('retentionClinical')?.value,
-        billing:                 el('retentionBilling')?.value,
-        auditLog:                el('retentionAudit')?.value,
+      // API expects POST (not PUT) and schedule enum names, not numeric fields
+      await apiPost('/v1/platform/retention-policies', {
+        clinicalRecordsSchedule: el('retentionClinical')?.value,
+        billingSchedule:         el('retentionBilling')?.value,
+        auditLogSchedule:        el('retentionAudit')?.value,
         includeDocumentVersions: el('retentionIncludeDocVersions')?.checked ?? true,
         legalHoldEnabled:        el('retentionLegalHold')?.checked ?? false,
       });
