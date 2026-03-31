@@ -2,6 +2,69 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v5.5.0 — Faithful Workflows ⚠️ UNTESTED — Under Review
+
+**Date:** 2026-03-31
+**Type:** Minor release — new counselor-facing feature page
+
+### Summary
+
+Introduces **Faithful Workflows**, a counselor-facing three-panel workspace that reviews each client's clinical data and surfaces prioritized, explainable, actionable care recommendations using a hybrid deterministic-rules + template-rationale engine.
+
+### New features
+
+- **Left panel:** Ranked client list with urgency badge (critical/high/moderate/routine), recommendation count, top reason chips, diagnosis summary, last activity, and trend indicator
+- **Center panel:** Vertical workflow canvas showing a client snapshot node followed by recommendation nodes grouped by category (safety → clinical → session → homework → relationship → spiritual → coordination → monitoring)
+- **Right drawer:** Full recommendation detail — why surfaced, evidence snippets, clinical relevance, faith integration note, cautions, documentation considerations, and action outputs
+- **Action buttons:** Session agenda, note prep, Bible verses (optional), prayer prompt (optional), CBT exercise, journaling prompt, follow-up message, reminder task, treatment plan update draft — all output AI-disclaimer watermark
+- **Safety enforcement:** Safety nodes cannot be hidden or deferred when priority ≥ 9; safety banner always visible; spiritual nodes always labeled "(Optional)"
+- **5 mock clients** (Emma R., Marcus T., Priya K., David L., Sarah M.) covering the full urgency range — available in demo/dev mode
+
+### Rules engine (27 rules across 7 categories)
+
+- Safety: PHQ-9 severe, suicidal ideation (item 9), PCL-5 crisis, consecutive no-shows, risk keywords in notes
+- Clinical: PHQ-9 worsening trend, GAD-7 high, no treatment plan, stale plan, no recent note, diagnosis without goal
+- Session: overdue goals, pending homework, pending assessment
+- Homework: no between-session homework, journaling suggestion
+- Relationship: systems goal missing, relationship concern in note
+- Spiritual (all optional): biblical integration, grief support, transition prayer, faith acknowledge
+- Coordination: no insurance, open referral, faith referral, closing summary
+- Monitoring: reassessment overdue, discharge planning, stable progress
+
+### New files
+
+```text
+apps/web/src/components/FaithWorkflows/
+├── FaithWorkflowsPage.jsx
+├── ClientRankList.jsx
+├── WorkflowCanvas.jsx
+├── WorkflowNode.jsx
+├── RecommendationDrawer.jsx
+├── SafetyBanner.jsx
+└── engine/
+    ├── types.js
+    ├── mockData.js
+    ├── utils.js
+    ├── scoreClient.js
+    ├── runWorkflow.js
+    └── rules/
+        ├── safetyRules.js
+        ├── clinicalRules.js
+        ├── sessionRules.js
+        ├── homeworkRules.js
+        ├── spiritualRules.js
+        ├── coordinationRules.js
+        └── monitoringRules.js
+```
+
+### Modified files
+
+- `apps/web/src/App.jsx` — `showFaith` flag + `FaithWorkflowsPage` import + render
+- `packages/i18n/src/index.js` — ~65 new `workflow.*` keys
+- `packages/domain/src/index.js` — `workflowCategories`, `workflowActionTypes`, `workflowUrgencyLevels`, `workflowRecommendationStatuses`, `workflowTrends` enums
+
+---
+
 ## v5.4.2 — Operations Studio AR Removal + Cache Stability ✅ Validated
 
 **Date:** March 31, 2026

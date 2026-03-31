@@ -18,6 +18,7 @@ import DocumentsPage from './components/Documents/DocumentsPage.jsx';
 import ClientPortalPage from './components/Portal/ClientPortalPage.jsx';
 import OfferingsPage from './components/Offerings/OfferingsPage.jsx';
 import ClinicalChartPage from './components/ClinicalChart/ClinicalChartPage.jsx';
+import FaithWorkflowsPage from './components/FaithWorkflows/FaithWorkflowsPage.jsx';
 import { csrfHeaders } from './lib/csrf.js';
 import { fetchOperationsSummary } from './lib/clientApi.js';
 import { frontendTelemetry } from './lib/frontendTelemetry.js';
@@ -362,7 +363,8 @@ export default function App() {
   const showPortal           = currentView === 'portal';
   const showOfferings        = currentView === 'offerings';
   const showClinical         = currentView === 'clinical';
-  const showFallbackWorkspace = !showDashboard && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal && !showOfferings && !showClinical;
+  const showFaith            = currentView === 'faith';
+  const showFallbackWorkspace = !showDashboard && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal && !showOfferings && !showClinical && !showFaith;
   const topLevelSurfaceId = !isAuthenticated
     ? 'auth'
     : selectedClientId || selectedCounselorId
@@ -513,6 +515,8 @@ export default function App() {
           <ClientPortalPage currentUser={currentUser} clients={clientsData.items} onSignOut={handleSignOut} />
         ) : showOfferings ? (
           <OfferingsPage clients={clientsData.items} />
+        ) : showFaith ? (
+          <FaithWorkflowsPage clients={clientsData.items} currentUser={currentUser} />
         ) : showClinical ? (
           <ClinicalChartPage clients={clientsData.items} currentUser={currentUser} initialClientId={clinicalChartInitialClientId} />
         ) : (
