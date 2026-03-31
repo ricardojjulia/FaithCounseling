@@ -163,7 +163,17 @@ function rowToSeries(row) {
 // Appointments
 // ---------------------------------------------------------------------------
 
-export async function listAppointments(tenantId) {
+export async function listAppointments(tenantId, { clientId } = {}) {
+  if (clientId) {
+    const [rows] = await pool.query(
+      `${APPOINTMENT_SELECT}
+       WHERE a.tenant_id = ?
+         AND a.client_id = ?
+       ORDER BY COALESCE(a.starts_at, a.scheduled_at) ASC`,
+      [tenantId, clientId]
+    );
+    return rows.map(rowToAppointment);
+  }
   const [rows] = await pool.query(
     `${APPOINTMENT_SELECT}
      WHERE a.tenant_id = ?

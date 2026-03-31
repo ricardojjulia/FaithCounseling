@@ -83,6 +83,7 @@ function rowToProgressNote(row) {
     id: row.id,
     clientId: row.client_id,
     tenantId: row.tenant_id,
+    appointmentId: row.appointment_id ?? null,
     noteType: row.note_type,
     summary: decrypt(row.summary_enc),
     interventions: decrypt(row.interventions_enc),
@@ -372,6 +373,7 @@ export async function createProgressNote({
   id,
   clientId,
   tenantId,
+  appointmentId,
   noteType,
   summary,
   interventions,
@@ -382,11 +384,12 @@ export async function createProgressNote({
   const summaryEnc = summary ? encrypt(summary) : null;
   const interventionsEnc = interventions ? encrypt(interventions) : null;
   const signedAtSql = toSqlTimestamp(signedAt);
+  const apptId = appointmentId ?? null;
   await pool.query(
     `INSERT INTO progress_notes
-       (id, client_id, tenant_id, note_type, summary_enc, interventions_enc, locked, signed_by, signed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, clientId, tenantId, noteType, summaryEnc, interventionsEnc, lockedNote ? 1 : 0, signedBy, signedAtSql],
+       (id, client_id, tenant_id, appointment_id, note_type, summary_enc, interventions_enc, locked, signed_by, signed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, clientId, tenantId, apptId, noteType, summaryEnc, interventionsEnc, lockedNote ? 1 : 0, signedBy, signedAtSql],
   );
   const [rows] = await pool.query(
     'SELECT * FROM progress_notes WHERE id = ? AND client_id = ? AND tenant_id = ?',

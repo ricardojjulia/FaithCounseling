@@ -273,6 +273,7 @@ CREATE TABLE IF NOT EXISTS progress_notes (
   id               VARCHAR(64)  NOT NULL,
   tenant_id        VARCHAR(64)  NOT NULL,
   client_id        VARCHAR(64)  NOT NULL,
+  appointment_id   VARCHAR(64)  NULL,
   note_type        VARCHAR(64)  NOT NULL,
   summary_enc      TEXT,                  -- encrypted PHI
   interventions_enc TEXT,                 -- encrypted PHI (JSON array)
@@ -282,7 +283,8 @@ CREATE TABLE IF NOT EXISTS progress_notes (
   created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  INDEX idx_note_tenant_client (tenant_id, client_id)
+  INDEX idx_note_tenant_client (tenant_id, client_id),
+  INDEX idx_note_appointment (appointment_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─── Document templates ───────────────────────────────────────────────────────

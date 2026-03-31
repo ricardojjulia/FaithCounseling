@@ -1248,6 +1248,11 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname.startsWith('/v1/clients/') && requestUrl.pathname.includes('/progress-notes/') && !requestUrl.pathname.endsWith('/progress-notes')) {
+      await handleClientProgressNoteById(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname.startsWith('/v1/clients/')) {
       const sub = parseClientSubresource(requestUrl.pathname);
       if (sub) {
@@ -1467,6 +1472,11 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/offerings/summary') {
+      await handleOfferingsSummary(request, response, session);
+      return;
+    }
+
     if (requestUrl.pathname.startsWith('/v1/offerings/')) {
       await handleOfferings(request, response, requestUrl, session);
       return;
@@ -1474,11 +1484,6 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === '/v1/offerings') {
       await handleOfferings(request, response, requestUrl, session);
-      return;
-    }
-
-    if (requestUrl.pathname === '/v1/offerings/summary') {
-      await handleOfferingsSummary(request, response, session);
       return;
     }
 
@@ -3050,12 +3055,14 @@ async function handleClientProgressNotes(request, response, requestUrl, session)
   const interventions = Array.isArray(payload.interventions)
     ? payload.interventions.map((entry) => sanitizeStr(String(entry), 300)).filter(Boolean)
     : [];
+  const appointmentId = sanitizeStr(payload.appointmentId, 64) ?? null;
 
   if (process.env.DB_NAME) {
     const item = await createProgressNote({
       id: genId('pn'),
       tenantId: client.tenantId,
       clientId,
+      appointmentId,
       noteType,
       summary,
       interventions: interventions.join('\n'),
@@ -3073,6 +3080,7 @@ async function handleClientProgressNotes(request, response, requestUrl, session)
     id: createId('pn', progressNotes),
     tenantId: client.tenantId,
     clientId,
+    appointmentId,
     noteType,
     summary,
     interventions,
@@ -3085,6 +3093,119 @@ async function handleClientProgressNotes(request, response, requestUrl, session)
   telemetry.recordMutation('chart.progress_note.create');
   emitAudit(request, 'chart.progress_note.create', 'progress_note', item.id);
   writeJson(response, 201, { item });
+}
+
+async function handleClientProgressNoteById(request, response, requestUrl, session) {
+  // Extract clientId and noteId from /v1/clients/:clientId/progress-notes/:noteId
+  const parts = requestUrl.pathname.split('/');
+  const notesIdx = parts.indexOf('progress-notes');
+  const clientsIdx = parts.indexOf('clients');
+  if (notesIdx === -1 || clientsIdx === -1 || notesIdx + 1 >= parts.length || clientsIdx + 1 >= parts.length) {
+    writeJson(response, 404, { error: 'Not found' });
+    return;
+  }
+  const clientId = parts[clientsIdx + 1];
+  const noteId = parts[notesIdx + 1];
+
+  if (!clientId || !noteId) {
+    writeJson(response, 404, { error: 'Not found' });
+    return;
+  }
+
+  let tenantId;
+  if (process.env.DB_NAME) {
+    tenantId = callerTenant(request, session);
+    const [rows] = await pool.query('SELECT id FROM clients WHERE id = ? AND tenant_id = ?', [clientId, tenantId]);
+    if (!rows[0]) { writeJson(response, 404, { error: 'Client not found' }); return; }
+  } else {
+    const c = clients.find((item) => item.id === clientId);
+    if (!c) { writeJson(response, 404, { error: 'Client not found' }); return; }
+    if (enforceTenantScope(request, response, c.tenantId, session)) return;
+    tenantId = c.tenantId;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  // Fetch the existing note to enforce lock immutability
+  if (process.env.DB_NAME) {
+    const [noteRows] = await pool.query(
+      'SELECT id, locked FROM progress_notes WHERE id = ? AND client_id = ? AND tenant_id = ?',
+      [noteId, clientId, tenantId],
+    );
+    if (!noteRows[0]) { writeJson(response, 404, { error: 'Note not found' }); return; }
+    if (noteRows[0].locked) { writeJson(response, 409, { error: 'Note is signed and locked. It cannot be modified.' }); return; }
+  }
+
+  const payload = await readJsonBody(request);
+  const fields = {};
+
+  if (payload.noteType !== undefined) {
+    const nt = normalizeProgressNoteType(payload.noteType);
+    if (!nt) { writeJson(response, 400, { error: 'noteType must be valid' }); return; }
+    fields.noteType = nt;
+  }
+  if (payload.summary !== undefined) {
+    const s = sanitizeStr(payload.summary, 3000);
+    if (!s) { writeJson(response, 400, { error: 'summary cannot be empty' }); return; }
+    fields.summary = s;
+  }
+  if (payload.interventions !== undefined) {
+    const list = Array.isArray(payload.interventions)
+      ? payload.interventions.map((e) => sanitizeStr(String(e), 300)).filter(Boolean)
+      : [];
+    fields.interventions = list.join('\n');
+  }
+  if (payload.locked === true) {
+    fields.lockedNote = true;
+    fields.signedBy = sanitizeStr(payload.signedBy, 120) ?? callerRole(request, session);
+    fields.signedAt = new Date().toISOString();
+  }
+
+  if (!Object.keys(fields).length) {
+    writeJson(response, 400, { error: 'No updatable fields provided' });
+    return;
+  }
+
+  if (process.env.DB_NAME) {
+    await updateProgressNote(noteId, clientId, tenantId, fields);
+    const [updated] = await pool.query(
+      'SELECT * FROM progress_notes WHERE id = ? AND client_id = ? AND tenant_id = ?',
+      [noteId, clientId, tenantId],
+    );
+    const item = updated[0] ? {
+      id: updated[0].id,
+      clientId: updated[0].client_id,
+      tenantId: updated[0].tenant_id,
+      appointmentId: updated[0].appointment_id ?? null,
+      noteType: updated[0].note_type,
+      summary: updated[0].summary_enc,
+      locked: Boolean(updated[0].locked),
+      signedBy: updated[0].signed_by,
+      signedAt: updated[0].signed_at,
+      createdAt: updated[0].created_at,
+    } : null;
+    telemetry.recordMutation(fields.lockedNote ? 'chart.progress_note.sign' : 'chart.progress_note.update');
+    emitAudit(request, fields.lockedNote ? 'chart.progress_note.sign' : 'chart.progress_note.update', 'progress_note', noteId, session);
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  // In-memory fallback
+  const noteIdx = progressNotes.findIndex((n) => n.id === noteId && n.clientId === clientId);
+  if (noteIdx === -1) { writeJson(response, 404, { error: 'Note not found' }); return; }
+  if (progressNotes[noteIdx].locked) { writeJson(response, 409, { error: 'Note is signed and locked. It cannot be modified.' }); return; }
+  Object.assign(progressNotes[noteIdx], {
+    ...(fields.noteType ? { noteType: fields.noteType } : {}),
+    ...(fields.summary ? { summary: fields.summary } : {}),
+    ...(fields.interventions !== undefined ? { interventions: fields.interventions.split('\n').filter(Boolean) } : {}),
+    ...(fields.lockedNote ? { locked: true, signedBy: fields.signedBy, signedAt: fields.signedAt } : {}),
+  });
+  telemetry.recordMutation(fields.lockedNote ? 'chart.progress_note.sign' : 'chart.progress_note.update');
+  emitAudit(request, fields.lockedNote ? 'chart.progress_note.sign' : 'chart.progress_note.update', 'progress_note', noteId);
+  writeJson(response, 200, { item: progressNotes[noteIdx] });
 }
 
 async function handleDocumentTemplates(request, response, session) {
@@ -4657,11 +4778,14 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
 
 async function handleAppointmentsCollection(request, response, session) {
   if (request.method === 'GET') {
+    const requestUrl = new URL(request.url, `http://localhost`);
+    const filterClientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50) || null;
     let items;
     if (process.env.DB_NAME) {
-      items = await listAppointments(callerTenant(request, session));
+      items = await listAppointments(callerTenant(request, session), { clientId: filterClientId });
     } else {
-      items = [...appointments].sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+      const all = [...appointments].sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+      items = filterClientId ? all.filter((a) => a.clientId === filterClientId) : all;
     }
     await emitAudit(request, 'appointment.list.read', 'appointment', 'collection', session);
     writeJson(response, 200, { items });

@@ -242,6 +242,10 @@ async function applyColumnMigrations(conn) {
     );
   }
 
+  // Progress notes: link to appointment
+  await addColumnIfMissing('progress_notes', 'appointment_id', 'VARCHAR(64) NULL AFTER client_id');
+  await addIndexIfMissing('progress_notes', 'idx_note_appointment', '(appointment_id)');
+
   console.log('Column migrations done.');
 }
 

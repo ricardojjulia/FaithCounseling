@@ -17,6 +17,7 @@ import SchedulingPage from './components/SchedulingPage.jsx';
 import DocumentsPage from './components/Documents/DocumentsPage.jsx';
 import ClientPortalPage from './components/Portal/ClientPortalPage.jsx';
 import OfferingsPage from './components/Offerings/OfferingsPage.jsx';
+import ClinicalChartPage from './components/ClinicalChart/ClinicalChartPage.jsx';
 import { csrfHeaders } from './lib/csrf.js';
 import { fetchOperationsSummary } from './lib/clientApi.js';
 import { frontendTelemetry } from './lib/frontendTelemetry.js';
@@ -352,7 +353,8 @@ export default function App() {
   const showDocuments        = currentView === 'documents';
   const showPortal           = currentView === 'portal';
   const showOfferings        = currentView === 'offerings';
-  const showFallbackWorkspace = !showDashboard && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal && !showOfferings;
+  const showClinical         = currentView === 'clinical';
+  const showFallbackWorkspace = !showDashboard && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal && !showOfferings && !showClinical;
   const topLevelSurfaceId = !isAuthenticated
     ? 'auth'
     : selectedClientId || selectedCounselorId
@@ -378,7 +380,7 @@ export default function App() {
   useSurfaceTelemetry(topLevelSurfaceId, {
     surfaceKind: 'view',
     workflow: 'navigation',
-    emptyState: ['clinical', 'offerings', 'faith'].includes(topLevelSurfaceId) ? 'placeholder' : null,
+    emptyState: ['offerings', 'faith'].includes(topLevelSurfaceId) ? 'placeholder' : null,
   });
 
   useEffect(() => {
@@ -502,6 +504,8 @@ export default function App() {
           <ClientPortalPage currentUser={currentUser} clients={clientsData.items} onSignOut={handleSignOut} />
         ) : showOfferings ? (
           <OfferingsPage clients={clientsData.items} />
+        ) : showClinical ? (
+          <ClinicalChartPage clients={clientsData.items} currentUser={currentUser} />
         ) : (
           <>
             {showDashboard ? <Metrics data={metricsData} currentUser={currentUser} /> : null}

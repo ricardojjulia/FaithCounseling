@@ -2,6 +2,125 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v5.3.2 — Clinical Chart Session Loading Fix ✅ Validated
+
+**Date:** March 30, 2026
+**Type:** Patch release
+
+### Summary
+
+Fixes a bug in v5.3.1 where the session appointment selector in the Clinical Chart showed "No sessions on calendar for this client" for every client. Two root causes: (1) a bare `catch {}` silently swallowed all API errors, leaving `appointments` empty with no feedback; (2) the component fetched all practice appointments and filtered client-side, making any fetch failure indistinguishable from empty data. Fixed with server-side `?clientId=` filtering and proper error state exposure in the UI.
+
+### Changed
+
+- `apps/api/src/db/queries/appointments.js`
+  - `listAppointments(tenantId, { clientId })` — optional `clientId` parameter adds `AND a.client_id = ?` to the SQL
+- `apps/api/src/index.js`
+  - `GET /v1/appointments` reads `?clientId=` query param, sanitizes, and passes to `listAppointments`
+  - In-memory fallback also filters by `clientId` when provided
+- `apps/web/src/components/ClinicalChart/tabs/SessionNotesTab.jsx`
+  - Fetches `/api/v1/appointments?clientId=<id>` instead of all appointments
+  - Replaced bare `catch {}` with `catch (err)` that sets `apptLoadError` state and logs to console
+  - Red Alert shown in note composer when appointments fail to load
+  - Added early-return guard when `clientId` is not set
+- `package.json`, `apps/api/package.json`, `apps/web/package.json`
+  - bumped version from `5.3.1` to `5.3.2`
+
+---
+
+## v5.3.1 — Session Notes Appointment Linkage ⚠️ Untested — Under Review
+
+**Date:** March 30, 2026
+**Type:** Patch release
+
+### Summary
+
+Enforces that every clinical session note is attached to a calendar appointment. The note composer in the Clinical Chart requires selecting a scheduled session before saving. Notes are displayed grouped under their linked appointment. The `progress_notes` table gains `appointment_id` via a backward-compatible migration; existing unlinked notes are preserved under a legacy divider.
+
+### Changed
+
+- `apps/api/src/db/schema.sql`
+  - added `appointment_id VARCHAR(64) NULL` and `INDEX idx_note_appointment` to `progress_notes`
+- `apps/api/src/db/migrate.js`
+  - added backward-compatible column and index migration for `progress_notes.appointment_id`
+- `apps/api/src/db/queries/clinical.js`
+  - `rowToProgressNote` returns `appointmentId`
+  - `createProgressNote` accepts and stores `appointmentId`
+- `apps/api/src/index.js`
+  - POST `/v1/clients/:id/progress-notes` accepts `appointmentId`
+  - PATCH handler row reconstruction includes `appointmentId`
+- `apps/web/src/components/ClinicalChart/tabs/SessionNotesTab.jsx`
+  - loads client appointments from calendar
+  - requires session selection before note can be saved
+  - groups notes by linked appointment in the display
+  - legacy notes (no appointment link) shown under a separate divider
+- workspace package manifests
+  - bumped version from `5.3.0` to `5.3.1`
+
+### Validation
+
+> ⚠️ Not yet validated. See [v5.3.1-RELEASE-SUMMARY.md](v5.3.1-RELEASE-SUMMARY.md) for the full checklist.
+
+```bash
+node --env-file=.env apps/api/src/db/migrate.js
+pnpm --filter @faith/api exec node --check src/index.js
+pnpm lint
+pnpm --filter @faith/web build
+```
+
+---
+
+## v5.3.0 — Clinical Chart ⚠️ Untested — Under Review
+
+**Date:** March 30, 2026
+**Type:** Minor release
+
+### Summary
+
+Ships the Clinical Chart — the primary clinical documentation surface. Wires the previously-placeholder "Clinical Chart" sidebar nav item to a fully functional 5-tab page. Adds a PATCH endpoint for note updates and sign/lock. Introduces the `internal_note` type for private counselor notes that are excluded from the legal clinical record.
+
+### Added
+
+- `packages/domain/src/index.js`
+  - added `'internal_note'` to `progressNoteTypes` enum
+- `apps/api/src/index.js`
+  - added `PATCH /v1/clients/:id/progress-notes/:noteId` — updates drafts, signs/locks notes, enforces 409 on locked note mutations
+  - emits `chart.progress_note.update` and `chart.progress_note.sign` audit events
+- `packages/i18n/src/index.js`
+  - added ~45 keys for `chart.tab.*`, `chart.note.*`, `chart.plan.*`, `chart.progress.*`, `chart.homework.*`
+- `apps/web/src/components/ClinicalChart/ClinicalChartPage.jsx`
+  - top-level chart page with client picker and 5-tab shell
+- `apps/web/src/components/ClinicalChart/tabs/SessionNotesTab.jsx`
+  - create/edit/sign clinical session notes with type selector, summary, and interventions
+- `apps/web/src/components/ClinicalChart/tabs/InternalNotesTab.jsx`
+  - private counselor notes with tags (Risk, Spiritual concerns, etc.), never locked
+- `apps/web/src/components/ClinicalChart/tabs/TreatmentPlanTab.jsx`
+  - goals and interventions editor with status, review cadence, and last-reviewed date
+- `apps/web/src/components/ClinicalChart/tabs/ProgressTab.jsx`
+  - assessment score history grouped by instrument with severity band badges for all 10 scored tools
+- `apps/web/src/components/ClinicalChart/tabs/HomeworkTab.jsx`
+  - form assignment tracking: pending assignments as cards, completed as summary table
+
+### Changed
+
+- `apps/web/src/App.jsx`
+  - added `showClinical` flag, imported and rendered `ClinicalChartPage`
+  - removed `'clinical'` from telemetry placeholder list
+- workspace package manifests
+  - bumped version from `5.2.2` to `5.3.0`
+
+### Validation
+
+> ⚠️ Not yet validated. See [v5.3.0-RELEASE-SUMMARY.md](v5.3.0-RELEASE-SUMMARY.md) for the full checklist.
+
+```bash
+pnpm --filter @faith/api exec node --check src/index.js
+pnpm lint
+pnpm --filter @faith/web build
+```
+
+---
+
 ## v5.2.2 — Offerings Settings and Removal Fixes
 
 **Date:** March 30, 2026

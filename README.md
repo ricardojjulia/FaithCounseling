@@ -4,9 +4,9 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## At a Glance
 
-- Version: `5.2.2`
-- Status: `Beta Ready`
-- Release summary: [docs/v5.2.2-RELEASE-SUMMARY.md](docs/v5.2.2-RELEASE-SUMMARY.md)
+- Version: `5.3.2`
+- Status: `✅ Validated`
+- Release summary: [docs/v5.3.2-RELEASE-SUMMARY.md](docs/v5.3.2-RELEASE-SUMMARY.md)
 - UI Baseline agent run report: [docs/UI-BASELINE-AGENT-RUN-2026-03-30.md](docs/UI-BASELINE-AGENT-RUN-2026-03-30.md)
 - Operations Dashboard summary: [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
 - Change log: [docs/change-log.md](docs/change-log.md)
@@ -15,6 +15,7 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## What This Includes
 
+- **Clinical Chart** — session notes linked to calendar appointments with Sign & Lock compliance workflow, private internal notes, treatment plan editor (goals/interventions/status), assessment score history with severity bands, and homework assignment tracking
 - practice operations workspace for counselors, managers, and admins
 - upgraded Operations Dashboard with counselor workload, 1-hour gap visibility, compliance note-gap tracking, portal request rollups, operational alert thresholds, and 7-day trend visibility
 - dashboard drill-down workflows that open the affected client, document, scheduling, and portal-review queues directly from summary metrics
@@ -28,15 +29,19 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Current Release Focus
 
-The current build ships the offerings model with the full first stabilization pass applied. Offerings labels resolve correctly, the screens use the proxied `/api/v1/...` API routes, the suggested-offering setting stays aligned between Workspace Studio and the client portal, older databases receive the required portal-settings columns automatically, and incorrect offering entries can now be removed from the Offerings history.
+v5.3.2 fixes the clinical chart session loading bug from v5.3.1. When opening the note composer for any client, the appointments dropdown now correctly populates with that client's calendar sessions. A silent `catch {}` was swallowing all API errors, and all appointments were being fetched then filtered client-side — both issues are now resolved with server-side `?clientId=` filtering and proper error state.
+
+> ✅ v5.3.2 is validated. See [docs/v5.3.2-RELEASE-SUMMARY.md](docs/v5.3.2-RELEASE-SUMMARY.md) for the full details.
 
 ## Key Docs
 
-- Release summary: [docs/v5.2.2-RELEASE-SUMMARY.md](docs/v5.2.2-RELEASE-SUMMARY.md)
+- Release summary: [docs/v5.3.2-RELEASE-SUMMARY.md](docs/v5.3.2-RELEASE-SUMMARY.md)
+- Previous release: [docs/v5.3.1-RELEASE-SUMMARY.md](docs/v5.3.1-RELEASE-SUMMARY.md)
 - Operations Dashboard summary: [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
 - Operations Dashboard implementation log: [docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md](docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md)
 - Spanish translation report: [docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md](docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md)
 - Product plans overview: [docs/PRODUCT-PLANS-OVERVIEW.md](docs/PRODUCT-PLANS-OVERVIEW.md)
+- Clinical Chart plan: [PLANS/CLINICAL-CHART.md](PLANS/CLINICAL-CHART.md)
 - Operations Dashboard plan: [PLANS/OPERATIONS-DASHBOARD-UPGRADE.md](PLANS/OPERATIONS-DASHBOARD-UPGRADE.md)
 - Form library plan: [PLANS/FORM-LIBRARY-EXPANSION.md](PLANS/FORM-LIBRARY-EXPANSION.md)
 - Portal plan: [PLANS/CLIENT-PORTAL-EXPANSION.md](PLANS/CLIENT-PORTAL-EXPANSION.md)
@@ -81,6 +86,88 @@ pnpm agent:translation:run
 ```
 
 The service listens on `http://127.0.0.1:8098` by default.
+
+## v5.3.2 — Clinical Chart Session Loading Fix ✅ Validated (March 30, 2026)
+
+### v5.3.2 Overview
+
+Fixes the session appointment selector in the Clinical Chart always showing "No sessions on calendar for this client" for every selected client. Two root causes: a bare `catch {}` that silently swallowed all API errors, and client-side filtering of all practice appointments (making any failure or empty-result indistinguishable). Fixed with server-side `?clientId=` filtering at the DB query level and proper `apptLoadError` state in the UI.
+
+### v5.3.2 — What Changed
+
+- `apps/api/src/db/queries/appointments.js` — `listAppointments(tenantId, { clientId })` adds `AND a.client_id = ?` when `clientId` is provided
+- `apps/api/src/index.js` — `GET /v1/appointments` reads `?clientId=` query param and passes to `listAppointments`
+- `apps/web/src/components/ClinicalChart/tabs/SessionNotesTab.jsx` — fetches `/api/v1/appointments?clientId=<id>`, exposes `apptLoadError` with a red Alert in the composer, guards against early invocation before a client is selected
+
+### v5.3.2 — Validation
+
+```bash
+pnpm --filter @faith/api exec node --check src/index.js
+pnpm --filter @faith/web build
+# Smoke: select a client → New Note → appointments populate
+```
+
+See [docs/v5.3.2-RELEASE-SUMMARY.md](docs/v5.3.2-RELEASE-SUMMARY.md) for the full details.
+
+---
+
+## v5.3.1 — Session Notes Appointment Linkage ⚠️ Untested — Under Review (March 30, 2026)
+
+### v5.3.1 Overview
+
+Enforces that every session note in the Clinical Chart is linked to a calendar appointment. The note composer now requires selecting an appointment for the client before a note can be saved. Notes are displayed grouped under their linked session (date, type, counselor, location). The `progress_notes` table gains `appointment_id` via a backward-compatible migration, carried through the query layer, API POST and PATCH handlers. Existing notes with no appointment link appear under a legacy divider rather than disappearing.
+
+### v5.3.1 — What Changed
+
+- `apps/api/src/db/schema.sql` — added `appointment_id VARCHAR(64) NULL` + index to `progress_notes`
+- `apps/api/src/db/migrate.js` — backward-compatible `addColumnIfMissing` for `appointment_id` and its index
+- `apps/api/src/db/queries/clinical.js` — `rowToProgressNote` returns `appointmentId`; `createProgressNote` accepts and stores it
+- `apps/api/src/index.js` — POST `/v1/clients/:id/progress-notes` accepts `appointmentId`; PATCH handler row includes `appointmentId`
+- `apps/web/src/components/ClinicalChart/tabs/SessionNotesTab.jsx` — loads client appointments from calendar, requires session selection in composer, groups notes by linked appointment
+
+### v5.3.1 — Validation Required
+
+```bash
+node --env-file=.env apps/api/src/db/migrate.js
+pnpm --filter @faith/api exec node --check src/index.js
+pnpm lint
+pnpm --filter @faith/web build
+```
+
+See [docs/v5.3.1-RELEASE-SUMMARY.md](docs/v5.3.1-RELEASE-SUMMARY.md) for the full manual flow checklist.
+
+---
+
+## v5.3.0 — Clinical Chart ⚠️ Untested — Under Review (March 30, 2026)
+
+### v5.3.0 Overview
+
+Ships the Clinical Chart as a fully wired top-level surface. Counselors can click "Clinical Chart" in the sidebar to access a five-tab clinical workspace: session notes with a Sign & Lock compliance workflow, private internal notes, a treatment plan editor, an assessment score history with severity band analysis, and homework assignment tracking. This release also adds a PATCH endpoint for individual note updates and signing, and introduces the `internal_note` domain type.
+
+### v5.3.0 — What Changed
+
+- wired the "Clinical Chart" sidebar nav item to a new `ClinicalChartPage` (previously a placeholder)
+- added `PATCH /v1/clients/:id/progress-notes/:noteId` — updates drafts, signs/locks notes, returns 409 on locked note mutations
+- added `internal_note` to `progressNoteTypes` domain enum
+- added `ClinicalChartPage` with 5 tabs: Session Notes, Internal Notes, Treatment Plan, Progress, Homework
+- Session Notes: create/edit draft notes, Sign & Lock with confirmation, read-only after signing
+- Internal Notes: private counselor-only notes with tags, always editable, excluded from clinical record
+- Treatment Plan: goals and interventions dynamic editor, status/cadence/reviewed-date tracking
+- Progress: assessment score history grouped by instrument with severity bands for all 10 scored tools
+- Homework: form assignments shown as pending cards and completed history
+- added ~45 i18n keys for all new surfaces
+
+### v5.3.0 — Validation Required
+
+```bash
+pnpm --filter @faith/api exec node --check src/index.js
+pnpm lint
+pnpm --filter @faith/web build
+```
+
+See [docs/v5.3.0-RELEASE-SUMMARY.md](docs/v5.3.0-RELEASE-SUMMARY.md) for the full manual flow checklist.
+
+---
 
 ## v5.2.2 — Offerings Settings and Removal Fixes (March 30, 2026)
 

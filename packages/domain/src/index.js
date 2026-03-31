@@ -132,6 +132,7 @@ export const progressNoteTypes = Object.freeze([
   'progress_note',
   'treatment_plan_review',
   'discharge_note',
+  'internal_note',
 ]);
 
 export const documentTemplateTypes = Object.freeze([
