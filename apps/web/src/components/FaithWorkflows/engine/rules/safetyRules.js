@@ -13,16 +13,24 @@
 
 import { getLatestAssessment, getLatestAssessmentScore, consecutiveNoShows } from '../utils.js';
 
-const RISK_KEYWORDS = [
+// Phrase/word keywords — safe to use substring match (each is distinctive enough)
+const PHRASE_RISK_KEYWORDS = [
   'suicidal', 'suicide', 'self-harm', 'self harm', 'homicidal', 'homicide',
   'overdose', 'cutting', 'kill myself', 'end my life', 'hopeless', 'plan to die',
-  'passive suicidal', 'SI', 'active SI',
+  'passive suicidal', 'active SI',
+];
+
+// Short abbreviations that must be matched as whole words to avoid false positives
+// e.g. 'SI' would match 'assigned', 'consistent', 'transition' as a bare substring
+const WORD_BOUNDARY_RISK_KEYWORDS = [
+  /\bSI\b/i,
 ];
 
 function containsRiskKeyword(text) {
   if (!text) return false;
   const lower = text.toLowerCase();
-  return RISK_KEYWORDS.some((kw) => lower.includes(kw.toLowerCase()));
+  if (PHRASE_RISK_KEYWORDS.some((kw) => lower.includes(kw.toLowerCase()))) return true;
+  return WORD_BOUNDARY_RISK_KEYWORDS.some((re) => re.test(text));
 }
 
 /**

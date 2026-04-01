@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Alert, Box, Group, Loader, Stack, Text, Title } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useSurfaceTelemetry } from '../../lib/useSurfaceTelemetry.js';
+import { frontendTelemetry } from '../../lib/frontendTelemetry.js';
 import { useI18n } from '../../lib/i18nContext.jsx';
 import SafetyBanner from './SafetyBanner.jsx';
 import ClientRankList from './ClientRankList.jsx';
@@ -212,19 +213,53 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
     return applyPersistedStates(recs, persistedStates, true);
   }, [selectedClientData, persistedStates]);
 
+  // ─── Track recommendation surface count per client (for telemetry) ──────────
+  const lastSurfacedRef = useRef(null);
+
+  // Emit telemetry when the recommendations list changes for the selected client
+  useEffect(() => {
+    if (!selectedClientId || recommendations.length === 0) return;
+
+    const key = `${selectedClientId}:${recommendations.length}`;
+    if (lastSurfacedRef.current === key) return;
+    lastSurfacedRef.current = key;
+
+    const safetyCount = recommendations.filter((r) => r.category === 'safety').length;
+    frontendTelemetry.trackAction(
+      'faith_workflows',
+      'recommendations_surfaced',
+      'success',
+      {
+        workflow: 'faith_workflows',
+        // statusClass carries the count band — no PHI, no IDs
+        statusClass: safetyCount > 0 ? 'with_safety' : 'no_safety',
+      },
+    );
+  }, [selectedClientId, recommendations]);
+
   // ─── Handlers ─────────────────────────────────────────────────────────────
   const handleSelectClient = useCallback((clientId) => {
+    frontendTelemetry.trackInteraction('faith_workflows', 'client_selected', 0, { workflow: 'faith_workflows' });
     setSelectedClientId(clientId);
     setSelectedRec(null);
     closeDrawer();
   }, [closeDrawer]);
 
   const handleSelectRec = useCallback((rec) => {
+    frontendTelemetry.trackInteraction('faith_workflows', 'recommendation_opened', 0, {
+      workflow: 'faith_workflows',
+      // category only — no client ID, no personal data
+      statusClass: rec?.category ?? 'unknown',
+    });
     setSelectedRec(rec);
     openDrawer();
   }, [openDrawer]);
 
   const handleStatusChange = useCallback((rec, status, deferredUntil = null) => {
+    frontendTelemetry.trackAction('faith_workflows', `recommendation_${status}`, 'success', {
+      workflow: 'faith_workflows',
+      statusClass: rec?.category ?? 'unknown',
+    });
     // Optimistic UI update
     setPersistedStates((prev) => ({
       ...prev,
@@ -244,6 +279,10 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
   }, [selectedRec, closeDrawer, selectedClientId]);
 
   const handleAction = useCallback((rec, actionType) => {
+    frontendTelemetry.trackAction('faith_workflows', `action_${actionType}`, 'success', {
+      workflow: 'faith_workflows',
+      statusClass: rec?.category ?? 'unknown',
+    });
     if (actionType === 'mark_complete') {
       handleStatusChange(rec, 'complete');
     } else if (actionType === 'hide') {
