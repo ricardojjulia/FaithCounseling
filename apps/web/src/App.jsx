@@ -81,9 +81,13 @@ function summarizeAppointmentMetrics(items) {
   startOfToday.setHours(0, 0, 0, 0);
   const startOfTomorrow = new Date(startOfToday);
   startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+  const thirtyOneDaysOut = new Date(startOfToday);
+  thirtyOneDaysOut.setDate(thirtyOneDaysOut.getDate() + 31);
+  const jan1 = new Date(now.getFullYear(), 0, 1);
 
   let sessions = 0;
   let futureAppointments = 0;
+  let yearlyAppointments = 0;
 
   for (const item of items) {
     const startsAt = toValidDate(item?.startsAt ?? item?.scheduledAt ?? item?.starts_at ?? item?.scheduled_at);
@@ -95,12 +99,15 @@ function summarizeAppointmentMetrics(items) {
     if (startsAt >= startOfToday && startsAt < startOfTomorrow) {
       sessions += 1;
     }
-    if (startsAt >= now) {
+    if (startsAt >= startOfTomorrow && startsAt < thirtyOneDaysOut) {
       futureAppointments += 1;
+    }
+    if (startsAt >= jan1 && startsAt < startOfToday) {
+      yearlyAppointments += 1;
     }
   }
 
-  return { sessions, futureAppointments };
+  return { sessions, futureAppointments, yearlyAppointments };
 }
 
 export default function App() {
@@ -113,9 +120,9 @@ export default function App() {
     sessions: 0,
     sessionsMeta: t('metrics.scheduledToday'),
     futureAppointments: 0,
-    futureAppointmentsMeta: t('metrics.scheduledAhead'),
-    auditEvents: 0,
-    auditEventsMeta: t('metrics.last7Days'),
+    futureAppointmentsMeta: t('metrics.scheduledAhead30'),
+    yearlyAppointments: 0,
+    faithfulCounts: { critical: 0, moderate: 0, routine: 0 },
   });
   const [connectionStatus, setConnectionStatus] = useState('loading');
   const [clientsData, setClientsData] = useState({ items: [], loading: true, error: null });
@@ -225,48 +232,18 @@ export default function App() {
       .then((res) => { if (!res.ok) throw new Error(); return res.json(); })
       .then((payload) => {
         const items = Array.isArray(payload?.items) ? payload.items : [];
-        const { sessions, futureAppointments } = summarizeAppointmentMetrics(items);
+        const { sessions, futureAppointments, yearlyAppointments } = summarizeAppointmentMetrics(items);
         setMetricsData((prev) => ({
           ...prev,
           sessions,
           sessionsMeta: t('metrics.scheduledToday'),
           futureAppointments,
-          futureAppointmentsMeta: t('metrics.scheduledAhead'),
+          futureAppointmentsMeta: t('metrics.scheduledAhead30'),
+          yearlyAppointments,
         }));
       })
       .catch(() => {});
   }, [isAuthenticated, t, userRole]);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const canReadAuditSummary = ['platform_admin', 'practice_owner', 'practice_admin'].includes(userRole || '');
-    if (!canReadAuditSummary) {
-      setMetricsData((prev) => ({
-        ...prev,
-        auditEvents: 0,
-        auditEventsMeta: t('metrics.adminVisibilityRequired'),
-      }));
-      return;
-    }
-
-    fetch('/api/v1/audit/intelligence?days=7&limit=1', { credentials: 'include' })
-      .then((res) => { if (!res.ok) throw new Error(); return res.json(); })
-      .then((payload) => {
-        const total = Number(payload?.summary?.total ?? 0);
-        setMetricsData((prev) => ({
-          ...prev,
-          auditEvents: total,
-          auditEventsMeta: t('metrics.last7Days'),
-        }));
-      })
-      .catch(() => {
-        setMetricsData((prev) => ({
-          ...prev,
-          auditEventsMeta: t('state.unableToLoad'),
-        }));
-      });
-  }, [isAuthenticated, userRole, t]);
 
   const handleAuthContinue = (profile) => {
     const normalized = normalizeSessionUser(profile);
@@ -337,6 +314,18 @@ export default function App() {
   const handleOpenWorkspaceStudio = (initialTab = 'portal') => {
     setWorkspaceStudioInitialTab(initialTab);
     setCurrentView('workspace-studio');
+    closeNav();
+  };
+
+  const handleViewTodaySessions = () => {
+    setSchedulingState({ composerOpen: false, initialClientId: null, initialView: null, initialPortalRequest: null });
+    setCurrentView('scheduling');
+    closeNav();
+  };
+
+  const handleViewFutureAppointments = () => {
+    setSchedulingState({ composerOpen: false, initialClientId: null, initialView: null, initialPortalRequest: null });
+    setCurrentView('scheduling');
     closeNav();
   };
 
@@ -521,7 +510,7 @@ export default function App() {
           <ClinicalChartPage clients={clientsData.items} currentUser={currentUser} initialClientId={clinicalChartInitialClientId} />
         ) : (
           <>
-            {showDashboard ? <Metrics data={metricsData} currentUser={currentUser} /> : null}
+            {showDashboard ? <Metrics data={metricsData} currentUser={currentUser} onTodaySessions={handleViewTodaySessions} onFutureAppointments={handleViewFutureAppointments} /> : null}
             {showFallbackWorkspace || showDashboard ? (
               <WorkspaceGrid
                 clientsData={clientsData}

@@ -504,11 +504,10 @@ export default function WorkspaceGrid({
               title={t('dashboard.trends.utilizationTitle')}
               subtitle={t('dashboard.trends.utilizationSubtitle')}
               footer={t('dashboard.trends.utilizationFooter', {
-                pct: Number(trendSchedule.at(-1)?.utilizationPct ?? 0).toFixed(1),
                 appointments: trendSchedule.at(-1)?.totalAppointments ?? 0,
               })}
             >
-              <TrendBars series={trendSchedule} valueAccessor={(entry) => entry.utilizationPct} />
+              <TrendBars series={trendSchedule} valueAccessor={(entry) => entry.totalAppointments} />
             </TrendCard>
 
             <TrendCard
@@ -555,7 +554,7 @@ export default function WorkspaceGrid({
 
       <Paper withBorder radius="md" p="md">
         <Group justify="space-between" mb="sm">
-          <Title order={3} fz="md">{t('panels.schedule')}</Title>
+          <Title order={3} fz="md">{t('panels.practiceOps')}</Title>
           <Group gap="xs">
             <Button variant="default" size="xs" onClick={() => onViewCalendar?.()}>{t('buttons.viewCalendar')}</Button>
             <Button size="xs" onClick={() => onNewAppointment?.()}>{t('header.newAppointment')}</Button>
@@ -566,17 +565,18 @@ export default function WorkspaceGrid({
           <Stack gap="md">
             <SimpleGrid cols={{ base: 1, sm: 3 }}>
               <SummaryMetric
-                label={t('dashboard.schedule.totalAppointments')}
-                value={todaySchedule.totalAppointments ?? 0}
+                label={t('dashboard.ops.currentCounselors')}
+                value={summary?.counselorCount ?? 0}
               />
               <SummaryMetric
-                label={t('dashboard.schedule.counselorsWithEntries')}
-                value={todaySchedule.counselorsWithEntries ?? 0}
+                label={t('dashboard.ops.portalRequests')}
+                value={summary?.pendingPortalRequests ?? 0}
+                onClick={summary?.pendingPortalRequests > 0 ? onOpenPortalQueue : undefined}
               />
               <SummaryMetric
-                label={t('dashboard.schedule.oneHourGaps')}
+                label={t('dashboard.ops.todayAvailableSlots')}
                 value={todaySchedule.oneHourGapsTotal ?? 0}
-                help={t('dashboard.schedule.oneHourGapsHelp')}
+                help={t('dashboard.ops.slotsHelp')}
               />
             </SimpleGrid>
 
@@ -590,24 +590,32 @@ export default function WorkspaceGrid({
                 <Text c="dimmed" fz="sm">{t('dashboard.schedule.noCounselorWorkload')}</Text>
               ) : workload.map((item) => (
                 <Paper key={item.counselorId || item.counselorName} withBorder radius="md" p="sm">
-                  <Group justify="space-between" align="flex-start" mb={8}>
+                  <Group justify="space-between" align="flex-start" mb={item.hasDeclaredAvailability ? 8 : 4}>
                     <div>
                       <Text fw={600} fz="sm">{item.counselorName}</Text>
                       <Text c="dimmed" fz="xs">
                         {item.appointmentsCount} {t('dashboard.schedule.appointments')} · {formatHours(item.scheduledMinutes)} {t('dashboard.schedule.booked')}
                       </Text>
                     </div>
-                    <Text fw={700} fz="sm">{Number(item.utilizationPct ?? 0).toFixed(1)}%</Text>
+                    {item.hasDeclaredAvailability
+                      ? <Text fw={700} fz="sm">{Number(item.utilizationPct ?? 0).toFixed(1)}%</Text>
+                      : null}
                   </Group>
-                  <Progress value={Number(item.utilizationPct ?? 0)} size="lg" radius="xl" />
-                  <Group justify="space-between" mt={8}>
-                    <Text c="dimmed" fz="xs">
-                      {t('dashboard.schedule.availableCapacity')}: {formatHours(item.availableMinutes)}
-                    </Text>
-                    <Text c="dimmed" fz="xs">
-                      {t('dashboard.schedule.gaps')}: {item.oneHourGapCount ?? 0}
-                    </Text>
-                  </Group>
+                  {item.hasDeclaredAvailability ? (
+                    <>
+                      <Progress value={Number(item.utilizationPct ?? 0)} size="lg" radius="xl" />
+                      <Group justify="space-between" mt={8}>
+                        <Text c="dimmed" fz="xs">
+                          {t('dashboard.schedule.availableCapacity')}: {formatHours(item.availableMinutes)}
+                        </Text>
+                        <Text c="dimmed" fz="xs">
+                          {t('dashboard.schedule.gaps')}: {item.oneHourGapCount ?? 0}
+                        </Text>
+                      </Group>
+                    </>
+                  ) : (
+                    <Text c="dimmed" fz="xs" fs="italic">{t('dashboard.schedule.noAvailability')}</Text>
+                  )}
                 </Paper>
               ))}
             </Stack>

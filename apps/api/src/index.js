@@ -12316,6 +12316,12 @@ async function buildOperationsSummary(request, timezone, session) {
     trends,
     priorityItems,
     complianceItems,
+    counselorCount: (data.staff ?? []).filter((item) => OPERATIONS_COUNSELOR_ROLES.has(item.role)).length,
+    pendingPortalRequests: [
+      ...(data.portalRegistrationRequests ?? []),
+      ...(data.portalAppointmentRequests ?? []),
+    ].filter((r) => r.status === 'pending').length,
+    faithfulWorkflowCounts: { critical: 0, moderate: 0, routine: 0 },
   };
 }
 
