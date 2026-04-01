@@ -75,6 +75,48 @@ async function fetchClientWorkflowData(clientId) {
 }
 
 /**
+ * Load persisted recommendation states for a real client from the API.
+ * Returns a map of ruleId → status for merging into runWorkflow output.
+ * Mock clients skip this — they always start fresh.
+ */
+async function fetchPersistedStates(clientId) {
+  if (clientId.startsWith('mock-')) return {};
+  try {
+    const res = await fetch(
+      `/api/v1/workflows/recommendations/state?clientId=${encodeURIComponent(clientId)}`,
+      { credentials: 'include' },
+    );
+    if (!res.ok) return {};
+    const data = await res.json();
+    const map = {};
+    for (const s of data.states ?? []) {
+      map[s.ruleId] = { status: s.status, deferredUntil: s.deferredUntil ?? null, stateId: s.id };
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Persist a status change for a recommendation to the API.
+ * Silently no-ops for mock clients.
+ */
+async function persistStateChange(clientId, ruleId, status, deferredUntil = null) {
+  if (clientId.startsWith('mock-')) return;
+  try {
+    await fetch('/api/v1/workflows/recommendations/state', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId, ruleId, status, deferredUntil }),
+    });
+  } catch {
+    // Non-fatal: UI state is already updated optimistically
+  }
+}
+
+/**
  * Faithful Workflows — main three-panel page.
  *
  * Props:
@@ -92,8 +134,9 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
 
   // Cache of enriched ClientWorkflowData keyed by clientId
   const [dataCache, setDataCache] = useState({});
-  // rec status overrides keyed by rec.id
-  const [statusOverrides, setStatusOverrides] = useState({});
+  // Persisted rec status overrides keyed by ruleId — loaded from API, updated optimistically
+  // Shape: { [ruleId]: { status, deferredUntil, stateId } }
+  const [persistedStates, setPersistedStates] = useState({});
   // Loading state per clientId
   const [loadingSet, setLoadingSet] = useState(new Set());
   const [loadError, setLoadError] = useState(null);
@@ -112,17 +155,13 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
         const cached = dataCache[c.id];
         if (cached) {
           const entry = buildClientRankEntry(cached);
-          // Apply status overrides to recs
-          const recs = entry.recommendations.map((r) => ({
-            ...r,
-            status: statusOverrides[r.id] ?? r.status,
-          }));
+          const recs = applyPersistedStates(entry.recommendations, persistedStates, c.id === selectedClientId);
           return { ...entry, recommendations: recs, recommendationCount: recs.filter((r) => r.status === 'pending').length };
         }
         return buildLightweightRankEntry(c);
       })
       .sort((a, b) => b.urgencyScore - a.urgencyScore);
-  }, [clients, dataCache, statusOverrides]);
+  }, [clients, dataCache, persistedStates, selectedClientId]);
 
   const hasCriticalClient = rankEntries.some((e) => e.urgencyLevel === 'critical');
 
@@ -130,7 +169,7 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
   const selectedEntry = rankEntries.find((e) => e.clientId === selectedClientId) ?? null;
   const selectedClientData = selectedClientId ? dataCache[selectedClientId] : null;
 
-  // ─── Load enriched data when a client is selected ─────────────────────────
+  // ─── Load enriched data + persisted states when a client is selected ───────
   useEffect(() => {
     if (!selectedClientId) return;
     if (dataCache[selectedClientId]) return;
@@ -139,9 +178,13 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
     setLoadingSet((prev) => new Set([...prev, selectedClientId]));
     setLoadError(null);
 
-    fetchClientWorkflowData(selectedClientId)
-      .then((data) => {
+    Promise.all([
+      fetchClientWorkflowData(selectedClientId),
+      fetchPersistedStates(selectedClientId),
+    ])
+      .then(([data, states]) => {
         setDataCache((prev) => ({ ...prev, [selectedClientId]: data }));
+        setPersistedStates((prev) => ({ ...prev, ...states }));
       })
       .catch((err) => {
         setLoadError(err.message ?? 'Unable to load client data');
@@ -166,8 +209,8 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
   const recommendations = useMemo(() => {
     if (!selectedClientData) return [];
     const recs = runWorkflow(selectedClientData);
-    return recs.map((r) => ({ ...r, status: statusOverrides[r.id] ?? r.status }));
-  }, [selectedClientData, statusOverrides]);
+    return applyPersistedStates(recs, persistedStates, true);
+  }, [selectedClientData, persistedStates]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
   const handleSelectClient = useCallback((clientId) => {
@@ -181,20 +224,32 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
     openDrawer();
   }, [openDrawer]);
 
-  const handleStatusChange = useCallback((recId, status) => {
-    setStatusOverrides((prev) => ({ ...prev, [recId]: status }));
-    // If the drawer's rec was hidden, close drawer
-    if (selectedRec?.id === recId && status === 'hidden') {
+  const handleStatusChange = useCallback((rec, status, deferredUntil = null) => {
+    // Optimistic UI update
+    setPersistedStates((prev) => ({
+      ...prev,
+      [rec.ruleId]: { status, deferredUntil, stateId: prev[rec.ruleId]?.stateId ?? null },
+    }));
+    // Update the drawer's selected rec if it's the same one
+    if (selectedRec?.id === rec.id) {
+      setSelectedRec((r) => r ? { ...r, status } : r);
+    }
+    // If hidden, close drawer
+    if (status === 'hidden' && selectedRec?.id === rec.id) {
       closeDrawer();
       setSelectedRec(null);
     }
-  }, [selectedRec, closeDrawer]);
+    // Persist to API
+    persistStateChange(selectedClientId, rec.ruleId, status, deferredUntil);
+  }, [selectedRec, closeDrawer, selectedClientId]);
 
   const handleAction = useCallback((rec, actionType) => {
-    // Status actions handled in WorkflowNode directly; non-status actions open drawer
-    if (['mark_complete', 'defer', 'hide'].includes(actionType)) {
-      handleStatusChange(rec.id, actionType === 'mark_complete' ? 'complete' : actionType);
+    if (actionType === 'mark_complete') {
+      handleStatusChange(rec, 'complete');
+    } else if (actionType === 'hide') {
+      handleStatusChange(rec, 'hidden');
     } else {
+      // For defer and content-generating actions, open the drawer
       setSelectedRec(rec);
       openDrawer();
     }
@@ -288,9 +343,38 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
       <RecommendationDrawer
         rec={selectedRec}
         client={selectedClientData?.client}
+        allRecommendations={recommendations}
         opened={drawerOpened}
         onClose={closeDrawer}
+        onStatusChange={handleStatusChange}
+        onAction={handleAction}
       />
     </Stack>
   );
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const SAFETY_LOCK_THRESHOLD = 9;
+
+/**
+ * Merge persisted DB states into the rules engine output.
+ * Safety lock: any rec with priority >= SAFETY_LOCK_THRESHOLD cannot stay hidden/deferred.
+ *
+ * @param {import('./engine/types.js').Recommendation[]} recs
+ * @param {Record<string, {status: string}>} states  — keyed by ruleId
+ * @param {boolean} applyStates  — false for non-selected clients (skip merge)
+ */
+function applyPersistedStates(recs, states, applyStates) {
+  if (!applyStates) return recs;
+  return recs.map((rec) => {
+    const persisted = states[rec.ruleId];
+    if (!persisted) return rec;
+    let status = persisted.status;
+    // Safety lock: high-priority recommendations cannot be hidden or deferred
+    if (rec.priority >= SAFETY_LOCK_THRESHOLD && (status === 'hidden' || status === 'deferred')) {
+      status = 'pending';
+    }
+    return { ...rec, status };
+  });
 }

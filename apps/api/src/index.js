@@ -40,7 +40,7 @@ import {
 import { createServiceTelemetry, startNodeTelemetry } from '../../../packages/telemetry/src/index.js';
 import { createI18nStore } from './lib/i18n-store.js';
 import { featureFlags } from './lib/feature-flags.js';
-import { HttpError, readJsonBody, writeJson } from './lib/http.js';
+import { HttpError, readJsonBody, writeJson, assertShape } from './lib/http.js';
 import { logError, logInfo, logWarn, serializeError } from './lib/log.js';
 import { translateMessages } from './lib/translate.js';
 import { handleCors, checkRateLimit, enforceRbac, enforceTenantScope, callerIdentity } from './lib/security.js';
@@ -1134,7 +1134,7 @@ const server = http.createServer(async (request, response) => {
     if (handleCors(request, response)) return;
 
     // Rate limiting
-    if (checkRateLimit(request, response)) return;
+    if (checkRateLimit(request, response, route)) return;
 
     // Resolve session from cookie (null if unauthenticated or DB not configured)
     session = process.env.DB_NAME ? await resolveSession(request) : null;
@@ -1487,6 +1487,12 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/workflows/recommendations/state' ||
+        requestUrl.pathname.startsWith('/v1/workflows/recommendations/state/')) {
+      await handleWorkflowRecommendationState(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/faith/overview') {
       await handleFaithOverview(request, response, requestUrl);
       return;
@@ -1775,6 +1781,7 @@ server.listen(port, () => {
 
 async function handleAuthLogin(request, response) {
   const payload = await readJsonBody(request);
+  assertShape({ required: ['email', 'password'] }, payload);
   try {
     const profile = await login(payload.email, payload.password, response);
     await emitAudit(
@@ -1843,6 +1850,7 @@ async function handleAuthChangePassword(request, response, session) {
     return;
   }
   const payload = await readJsonBody(request);
+  assertShape({ required: ['currentPassword', 'newPassword'] }, payload);
   try {
     if (session.role === 'client') {
       await changePortalPassword(session.portal_account_id, payload.currentPassword, payload.newPassword);
@@ -1860,6 +1868,7 @@ async function handleAuthChangePassword(request, response, session) {
 
 async function handlePortalPasswordResetRequest(request, response) {
   const payload = await readJsonBody(request);
+  assertShape({ required: ['email'] }, payload);
   try {
     const result = await requestPortalPasswordReset(payload.email);
     await emitAudit(request, 'portal.password_reset.request', 'portal_account', 'lookup');
@@ -1876,6 +1885,7 @@ async function handlePortalPasswordResetRequest(request, response) {
 
 async function handlePortalPasswordResetComplete(request, response) {
   const payload = await readJsonBody(request);
+  assertShape({ required: ['email', 'token', 'newPassword'] }, payload);
   try {
     const result = await completePortalPasswordReset(payload.email, payload.token, payload.newPassword);
     await emitAudit(request, 'portal.password_reset.complete', 'portal_account', result.portalAccountId ?? 'unknown');
@@ -1909,7 +1919,7 @@ async function handleClientsCollection(request, response, requestUrl, session) {
       if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
       sql += ' ORDER BY created_at DESC LIMIT 200';
       const [rows] = await pool.query(sql, args);
-      items = rows.map(dbRowToClient);
+      items = rows.map(dbRowToClientSummary);
     } else {
       // In-memory fallback (no DB configured)
       items = statusFilter ? clients.filter((c) => c.status === statusFilter) : clients;
@@ -2000,6 +2010,29 @@ function dbRowToClient(row) {
     faithBackground:      row.faith_background ?? '',
     createdAt:            row.created_at,
     updatedAt:            row.updated_at,
+  };
+}
+
+/**
+ * Minimal projection for list endpoints — omits high-sensitivity PHI fields
+ * (SSN, DOB, email, employer) that are not needed for a roster view.
+ */
+function dbRowToClientSummary(row) {
+  return {
+    id:                 row.id,
+    tenantId:           row.tenant_id,
+    firstName:          decrypt(row.first_name_enc),
+    lastName:           decrypt(row.last_name_enc),
+    preferredName:      row.preferred_name_enc ? decrypt(row.preferred_name_enc) : null,
+    pronouns:           row.pronouns          ?? null,
+    status:             row.status,
+    faithBackground:    row.faith_background  ?? '',
+    highTouchpoint:     Boolean(row.high_touchpoint),
+    isMinor:            Boolean(row.is_minor),
+    primaryCounselorId: row.primary_counselor_id ?? null,
+    languagePreference: row.language_preference  ?? 'en',
+    createdAt:          row.created_at,
+    updatedAt:          row.updated_at,
   };
 }
 
@@ -8402,6 +8435,173 @@ async function handleOfferingsSummary(request, response, session) {
   writeJson(response, 200, summary);
 }
 
+// ─── Workflow recommendation state ───────────────────────────────────────────
+// POST   /v1/workflows/recommendations/state      — upsert a counselor action
+// GET    /v1/workflows/recommendations/state      — load states for a client
+// DELETE /v1/workflows/recommendations/state/:id  — remove a state (un-defer/un-hide)
+
+const VALID_WF_STATUSES = new Set(['pending', 'complete', 'deferred', 'hidden']);
+
+async function handleWorkflowRecommendationState(request, response, requestUrl, session) {
+  if (!session || session.role === 'client') {
+    writeJson(response, session ? 403 : 401, { error: session ? 'Staff access required' : 'Authentication required' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  const method = request.method;
+
+  // DELETE /v1/workflows/recommendations/state/:id
+  if (method === 'DELETE') {
+    const parts = requestUrl.pathname.split('/');
+    const stateId = parts[parts.length - 1];
+    if (!stateId || stateId === 'state') {
+      writeJson(response, 400, { error: 'State id required in path' });
+      return;
+    }
+    if (process.env.DB_NAME) {
+      const [rows] = await pool.query(
+        'SELECT id FROM workflow_recommendation_states WHERE id = ? AND tenant_id = ?',
+        [stateId, tenantId],
+      );
+      if (!rows.length) {
+        writeJson(response, 404, { error: 'State not found' });
+        return;
+      }
+      await pool.query(
+        'DELETE FROM workflow_recommendation_states WHERE id = ? AND tenant_id = ?',
+        [stateId, tenantId],
+      );
+    }
+    await emitAudit(request, 'faith.workflow.state.delete', 'workflow_recommendation_state', stateId, session);
+    writeJson(response, 200, { deleted: stateId });
+    return;
+  }
+
+  // GET /v1/workflows/recommendations/state?clientId=:id
+  if (method === 'GET') {
+    const clientId = requestUrl.searchParams.get('clientId');
+    if (!clientId) {
+      writeJson(response, 400, { error: 'clientId query parameter is required' });
+      return;
+    }
+    if (process.env.DB_NAME) {
+      const [rows] = await pool.query(
+        `SELECT id, rule_id, status, deferred_until, actioned_at
+         FROM workflow_recommendation_states
+         WHERE tenant_id = ? AND client_id = ?
+           AND (expires_at IS NULL OR expires_at > NOW())
+         ORDER BY actioned_at DESC`,
+        [tenantId, clientId],
+      );
+      const states = rows.map((row) => ({
+        id: row.id,
+        ruleId: row.rule_id,
+        status: row.status,
+        deferredUntil: row.deferred_until ?? null,
+        actionedAt: row.actioned_at,
+      }));
+      await emitAudit(request, 'faith.workflow.state.read', 'workflow_recommendation_state', clientId, session);
+      writeJson(response, 200, { states });
+    } else {
+      await emitAudit(request, 'faith.workflow.state.read', 'workflow_recommendation_state', clientId, session);
+      writeJson(response, 200, { states: [] });
+    }
+    return;
+  }
+
+  // POST /v1/workflows/recommendations/state
+  if (method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const clientId = sanitizeStr(payload.clientId, 64);
+  const ruleId   = sanitizeStr(payload.ruleId, 128);
+  const status   = sanitizeStr(payload.status, 16);
+  const deferredUntil = payload.deferredUntil ? sanitizeStr(payload.deferredUntil, 16) : null;
+  const notesRaw = payload.notes ? sanitizeStr(payload.notes, 2000) : null;
+
+  if (!clientId || !ruleId) {
+    writeJson(response, 400, { error: 'clientId and ruleId are required' });
+    return;
+  }
+  if (!VALID_WF_STATUSES.has(status)) {
+    writeJson(response, 400, { error: `status must be one of: ${[...VALID_WF_STATUSES].join(', ')}` });
+    return;
+  }
+
+  // Compute expiry: hidden → 30 days, deferred → deferredUntil date, others → null
+  let expiresAt = null;
+  if (status === 'hidden') {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    expiresAt = d.toISOString().slice(0, 19).replace('T', ' ');
+  } else if (status === 'deferred' && deferredUntil) {
+    expiresAt = deferredUntil + ' 23:59:59';
+  }
+
+  const practiceId = sanitizeStr(payload.practiceId, 64) ?? tenantId;
+  const notesEnc   = notesRaw ? encrypt(notesRaw) : null;
+
+  let stateId;
+  if (process.env.DB_NAME) {
+    const counselorId = await resolveCallerStaffMemberId(session);
+    if (!counselorId) {
+      writeJson(response, 403, { error: 'Staff member record required to record workflow actions' });
+      return;
+    }
+
+    // Verify the client belongs to this tenant
+    const [clientRows] = await pool.query(
+      'SELECT id FROM clients WHERE id = ? AND tenant_id = ?',
+      [clientId, tenantId],
+    );
+    if (!clientRows.length) {
+      writeJson(response, 404, { error: 'Client not found' });
+      return;
+    }
+
+    stateId = genId('wfs');
+    await pool.query(
+      `INSERT INTO workflow_recommendation_states
+         (id, tenant_id, practice_id, client_id, counselor_id, rule_id, status, deferred_until, notes_enc, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         counselor_id   = VALUES(counselor_id),
+         status         = VALUES(status),
+         deferred_until = VALUES(deferred_until),
+         notes_enc      = VALUES(notes_enc),
+         actioned_at    = NOW(),
+         expires_at     = VALUES(expires_at)`,
+      [stateId, tenantId, practiceId, clientId, counselorId, ruleId, status, deferredUntil, notesEnc, expiresAt],
+    );
+
+    // Fetch back the actual row id (upsert may have kept the original id)
+    const [updated] = await pool.query(
+      'SELECT id, actioned_at FROM workflow_recommendation_states WHERE tenant_id = ? AND client_id = ? AND rule_id = ?',
+      [tenantId, clientId, ruleId],
+    );
+    stateId = updated[0]?.id ?? stateId;
+
+    telemetry.recordMutation('workflow.state.set');
+  } else {
+    stateId = genId('wfs');
+  }
+
+  // Audit: never include notes (PHI)
+  await emitAudit(request, 'faith.workflow.state.set', 'workflow_recommendation_state', stateId, session);
+
+  writeJson(response, 200, {
+    id: stateId,
+    ruleId,
+    status,
+    deferredUntil: deferredUntil ?? null,
+    actionedAt: new Date().toISOString(),
+  });
+}
+
 async function handleFaithOverview(request, response, requestUrl) {
   if (request.method !== 'GET') {
     writeJson(response, 405, { error: 'Method not allowed' });
@@ -12168,13 +12368,41 @@ async function buildOperationsSummary(request, timezone, session) {
     }),
   ].sort((left, right) => String(right.requestedAt ?? '').localeCompare(String(left.requestedAt ?? '')));
 
+  // Load dismissed workflow recommendation states so the dashboard tile reflects
+  // open/unaddressed items only, not raw rule firings.
+  const dismissedClientIds = new Set(); // clients where ALL signals are complete/hidden
+  const tenantId = callerTenant(request, session);
+  if (process.env.DB_NAME) {
+    try {
+      // A client is "dismissed" when every non-expired state for them is complete or hidden.
+      // We only remove them from counts if they have at least one state record and none are pending/deferred.
+      const [stateRows] = await pool.query(
+        `SELECT client_id,
+                SUM(CASE WHEN status IN ('pending','deferred') THEN 1 ELSE 0 END) AS open_count,
+                COUNT(*) AS total_count
+         FROM workflow_recommendation_states
+         WHERE tenant_id = ?
+           AND (expires_at IS NULL OR expires_at > NOW())
+         GROUP BY client_id`,
+        [tenantId],
+      );
+      for (const row of stateRows) {
+        if (row.total_count > 0 && row.open_count === 0) {
+          dismissedClientIds.add(row.client_id);
+        }
+      }
+    } catch (_err) {
+      // Non-fatal: if query fails, counts fall back to raw signals
+    }
+  }
+
   // Build a lightweight faithful-workflow risk rollup for dashboard visibility.
   // These counts are intentionally conservative and based on existing operational signals.
   const criticalFaithClientIds = new Set();
   const moderateFaithClientIds = new Set();
 
   for (const item of noteGapItems) {
-    if (!item?.clientId) continue;
+    if (!item?.clientId || dismissedClientIds.has(item.clientId)) continue;
     if ((item.daysWithoutNote ?? 0) >= 7) {
       criticalFaithClientIds.add(item.clientId);
       continue;
@@ -12185,12 +12413,12 @@ async function buildOperationsSummary(request, timezone, session) {
   }
 
   for (const item of highTouchpointWithoutFutureAppointmentItems) {
-    if (!item?.clientId) continue;
+    if (!item?.clientId || dismissedClientIds.has(item.clientId)) continue;
     criticalFaithClientIds.add(item.clientId);
   }
 
   for (const item of outstandingAssignmentItems) {
-    if (!item?.clientId) continue;
+    if (!item?.clientId || dismissedClientIds.has(item.clientId)) continue;
     if (criticalFaithClientIds.has(item.clientId)) continue;
     moderateFaithClientIds.add(item.clientId);
   }
@@ -12768,6 +12996,8 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/portal/data-rights') return '/v1/portal/data-rights';
   if (pathname === '/v1/portal/data-rights/review') return '/v1/portal/data-rights/review';
   if (pathname.startsWith('/v1/offerings/')) return '/v1/offerings/:id';
+  if (pathname === '/v1/workflows/recommendations/state') return '/v1/workflows/recommendations/state';
+  if (pathname.startsWith('/v1/workflows/recommendations/state/')) return '/v1/workflows/recommendations/state/:id';
   if (pathname === '/v1/faith/overview') return '/v1/faith/overview';
   if (pathname === '/v1/faith/note-templates') return '/v1/faith/note-templates';
   if (pathname === '/v1/faith/treatment-goals') return '/v1/faith/treatment-goals';

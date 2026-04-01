@@ -247,11 +247,27 @@ Deliverables:
 - Implement optional AI rationale via `POST /v1/workflows/rationale` (API stub)
 - Template rationale fallback when AI endpoint unavailable
 
-### Phase 4: Action Buttons + Integrations
-Deliverables:
-- Action button handlers (draft generators, note prep, verse suggestions)
-- `POST /v1/workflows/actions/:type` endpoint stubs
-- "Mark complete / defer / hide" status persistence (client-side state, optionally persisted)
+### Phase 4: Action Persistence + Backend Wiring ✅ COMPLETE (2026-04-01)
+
+Delivered in commit `8f60c57` / PR #6.
+
+**Database:**
+
+- `workflow_recommendation_states` table — upsert-based, one row per rule per client, auto-expiry (hidden: 30 days, deferred: until chosen date), PHI-encrypted notes column, tenant-isolated via FK cascade
+
+**API:**
+
+- `POST /v1/workflows/recommendations/state` — upsert a counselor action
+- `GET  /v1/workflows/recommendations/state?clientId=` — load persisted states on client select
+- `DELETE /v1/workflows/recommendations/state/:id` — undo defer/hide
+- Audit events on all three; `notes_enc` excluded from audit payload (PHI)
+- `faithfulWorkflowCounts` in operations summary now excludes clients with all-dismissed states
+
+**Frontend:**
+
+- `FaithWorkflowsPage.jsx` — fetches persisted states alongside clinical data; merges into `runWorkflow()` output via `applyPersistedStates()`; posts changes optimistically
+- `RecommendationDrawer.jsx` — mark complete, defer (date picker), hide, and reopen wired; safety-locked recs (priority ≥ 9) cannot be hidden/deferred
+- `engine/contentTemplates.js` (new) — static template library for all 7 content actions: session agenda, note prep, verse suggestions, prayer prompt, CBT exercise, journal prompt, follow-up message draft
 
 ### Phase 5: Testing + Safety Hardening + Performance
 Deliverables:

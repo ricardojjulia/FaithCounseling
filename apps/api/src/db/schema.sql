@@ -1412,6 +1412,26 @@ CREATE TABLE IF NOT EXISTS staff_faith_profiles (
   CONSTRAINT fk_staff_faith_member FOREIGN KEY (staff_id) REFERENCES staff_members (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS workflow_recommendation_states (
+  id               VARCHAR(64)   NOT NULL,
+  tenant_id        VARCHAR(64)   NOT NULL,
+  practice_id      VARCHAR(64)   NOT NULL,
+  client_id        VARCHAR(64)   NOT NULL,
+  counselor_id     VARCHAR(64)   NOT NULL,
+  rule_id          VARCHAR(128)  NOT NULL,
+  status           VARCHAR(16)   NOT NULL,
+  deferred_until   DATE          NULL,
+  notes_enc        TEXT          NULL,
+  actioned_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  expires_at       TIMESTAMP     NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_wf_state (tenant_id, client_id, rule_id),
+  INDEX idx_wf_states_client   (tenant_id, client_id),
+  INDEX idx_wf_states_counselor (counselor_id, actioned_at),
+  CONSTRAINT fk_wf_state_client   FOREIGN KEY (client_id)   REFERENCES clients(id)       ON DELETE CASCADE,
+  CONSTRAINT fk_wf_state_counselor FOREIGN KEY (counselor_id) REFERENCES staff_members(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ─── Practices (extended) — add columns missing from initial definition ────────
 -- practices table was created earlier; these ALTER statements are idempotent-safe
 -- via the IF NOT EXISTS DDL for tables above. When running on a fresh DB the

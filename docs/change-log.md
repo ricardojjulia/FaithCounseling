@@ -2,6 +2,42 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v5.6.0 — API Security and Compliance Baseline Hardening
+
+**Date:** 2026-04-01
+**Type:** Security and governance baseline release
+
+### Summary
+
+Introduces a versioned API security and compliance engineering baseline designed for high-trust environments where PHI, PII, confidential business data, and payment-related records may exist. This release codifies secure-by-design and privacy-by-design expectations for all new and modified API work.
+
+### What changed
+
+- updated canonical security standard at `PLANS/FULL-SECURITY-AND-AUDITING.md` with a new section:
+  - `v5.6.0 API Security And Compliance Engineering Standard`
+- added a dedicated README section:
+  - `API Security And Compliance Baseline (v5.6.0)`
+
+### Baseline coverage
+
+- authentication and authorization hardening expectations
+- tenant isolation and object-level access control requirements
+- input validation and output minimization requirements
+- safe error handling and secrets-safe logging requirements
+- PHI/PII/payment-aware handling and redaction requirements
+- auditability, traceability, and secure change-delivery expectations
+
+### Compliance alignment intent
+
+This engineering baseline supports:
+
+- HIPAA-oriented safeguards
+- GDPR-aligned privacy principles
+- SOC 2 control expectations
+- PCI-conscious engineering
+
+No automatic legal certification claim is made by this release.
+
 ## v5.5.0 — Faithful Workflows
 
 **Date:** 2026-03-31

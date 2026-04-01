@@ -15,47 +15,40 @@ import {
   Text,
   Textarea,
   Title,
+  TextInput,
 } from '@mantine/core';
 import { CATEGORY_COLORS, CATEGORY_ICONS } from './engine/types.js';
 import { useI18n } from '../../lib/i18nContext.jsx';
+import { renderActionContent, AI_DISCLAIMER } from './engine/contentTemplates.js';
 
-// Action templates — deterministic string generators (Phase 3 will call an API)
-const ACTION_TEMPLATES = {
-  generate_session_agenda: (rec, client) =>
-    `SESSION AGENDA — ${client?.firstName ?? 'Client'} ${client?.lastName ?? ''}\n\nFocus: ${rec.title}\n\n1. Check-in (5 min)\n2. Review homework/previous session (10 min)\n3. Primary focus: ${rec.summary} (25 min)\n4. Skills/intervention: [Counselor to determine] (10 min)\n5. Wrap-up + homework assignment (10 min)\n\nNotes: ${rec.rationale}`,
-
-  generate_note_prep: (rec, client) =>
-    `PROGRESS NOTE PREP — ${client?.firstName ?? 'Client'} ${client?.lastName ?? ''}\n\nSession focus: ${rec.title}\n\nKey areas to document:\n- ${rec.evidence?.join('\n- ') ?? 'See recommendation details'}\n\nClinical rationale: ${rec.rationale}\n\n${rec.cautions?.length ? 'Cautions: ' + rec.cautions.join('; ') : ''}`,
-
-  suggest_verses: (rec) =>
-    `SCRIPTURE SUGGESTIONS — Optional, client-led\n\nThematic fit: ${rec.title}\n\nSuggested passages:\n• Psalm 34:18 — "The Lord is close to the brokenhearted"\n• Philippians 4:6-7 — Anxiety and peace\n• Romans 8:38-39 — Nothing separates us from God's love\n• Isaiah 41:10 — "Do not fear, for I am with you"\n\n${rec.faithNote ?? ''}\n\n⚠ Use only if client has expressed faith integration interest this session.`,
-
-  create_prayer_prompt: (rec) =>
-    `PRAYER PROMPT — Optional, client-led\n\nFor: ${rec.title}\n\nOpening prompt:\n"God, I bring [client name] before you today. We acknowledge the weight of [issue]. We ask for wisdom, clarity, and peace as we work together on this..."\n\nThemes to consider: healing, courage, peace, clarity\n\n${rec.faithNote ?? ''}\n\n⚠ Only introduce if client initiates or explicitly requests prayer.`,
-
-  create_cbt_exercise: (rec) =>
-    `CBT / GROUNDING EXERCISE\n\nFor: ${rec.title}\n\nSuggested exercise: Thought Record\n\n1. Situation: What happened? When/where?\n2. Automatic thoughts: What went through your mind?\n3. Emotions: What did you feel? (0–100%)\n4. Evidence FOR the thought:\n5. Evidence AGAINST the thought:\n6. Balanced thought: A more balanced way to see this?\n7. Outcome: How do you feel now? (0–100%)\n\nAssign as between-session homework with client agreement.`,
-
-  create_journal_prompt: (rec, client) =>
-    `JOURNALING PROMPT — ${client?.firstName ?? 'Client'}\n\nFor: ${rec.title}\n\nPrompt:\n"Describe a moment this week when you noticed [issue]. What were you thinking? What did you feel in your body? What did you do? What would you like to have done differently?"\n\nAlternative (faith-integrated, if applicable):\n"Where did you notice God's presence — or absence — during this moment? What would you want to say to Him about it?"\n\n${rec.faithNote ? '(Faith note: ' + rec.faithNote + ')' : ''}`,
-
-  draft_followup_message: (rec, client) =>
-    `FOLLOW-UP MESSAGE DRAFT — Requires counselor review before sending\n\nTo: ${client?.firstName ?? 'Client'} ${client?.lastName ?? ''}\n\nHi ${client?.firstName ?? '[Name]'},\n\nI wanted to reach out to check in. We missed you at our last session and I want to make sure you're doing okay. Please reply to this message or call our office at [phone number] when you're able.\n\nI'm thinking of you and here when you're ready.\n\nWarm regards,\n[Counselor Name]\n\n⚠ Review and personalize before sending. Do not send if in crisis — call directly.`,
-
-  add_reminder_task: (rec) =>
-    `REMINDER TASK\n\nTitle: ${rec.title}\nCategory: ${rec.category}\nPriority: ${rec.priority}/10\n\nAction needed: ${rec.summary}\n\nEvidence: ${rec.evidence?.join('; ') ?? 'See recommendation'}\n\n[Add to task list or calendar for follow-up]`,
-
-  create_treatment_plan_update: (rec, client) =>
-    `TREATMENT PLAN UPDATE DRAFT — ${client?.firstName ?? 'Client'}\n\nTriggered by: ${rec.title}\n\nSuggested update:\nGoal: [Counselor to define based on: ${rec.summary}]\nIntervention: [Counselor to specify]\nTarget date: [Set realistic timeline]\nMeasurable outcome: [Define observable change]\n\nRationale: ${rec.rationale}\n\n⚠ Requires counselor review and client collaboration before finalizing.`,
-};
+const SAFETY_LOCK_THRESHOLD = 9;
 
 /**
  * Right-side detail drawer for a selected recommendation.
+ *
+ * Props:
+ *   rec                — the Recommendation object
+ *   client             — client record (for name interpolation)
+ *   allRecommendations — full list for session agenda generation
+ *   opened             — drawer open state
+ *   onClose            — close callback
+ *   onStatusChange     — (rec, status, deferredUntil?) => void
+ *   onAction           — (rec, actionType) => void
  */
-export default function RecommendationDrawer({ rec, client, opened, onClose }) {
+export default function RecommendationDrawer({
+  rec,
+  client,
+  allRecommendations = [],
+  opened,
+  onClose,
+  onStatusChange,
+  onAction,
+}) {
   const { t } = useI18n();
   const [actionOutput, setActionOutput] = useState(null);
   const [actionRunning, setActionRunning] = useState(false);
+  const [deferDate, setDeferDate] = useState('');
+  const [showDeferInput, setShowDeferInput] = useState(false);
 
   if (!rec) return null;
 
@@ -63,23 +56,72 @@ export default function RecommendationDrawer({ rec, client, opened, onClose }) {
   const icon = CATEGORY_ICONS[rec.category] ?? '•';
   const confidencePct = Math.round(rec.confidence * 100);
   const isSpiritual = rec.category === 'spiritual';
+  const isSafetyLocked = rec.priority >= SAFETY_LOCK_THRESHOLD;
 
-  const handleAction = (actionType) => {
-    const template = ACTION_TEMPLATES[actionType];
-    if (!template) return;
+  const clientName = [client?.firstName, client?.lastName].filter(Boolean).join(' ') || 'Client';
+  const clientFirstName = client?.firstName || '';
+
+  const handleContentAction = (actionType) => {
     setActionRunning(true);
     setActionOutput(null);
-    // Simulate async generation (Phase 3 will call /v1/workflows/rationale)
+    // Render template (synchronous, but wrapped in timeout for perceived responsiveness)
     setTimeout(() => {
-      setActionOutput(template(rec, client));
+      const content = renderActionContent(actionType, rec, {
+        clientName,
+        clientFirstName,
+        allRecommendations,
+      });
+      setActionOutput(content ?? `No template available for action: ${actionType}`);
       setActionRunning(false);
-    }, 400);
+    }, 200);
   };
 
-  // All actions for this rec including status ones
-  const primaryActions = (rec.actions ?? []).filter(
-    (a) => !['mark_complete', 'defer', 'hide'].includes(a),
+  const handleMarkComplete = () => {
+    onStatusChange?.(rec, 'complete');
+    onClose();
+  };
+
+  const handleHide = () => {
+    onStatusChange?.(rec, 'hidden');
+    onClose();
+  };
+
+  const handleDefer = () => {
+    if (!showDeferInput) {
+      setShowDeferInput(true);
+      return;
+    }
+    if (!deferDate) return;
+    onStatusChange?.(rec, 'deferred', deferDate);
+    setShowDeferInput(false);
+    setDeferDate('');
+    onClose();
+  };
+
+  const handleAddReminder = () => {
+    // POST /v1/reminders with pre-filled data
+    fetch('/api/v1/reminders', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: rec.title,
+        notes: rec.summary,
+        category: rec.category,
+        clientId: client?.id,
+        dueAt: null,
+      }),
+    }).catch(() => {});
+    // Also show a note prep so the counselor knows what the reminder is for
+    handleContentAction('generate_note_prep');
+  };
+
+  // Status actions are always shown; content actions come from the rec's actions array
+  const contentActions = (rec.actions ?? []).filter(
+    (a) => !['mark_complete', 'defer', 'hide', 'add_reminder_task'].includes(a),
   );
+
+  const currentStatus = rec.status ?? 'pending';
 
   return (
     <Drawer
@@ -106,6 +148,36 @@ export default function RecommendationDrawer({ rec, client, opened, onClose }) {
           </Alert>
         )}
 
+        {/* Safety lock notice */}
+        {isSafetyLocked && (
+          <Alert color="red" variant="light" size="xs">
+            <Text size="xs">
+              <strong>Safety item:</strong> This recommendation cannot be hidden or deferred. It requires clinical review before this session.
+            </Text>
+          </Alert>
+        )}
+
+        {/* Current status badge */}
+        {currentStatus !== 'pending' && (
+          <Group>
+            <Badge
+              color={currentStatus === 'complete' ? 'green' : currentStatus === 'deferred' ? 'orange' : 'gray'}
+              variant="light"
+              size="sm"
+            >
+              {currentStatus === 'complete' ? '✓ Complete' : currentStatus === 'deferred' ? '⏱ Deferred' : '◌ Hidden'}
+            </Badge>
+            <Button
+              size="compact-xs"
+              variant="subtle"
+              color="gray"
+              onClick={() => onStatusChange?.(rec, 'pending')}
+            >
+              Reopen
+            </Button>
+          </Group>
+        )}
+
         {/* Priority + confidence */}
         <Group gap="xl">
           <Stack gap={2}>
@@ -130,7 +202,7 @@ export default function RecommendationDrawer({ rec, client, opened, onClose }) {
         {/* Evidence */}
         {rec.evidence?.length > 0 && (
           <Stack gap={4}>
-            <Text size="xs" fw={700} c="dimmed" tt="uppercase">{t('workflow.drawer.evidence')}</Text>
+            <Text size="xs" fw={700} c="dimmed" tt="uppercase">{t('workflow.node.evidence')}</Text>
             {rec.evidence.map((e, i) => (
               <Paper key={i} withBorder radius="sm" p="xs">
                 <Text size="sm" ff="monospace">{e}</Text>
@@ -184,25 +256,36 @@ export default function RecommendationDrawer({ rec, client, opened, onClose }) {
           </>
         )}
 
-        {/* Actions */}
-        {primaryActions.length > 0 && (
+        {/* Content-generating actions */}
+        {contentActions.length > 0 && (
           <>
             <Divider />
             <Stack gap={6}>
-              <Text size="xs" fw={700} c="dimmed" tt="uppercase">Actions</Text>
+              <Text size="xs" fw={700} c="dimmed" tt="uppercase">Generate</Text>
               <Group gap="xs">
-                {primaryActions.map((action) => (
+                {contentActions.map((action) => (
                   <Button
                     key={action}
                     size="xs"
                     variant="light"
                     color={isSpiritual && ['suggest_verses', 'create_prayer_prompt'].includes(action) ? 'grape' : 'blue'}
-                    onClick={() => handleAction(action)}
+                    onClick={() => handleContentAction(action)}
                     disabled={actionRunning}
                   >
-                    {t(`workflow.action.${action}`)}
+                    {t(`workflow.action.${action}`) || action}
                   </Button>
                 ))}
+                {(rec.actions ?? []).includes('add_reminder_task') && (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    color="teal"
+                    onClick={handleAddReminder}
+                    disabled={actionRunning}
+                  >
+                    {t('workflow.action.addReminder') || 'Add Reminder'}
+                  </Button>
+                )}
               </Group>
             </Stack>
           </>
@@ -212,24 +295,24 @@ export default function RecommendationDrawer({ rec, client, opened, onClose }) {
         {actionRunning && (
           <Group justify="center" py="md">
             <Loader size="sm" />
-            <Text size="sm" c="dimmed">{t('workflow.action.running')}</Text>
+            <Text size="sm" c="dimmed">Generating…</Text>
           </Group>
         )}
 
         {actionOutput && (
           <Stack gap={6}>
             <Group justify="space-between" align="center">
-              <Text size="xs" fw={700} c="dimmed" tt="uppercase">{t('workflow.action.result.title')}</Text>
+              <Text size="xs" fw={700} c="dimmed" tt="uppercase">Generated draft</Text>
               <Group gap={4}>
                 <CopyButton value={actionOutput}>
                   {({ copied, copy }) => (
                     <Button size="compact-xs" variant="subtle" color={copied ? 'green' : 'gray'} onClick={copy}>
-                      {copied ? '✓ Copied' : t('workflow.action.copy')}
+                      {copied ? '✓ Copied' : 'Copy'}
                     </Button>
                   )}
                 </CopyButton>
                 <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setActionOutput(null)}>
-                  {t('workflow.action.close')}
+                  Clear
                 </Button>
               </Group>
             </Group>
@@ -241,10 +324,56 @@ export default function RecommendationDrawer({ rec, client, opened, onClose }) {
               styles={{ input: { fontFamily: 'monospace', fontSize: 12 } }}
             />
             <Alert color="yellow" variant="light" size="xs">
-              <Text size="xs">{t('workflow.action.output.disclaimer')}</Text>
+              <Text size="xs">{AI_DISCLAIMER}</Text>
             </Alert>
           </Stack>
         )}
+
+        {/* Status actions — mark complete / defer / hide */}
+        <Divider />
+        <Stack gap={6}>
+          <Text size="xs" fw={700} c="dimmed" tt="uppercase">Status</Text>
+
+          {currentStatus !== 'complete' && (
+            <Button size="xs" variant="filled" color="green" onClick={handleMarkComplete}>
+              ✓ Mark Complete
+            </Button>
+          )}
+
+          {!isSafetyLocked && currentStatus !== 'deferred' && (
+            <>
+              {showDeferInput ? (
+                <Group gap="xs" align="flex-end">
+                  <TextInput
+                    label="Defer until"
+                    type="date"
+                    size="xs"
+                    value={deferDate}
+                    onChange={(e) => setDeferDate(e.currentTarget.value)}
+                    style={{ flex: 1 }}
+                    min={new Date().toISOString().slice(0, 10)}
+                  />
+                  <Button size="xs" variant="light" color="orange" onClick={handleDefer} disabled={!deferDate}>
+                    Confirm
+                  </Button>
+                  <Button size="xs" variant="subtle" color="gray" onClick={() => { setShowDeferInput(false); setDeferDate(''); }}>
+                    Cancel
+                  </Button>
+                </Group>
+              ) : (
+                <Button size="xs" variant="light" color="orange" onClick={handleDefer}>
+                  ⏱ Defer
+                </Button>
+              )}
+            </>
+          )}
+
+          {!isSafetyLocked && currentStatus !== 'hidden' && (
+            <Button size="xs" variant="subtle" color="gray" onClick={handleHide}>
+              ◌ Hide (auto-expires in 30 days)
+            </Button>
+          )}
+        </Stack>
       </Stack>
     </Drawer>
   );
