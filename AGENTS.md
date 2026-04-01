@@ -1,5 +1,7 @@
 # AGENTS
 
+You are working in the FaithCounseling repository — a faith-based Christian counseling practice platform. Follow these rules exactly before making changes.
+
 This repository uses `main` as the monitoring and telemetry baseline.
 
 For any work touching UI, telemetry, monitoring, OTEL, health, screens, tabs, workflows, dashboards, or summaries:
@@ -38,3 +40,51 @@ Relationship of the two files:
 - `PLANS/FULL-SURFACE-MONITORING.md` is the detailed canonical implementation spec.
 - `PLANS/FULL-SECURITY-AND-AUDITING.md` is the detailed canonical implementation spec for security and auditing.
 - `AGENTS.md` is the durable session-level instruction layer and defers to the canonical plan files when details are needed.
+
+---
+
+## Git and collaboration rules
+
+- Do not push directly to main.
+- Always create a feature branch first.
+- Open a pull request into main.
+- Keep commits focused and small.
+- Use signed commits.
+- Never use destructive git commands unless explicitly requested by the user.
+
+## Local workflow guardrails
+
+A shared pre-push hook exists at `.githooks/pre-push`. Enable it in your clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+This hook blocks direct pushes to main and master.
+
+## Repository policy context
+
+- Main branch protections and ruleset behavior are active.
+- Signed commits are required.
+- Branch + PR workflow is expected.
+
+---
+
+## Required execution checklist for every task
+
+1. Read `AGENTS.md` (this file).
+2. Confirm task scope — identify whether monitoring or security plans apply.
+3. Make changes on a new feature branch.
+4. Run relevant validation and tests.
+5. Update docs when behavior or user-facing flow changes.
+6. Commit with a signed commit.
+7. Push branch and open a PR with a clear summary and validation notes.
+
+## Pull request expectations
+
+Every PR must include:
+
+- **What changed** — describe the change.
+- **Why it changed** — describe the motivation.
+- **Validation performed** — tests run, manual checks done.
+- **Follow-up actions** — anything maintainers need to do after merge.
