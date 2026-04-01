@@ -270,12 +270,23 @@ Delivered in commit `8f60c57` / PR #6.
 - `engine/contentTemplates.js` (new) — static template library for all 7 content actions: session agenda, note prep, verse suggestions, prayer prompt, CBT exercise, journal prompt, follow-up message draft
 
 ### Phase 5: Testing + Safety Hardening + Performance
+**Status: ✅ COMPLETE**
+
 Deliverables:
-- Integration tests (rules engine with realistic data)
-- UI tests (panel interactions, safety banner visibility)
-- Performance review (client list virtualization if > 100 clients)
-- Safety audit checklist review
-- Logging (telemetry events for each recommendation surfaced + each action taken)
+- ✅ **Rules engine integration tests** — `engine/runWorkflow.test.mjs` (51 tests, all green)
+  - Covers all 5 mock clients: Emma (critical), Marcus (high), Priya (moderate), David (routine), Sarah (discharge)
+  - Tests: category presence/absence, safety rule fires, ruleId correctness, no duplicate IDs, sort order, safety lock invariant, null safety, idempotency, required field shapes
+- ✅ **Production bug fixes discovered by tests**:
+  - `monitoringRules.js` — `buildOverdueRec` crash: `data` not in scope (fixed: param added)
+  - `safetyRules.js` — `'SI'` keyword matched substring in common words like "assigned", "transition", "consistent" (fixed: word-boundary regex for short abbreviations)
+- ✅ **Telemetry events** wired in `FaithWorkflowsPage.jsx`:
+  - `recommendations_surfaced` (with `with_safety`/`no_safety` signal) — fired on client selection
+  - `client_selected` — fired on left-panel client click
+  - `recommendation_opened` — fired when recommendation drawer opens
+  - `recommendation_${status}` — fired on status change (complete, defer, hide)
+  - `action_${actionType}` — fired on content action button click
+  - Zero PHI emitted: only category names and count bands in telemetry attrs
+- UI regression tests and performance review deferred to Phase 6 (browser automation required for full panel interaction tests)
 
 ---
 

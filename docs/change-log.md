@@ -2,6 +2,43 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v5.5.1 — Faithful Workflows: Phase 5 — Testing, Telemetry, and Bug Fixes
+
+**Date:** 2026-04-02
+**Type:** Patch — testing completeness, telemetry events, production bug fixes
+
+### Summary
+
+Completes Phase 5 of Faithful Workflows. Adds a 51-test integration suite for the
+rules engine, wires frontend telemetry events to the workflow page, and fixes two
+production bugs discovered by the new tests.
+
+### What changed
+
+**New: Rules engine integration tests** (`engine/runWorkflow.test.mjs`)
+- 51 tests covering all 5 mock clients (Emma, Marcus, Priya, David, Sarah)
+- Verifies: safety rule fires by ruleId, category ordering, no-duplicate IDs, sort correctness, safety lock invariant (priority ≥ 9 → never hidden/deferred), required Recommendation field shapes, deterministic idempotency, null/empty input safety
+
+**Bug fix: `monitoringRules.js` — `buildOverdueRec` crash**
+- `data` was referenced inside `buildOverdueRec` but not in scope (only `clientId` and `days` were params)
+- Fixed: `data` added as a parameter; `ruleReassessmentOverdue` passes it through
+- Impact: rule silently threw for every client with assessments > 90 days old — monitoring rec never surfaced
+
+**Bug fix: `safetyRules.js` — `'SI'` keyword false positives**
+- `containsRiskKeyword` used `String.includes('si')` which matched common English words: "assigned", "consistent", "transition", "persistent"
+- Fixed: `'SI'` moved to a word-boundary regex (`/\bSI\b/i`); all other phrase keywords retain substring matching
+- Impact: `rule_safety_risk_note` was firing for clinically routine clients (Marcus, David, Sarah) when their notes contained words like "No homework assigned"
+
+**New: Frontend telemetry events in `FaithWorkflowsPage.jsx`**
+- `recommendations_surfaced` — when a client's rec list first loads; carries `with_safety`/`no_safety` signal
+- `client_selected` — on left-panel client click
+- `recommendation_opened` — when recommendation drawer opens
+- `recommendation_${status}` — on status change (complete, defer, hide)
+- `action_${actionType}` — on content action button click
+- Zero PHI emitted: only category names and count bands used in telemetry attributes
+
+---
+
 ## v5.6.0 — API Security and Compliance Baseline Hardening
 
 **Date:** 2026-04-01

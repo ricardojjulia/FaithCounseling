@@ -15,7 +15,7 @@ export function ruleReassessmentOverdue(data, clientId) {
   if (data.client?.status !== 'active') return null;
   const assessments = (data.assessments ?? []).filter((a) => a.scoredAt || a.completedAt);
   if (assessments.length === 0) {
-    return buildOverdueRec(clientId, null);
+    return buildOverdueRec(data, clientId, null);
   }
 
   const sorted = [...assessments].sort(
@@ -24,10 +24,10 @@ export function ruleReassessmentOverdue(data, clientId) {
   const days = daysSince(sorted[0].scoredAt ?? sorted[0].completedAt);
   if (days < 90) return null;
 
-  return buildOverdueRec(clientId, days);
+  return buildOverdueRec(data, clientId, days);
 }
 
-function buildOverdueRec(clientId, days) {
+function buildOverdueRec(data, clientId, days) {
   return {
     id: `rule_monitoring_reassess:${clientId}`,
     ruleId: 'rule_monitoring_reassess',
@@ -39,7 +39,7 @@ function buildOverdueRec(clientId, days) {
     rationale: `Regular assessment data (PHQ-9, GAD-7, etc.) enables objective monitoring of symptom trajectories and informs treatment decisions. ${days ? `The last completed assessment was ${days} days ago — past the standard 90-day reassessment cycle.` : 'Without baseline data, progress cannot be objectively tracked.'}`,
     evidence: [
       days ? `Last assessment: ${days} days ago` : 'No completed assessments found',
-      `Client status: ${data?.client?.status ?? 'active'}`,
+      `Client status: ${data.client?.status ?? 'active'}`,
     ],
     priority: 5,
     confidence: 1.0,
