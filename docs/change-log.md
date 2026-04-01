@@ -2,14 +2,14 @@
 
 <!-- markdownlint-disable MD024 -->
 
-## v5.5.0 — Faithful Workflows ⚠️ UNTESTED — Under Review
+## v5.5.0 — Faithful Workflows
 
 **Date:** 2026-03-31
 **Type:** Minor release — new counselor-facing feature page
 
 ### Summary
 
-Introduces **Faithful Workflows**, a counselor-facing three-panel workspace that reviews each client's clinical data and surfaces prioritized, explainable, actionable care recommendations using a hybrid deterministic-rules + template-rationale engine.
+Introduces **Faithful Workflows**, a counselor-facing three-panel workspace that reviews each client's clinical data and surfaces prioritized, explainable, actionable care recommendations using a hybrid deterministic-rules + template-rationale engine. The page is wired to real API data; the demo dataset now seeds five clients with rich clinical profiles (PHQ-9 score history, item-9 SI scores, GAD-7, PCL-5, treatment goal objects, faith profiles, no-show appointments) that drive the full urgency range end-to-end.
 
 ### New features
 
@@ -18,7 +18,7 @@ Introduces **Faithful Workflows**, a counselor-facing three-panel workspace that
 - **Right drawer:** Full recommendation detail — why surfaced, evidence snippets, clinical relevance, faith integration note, cautions, documentation considerations, and action outputs
 - **Action buttons:** Session agenda, note prep, Bible verses (optional), prayer prompt (optional), CBT exercise, journaling prompt, follow-up message, reminder task, treatment plan update draft — all output AI-disclaimer watermark
 - **Safety enforcement:** Safety nodes cannot be hidden or deferred when priority ≥ 9; safety banner always visible; spiritual nodes always labeled "(Optional)"
-- **5 mock clients** (Emma R., Marcus T., Priya K., David L., Sarah M.) covering the full urgency range — available in demo/dev mode
+- **5 demo clients** mapped to real seeded records (Elena/Jordan/Naomi/Sofia/Isaac) covering the full urgency range — page uses real API data, mock clients serve as dev-time fallback only
 
 ### Rules engine (27 rules across 7 categories)
 
@@ -30,6 +30,18 @@ Introduces **Faithful Workflows**, a counselor-facing three-panel workspace that
 - Spiritual (all optional): biblical integration, grief support, transition prayer, faith acknowledge
 - Coordination: no insurance, open referral, faith referral, closing summary
 - Monitoring: reassessment overdue, discharge planning, stable progress
+
+### Demo dataset — Faithful Workflows enrichment
+
+Five canonical clients carry enriched clinical data seeded by `pnpm demo:finalize`:
+
+| Client | Counselor | Urgency | Key signals |
+| -------- | ----------- | ------- | ------------- |
+| Elena Martinez (client-001) | Ricardo Julia | Critical | PHQ-9 14→18→22, item9=3, 2 no-shows, faith opt-in |
+| Jordan Alvarez (client-002) | Ricardo Julia | High | PHQ-9 12→16→18, GAD-7=15, plan stale 110d |
+| Naomi Rivera (client-003) | Ricardo Julia | Moderate | Note 36d old, last assessment 97d ago |
+| Sofia Hernandez (client-005) | Ricardo Julia | Discharge | All 3 goals completed, PHQ-9=4 improving, faith opt-in |
+| Isaac Romero (client-010) | Mercy Robles | Routine | Stable PHQ-9, faith opt-in, no homework in notes |
 
 ### New files
 
@@ -55,11 +67,17 @@ apps/web/src/components/FaithWorkflows/
         ├── spiritualRules.js
         ├── coordinationRules.js
         └── monitoringRules.js
+
+.claude/agents/demo-dataset-finalizer.md
 ```
 
 ### Modified files
 
 - `apps/web/src/App.jsx` — `showFaith` flag + `FaithWorkflowsPage` import + render
+- `apps/api/src/db/queries/clientFaithProfiles.js` — row mapper exposes `integratesFaith`, `tradition`, `notes` aliases
+- `apps/api/src/db/queries/clinical.js` — treatment plan row mapper exposes `reviewedAt` / `lastReviewedAt`
+- `ops/demo-dataset/manifest.mjs` — `WORKFLOW_ENRICHMENT` block; enriched assessment history, goal objects, faith integration flags, no-show appointments
+- `ops/demo-dataset/common.mjs` — seeds `faith_integration_level`, goal objects, assessment history submissions; updated invariant for submission coverage
 - `packages/i18n/src/index.js` — ~65 new `workflow.*` keys
 - `packages/domain/src/index.js` — `workflowCategories`, `workflowActionTypes`, `workflowUrgencyLevels`, `workflowRecommendationStatuses`, `workflowTrends` enums
 
@@ -909,7 +927,7 @@ Completes Spanish localization across all deeper application surfaces (client de
 ### Mitigations and Fixes
 
 | Finding | Component | Fix |
-|---|---|---|
+| --- | --- | --- |
 | Tab labels bypassing i18n | `ClientDetailTabs.jsx`, `CounselorDetailTabs.jsx`, `WorkspaceStudioPage.jsx` | Converted `TABS` arrays from `{ label }` to `{ labelKey }`. All tab renders use `t(tab.labelKey)`. |
 | Variable shadowing | `WorkspaceStudioPage.jsx` | Renamed `.map()` parameter from `t` to `tab` across all three usages in the file. |
 | Inconsistent studio tab key path | `WorkspaceStudioPage.jsx` | Removed `documentsStudio` special case. All 10 studio tabs use uniform `t(tab.labelKey)`. |
