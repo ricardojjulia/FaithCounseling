@@ -213,6 +213,20 @@ Operations Studio stabilization update: removed non-representative AR display an
 - Database implementation details: `docs/DATABASE-IMPLEMENTATION.md`
 - Change log: `docs/change-log.md`
 
+## Contributing
+
+1. Create a feature branch from `main`.
+2. Keep changes focused and include relevant tests or validation commands.
+3. Run local checks before opening a PR:
+
+```bash
+pnpm lint
+pnpm test
+```
+
+4. Update docs when user-visible behavior changes.
+5. Open a pull request with a clear summary and validation notes.
+
 ## Open Source License
 
 This project is licensed under the MIT License.
