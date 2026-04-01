@@ -97,6 +97,22 @@ def _normalize_visible_text(text: str) -> str:
     return " ".join((text or "").split()).strip().lower()
 
 
+def _is_probable_raw_i18n_key(text: str) -> bool:
+    if not isinstance(text, str):
+        return False
+    return bool(re.match(r"^[a-z0-9_]+(?:\.[a-z0-9_]+)+$", text.strip()))
+
+
+def _required_translation_settings(settings: dict[str, Any]) -> dict[str, Any]:
+    required_fields = ["sourceLocale", "tone", "fallbackMode", "useGlossary", "glossary"]
+    missing_fields = [field for field in required_fields if field not in settings]
+    return {
+        "requiredFields": required_fields,
+        "missingFields": missing_fields,
+        "valid": len(missing_fields) == 0,
+    }
+
+
 async def _collect_visible_text(
     page,
     selectors: list[str],
@@ -162,6 +178,100 @@ async def _api_json(page, method: str, url: str, payload: dict[str, Any] | None 
         raise RuntimeError(f"{method} {url} failed ({response.status}): {message}")
 
     return data if isinstance(data, dict) else {"value": data}
+
+
+async def _verify_language_applies_across_surfaces(
+    page,
+    locale: str,
+    locale_label: str,
+    base_url: str,
+) -> dict[str, Any]:
+    # Cover in-app views and linked standalone pages from the sidebar nav model.
+    collected: list[dict[str, Any]] = []
+    surface_issues: list[dict[str, Any]] = []
+
+    def record_surface(name: str, url: str, texts: list[str]) -> None:
+        normalized = [_normalize_visible_text(value) for value in texts if _normalize_visible_text(value)]
+        raw_keys = [value for value in texts if _is_probable_raw_i18n_key(value)]
+        pass_state = len(raw_keys) == 0 and len(normalized) > 0
+        entry = {
+            "surface": name,
+            "url": url,
+            "visibleTextCount": len(texts),
+            "rawKeyLeakCount": len(raw_keys),
+            "rawKeySamples": raw_keys[:10],
+            "status": "pass" if pass_state else "warn",
+        }
+        collected.append(entry)
+        if not pass_state:
+            surface_issues.append(entry)
+
+    await page.goto(base_url, wait_until="domcontentloaded")
+    await page.wait_for_timeout(1000)
+    await _apply_language_selection(page, locale, locale_label)
+    await page.wait_for_timeout(900)
+
+    nav_items = page.locator("[data-nav-key]")
+    nav_count = await nav_items.count()
+    internal_nav_keys: list[str] = []
+    external_nav_urls: list[tuple[str, str]] = []
+
+    for idx in range(nav_count):
+        nav = nav_items.nth(idx)
+        key = await nav.get_attribute("data-nav-key")
+        href = await nav.get_attribute("href")
+        if not key:
+            continue
+        if isinstance(href, str) and href.strip():
+            external_nav_urls.append((key, href))
+        else:
+            internal_nav_keys.append(key)
+
+    base_selectors = [
+        ".workspace-topbar-kicker",
+        ".workspace-topbar-title",
+        ".workspace-topbar-subtitle",
+        "[data-nav-key]",
+        "button",
+        "h1, h2, h3",
+        "label",
+    ]
+
+    for nav_key in internal_nav_keys:
+        target = page.locator(f'[data-nav-key="{nav_key}"]').first
+        if await target.count() == 0:
+            continue
+        try:
+            await target.scroll_into_view_if_needed()
+            await target.click(timeout=5000, force=True)
+        except Exception:
+            await page.evaluate(
+                "(key) => { const node = document.querySelector(`[data-nav-key=\\\"${key}\\\"]`); if (node) node.click(); }",
+                nav_key,
+            )
+        await page.wait_for_timeout(800)
+        visible = await _collect_visible_text(page, base_selectors)
+        record_surface(f"app:{nav_key}", page.url, visible)
+
+    origin = _derive_origin_from_base_url(base_url)
+    for nav_key, href in external_nav_urls:
+        if href.startswith("http://") or href.startswith("https://"):
+            target_url = href
+        else:
+            target_url = f"{origin}{href}" if href.startswith("/") else f"{origin}/{href}"
+
+        await page.goto(target_url, wait_until="domcontentloaded")
+        await page.wait_for_timeout(800)
+        visible = await _collect_visible_text(page, ["h1, h2, h3", "button", "label", "[data-nav-key]", "[class*=title]"])
+        record_surface(f"page:{nav_key}", target_url, visible)
+
+    return {
+        "surfaceCount": len(collected),
+        "surfaces": collected,
+        "issueCount": len(surface_issues),
+        "issues": surface_issues,
+        "status": "pass" if not surface_issues else "warn",
+    }
 
 
 async def prepare_locale_in_application(
@@ -581,4 +691,132 @@ async def run_browser_translation_challenge(
         "issueCount": len(issues),
         "issues": issues,
         "artifactScreenshot": str(screenshot_path),
+    }
+
+
+async def run_language_agent(
+    language_or_locale: str,
+    mode: str = "create_or_review",
+    base_url: str = DEFAULT_BASE_URL,
+    login_email: str = DEFAULT_LOGIN_EMAIL,
+    login_password: str = DEFAULT_LOGIN_PASSWORD,
+) -> dict[str, Any]:
+    """Create/review a locale, validate required i18n variables, and verify language application across app surfaces."""
+    locale, locale_label = _resolve_locale_input(language_or_locale)
+    requested_mode = (mode or "create_or_review").strip().lower()
+    if requested_mode not in {"create", "review", "create_or_review"}:
+        raise ValueError("mode must be one of: create, review, create_or_review")
+
+    origin = _derive_origin_from_base_url(base_url)
+    api_locales = f"{origin}/v1/i18n/locales"
+    api_settings = f"{origin}/v1/i18n/settings/{locale}"
+
+    settings_snapshot = _load_json(SETTINGS_PATH)
+    locale_settings = settings_snapshot.get(locale, {})
+
+    # Needed variables in language settings code, label, and active locale handling.
+    config_audit = {
+        "languageSettingsVariables": {
+            "storageKey": "faith.locale",
+            "activeLocaleVariable": "locale",
+            "localeSetter": "setLocale",
+            "localeCollection": "locales",
+            "labelProperty": "label",
+            "valueProperty": "value",
+        },
+        "requiredTranslationConfig": _required_translation_settings(locale_settings),
+    }
+
+    integrity: dict[str, Any] = {}
+    accepted_terms: dict[str, Any] = {}
+    browser_rollout: dict[str, Any] = {}
+    surface_verification: dict[str, Any] = {}
+
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=True)
+        context = await browser.new_context(viewport={"width": 1440, "height": 900})
+        page = await context.new_page()
+
+        await page.goto(base_url, wait_until="domcontentloaded")
+        if await page.locator("#loginEmail").is_visible():
+            await page.locator("#loginEmail").fill(login_email)
+            await page.locator("#loginPassword").fill(login_password)
+            await page.locator("#loginPassword").press("Enter")
+            await page.wait_for_timeout(1200)
+
+        if requested_mode in {"create", "create_or_review"}:
+            await _api_json(page, "POST", api_locales, {"locale": locale, "label": locale_label})
+
+        if requested_mode in {"create", "create_or_review"}:
+            # Use counseling-aware defaults for better first-pass language quality.
+            await _api_json(
+                page,
+                "PATCH",
+                api_settings,
+                {
+                    "settings": {
+                        "sourceLocale": SOURCE_LOCALE,
+                        "tone": "pastoral",
+                        "fallbackMode": "copy",
+                        "useGlossary": True,
+                    }
+                },
+            )
+
+        await context.close()
+        await browser.close()
+
+    browser_rollout = await prepare_locale_in_application(
+        language_or_locale=locale,
+        base_url=base_url,
+        login_email=login_email,
+        login_password=login_password,
+    )
+    integrity = evaluate_locale_integrity(locale)
+    accepted_terms = evaluate_accepted_terms(locale)
+
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=True)
+        context = await browser.new_context(viewport={"width": 1440, "height": 900})
+        page = await context.new_page()
+
+        await page.goto(base_url, wait_until="domcontentloaded")
+        if await page.locator("#loginEmail").is_visible():
+            await page.locator("#loginEmail").fill(login_email)
+            await page.locator("#loginPassword").fill(login_password)
+            await page.locator("#loginPassword").press("Enter")
+            await page.wait_for_timeout(1200)
+
+        surface_verification = await _verify_language_applies_across_surfaces(page, locale, locale_label, base_url)
+        await context.close()
+        await browser.close()
+
+    statuses = [
+        config_audit["requiredTranslationConfig"]["valid"],
+        browser_rollout.get("status") == "pass",
+        integrity.get("status") == "pass",
+        accepted_terms.get("status") in {"pass", "warn"},
+        surface_verification.get("status") == "pass",
+    ]
+
+    overall = "pass" if all(statuses) else "warn"
+    if integrity.get("status") == "fail":
+        overall = "fail"
+
+    return {
+        "agent": "language-agent",
+        "mode": requested_mode,
+        "locale": locale,
+        "label": locale_label,
+        "status": overall,
+        "configAudit": config_audit,
+        "rollout": browser_rollout,
+        "integrity": integrity,
+        "acceptedTerms": accepted_terms,
+        "surfaceVerification": surface_verification,
+        "recommendation": (
+            "Locale is healthy for counseling workflows."
+            if overall == "pass"
+            else "Review missing settings, translation integrity issues, and surface warnings before release."
+        ),
     }

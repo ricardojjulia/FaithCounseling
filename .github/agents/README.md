@@ -56,6 +56,12 @@ pnpm agent:translation:run
 
 The service listens on `http://127.0.0.1:8098` by default.
 
+### [Language Agent](/Users/rjulia/FaithCounseling/.github/agents/language-agent.agent.md)
+
+Language rollout and validation agent that always takes a language argument, verifies required locale configuration variables, validates active locale and label wiring, and checks that language switching applies across app views and linked screens. Uses counseling-aware and Christian counseling-aware translation quality rules.
+
+Use when creating or reviewing any locale and you want one pass that covers config readiness, key integrity, accepted terminology, and cross-surface language application.
+
 ### [Demo Dataset Finalizer](/Users/rjulia/FaithCounseling/.claude/agents/demo-dataset-finalizer.md)
 
 Deterministic demo data reset agent. Validates and restores the canonical 10-client dataset for the `system` tenant after tests pass. Runs `pnpm demo:verify` and `pnpm demo:finalize`, confirms all invariants, and reports credentials. Scoped exclusively to `ops/demo-dataset/` — does not touch application code or run browser tests.

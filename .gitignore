@@ -10,3 +10,10 @@ coverage/
 .claude/settings.local.json
 test-results/*
 !test-results/.last-run.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.venv311/

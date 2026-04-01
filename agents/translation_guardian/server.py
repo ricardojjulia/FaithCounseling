@@ -21,6 +21,7 @@ try:
         evaluate_accepted_terms,
         evaluate_locale_integrity,
         prepare_locale_in_application,
+        run_language_agent,
         run_browser_translation_challenge,
     )
 except ImportError:
@@ -32,6 +33,7 @@ except ImportError:
         evaluate_accepted_terms,
         evaluate_locale_integrity,
         prepare_locale_in_application,
+        run_language_agent,
         run_browser_translation_challenge,
     )
 
@@ -67,7 +69,8 @@ def create_agent() -> Agent:
         instructions=(
             "You are Translation Guardian for a production counseling app. "
             "Your mandate is to protect application stability while validating translation quality. "
-            "Always run this sequence when asked to evaluate a locale: "
+            "Always require a language_or_locale argument and run run_language_agent first for create/review requests. "
+            "Then, when asked to evaluate a locale in detail, run this sequence: "
             "1) prepare_locale_in_application, "
             "2) evaluate_locale_integrity, "
             "3) evaluate_accepted_terms, "
@@ -83,6 +86,7 @@ def create_agent() -> Agent:
             evaluate_accepted_terms,
             build_translation_challenge_dataset,
             run_browser_translation_challenge,
+            run_language_agent,
         ],
     )
 

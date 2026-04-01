@@ -22,6 +22,12 @@ Translation Guardian is a Microsoft Agent Framework HTTP agent for safe localiza
   - applies locale where available
   - collects visible UI text
   - flags rejected or missing accepted terminology
+- Adds a one-call language agent flow for create/review:
+  - `run_language_agent(language_or_locale, mode="create_or_review")`
+  - confirms required settings variables and translation config fields are present
+  - verifies locale label and active locale wiring
+  - traverses app views and linked pages to ensure language switch applies across screens
+  - uses counseling-aware defaults (`tone: pastoral`, `useGlossary: true`)
 
 ## Files
 
@@ -95,6 +101,12 @@ pnpm agent:translation:down
 ```
 
 ## Recommended evaluation flow
+
+Preferred one-call flow:
+
+1. `run_language_agent(language_or_locale, mode="create_or_review")`
+
+Expanded validation flow:
 
 For each locale:
 
