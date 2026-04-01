@@ -1,12 +1,19 @@
 # Faith Counseling
 
-Faith Counseling is a web-first Christian counseling practice management platform for solo counselors, group practices, and multi-location clinics.
+Faith Counseling is a web-first, faith-based Christian counseling practice management platform for solo counselors, group practices, and multi-location clinics.
 
-It supports daily end-to-end workflows including client management, scheduling, clinical charting, forms, portal interactions, offerings tracking, compliance-focused operations, and observability.
+It is built specifically for Christian counseling practices and supports daily end-to-end workflows including client management, scheduling, clinical charting, forms, portal interactions, offerings tracking, compliance-focused operations, and observability.
+
+## Faith-Based Christian Practice Focus
+
+- designed for faith-based Christian counseling organizations and ministries
+- supports optional faith-integrated care planning and counseling workflows
+- preserves counselor clinical judgment while enabling Christian care context
+- includes safeguards so spiritual content remains intentional, contextual, and optional where appropriate
 
 ## What This Project Is For
 
-- running counseling operations in one platform across staff and client-facing workflows
+- running faith-based Christian counseling operations in one platform across staff and client-facing workflows
 - improving counselor decision support with structured, explainable workflow guidance
 - enforcing strong tenant scoping, auditability, and security boundaries
 - supporting incremental product evolution with a modular monolith architecture
@@ -224,8 +231,8 @@ pnpm lint
 pnpm test
 ```
 
-4. Update docs when user-visible behavior changes.
-5. Open a pull request with a clear summary and validation notes.
+1. Update docs when user-visible behavior changes.
+2. Open a pull request with a clear summary and validation notes.
 
 ## Open Source License
 
