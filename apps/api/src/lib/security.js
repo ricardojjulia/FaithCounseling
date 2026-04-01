@@ -102,6 +102,20 @@ export function handleCors(request, response) {
 const DEFAULT_WINDOW_MS = 60_000;
 const DEFAULT_MAX_REQUESTS = Number(process.env.RATE_LIMIT_MAX || 300);
 
+const ROUTE_RATE_LIMITS = [
+  // Auth and password reset flows are high-abuse surfaces.
+  { pattern: /^\/v1\/auth\/login$/, maxRequests: 20, windowMs: 60_000 },
+  { pattern: /^\/v1\/auth\/portal-password-reset-request$/, maxRequests: 10, windowMs: 60_000 },
+  { pattern: /^\/v1\/auth\/portal-password-reset$/, maxRequests: 15, windowMs: 60_000 },
+  // Public intake/request paths should have tighter limits than internal CRUD.
+  { pattern: /^\/v1\/portal\/public-requests$/, maxRequests: 10, windowMs: 60_000 },
+  // Data export and GDPR data-rights endpoints — prevent bulk scraping abuse.
+  { pattern: /^\/v1\/platform\/data-exports$/, maxRequests: 5, windowMs: 60_000 },
+  { pattern: /^\/v1\/portal\/data-rights$/, maxRequests: 5, windowMs: 60_000 },
+  // Client record exports (clinical bundles) are high-sensitivity and low-volume by design.
+  { pattern: /^\/v1\/clients\/[^/]+\/export$/, maxRequests: 3, windowMs: 60_000 },
+];
+
 const rateLimitStore = new Map(); // ip -> { count, windowStart }
 
 // Purge stale windows every 5 minutes to avoid unbounded memory growth
@@ -114,24 +128,40 @@ setInterval(() => {
   }
 }, 300_000).unref();
 
-export function checkRateLimit(request, response) {
+function resolveRateLimitPolicy(route) {
+  if (!route) {
+    return { maxRequests: DEFAULT_MAX_REQUESTS, windowMs: DEFAULT_WINDOW_MS };
+  }
+
+  const matched = ROUTE_RATE_LIMITS.find((entry) => entry.pattern.test(route));
+  if (matched) {
+    return { maxRequests: matched.maxRequests, windowMs: matched.windowMs };
+  }
+
+  return { maxRequests: DEFAULT_MAX_REQUESTS, windowMs: DEFAULT_WINDOW_MS };
+}
+
+export function checkRateLimit(request, response, route = '') {
   const ip =
     request.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
     request.socket?.remoteAddress ||
     'unknown';
 
-  const now = Date.now();
-  const entry = rateLimitStore.get(ip);
+  const { maxRequests, windowMs } = resolveRateLimitPolicy(route);
+  const key = `${ip}:${route || 'default'}`;
 
-  if (!entry || now - entry.windowStart > DEFAULT_WINDOW_MS) {
-    rateLimitStore.set(ip, { count: 1, windowStart: now });
+  const now = Date.now();
+  const entry = rateLimitStore.get(key);
+
+  if (!entry || now - entry.windowStart > windowMs) {
+    rateLimitStore.set(key, { count: 1, windowStart: now });
     return false; // not limited
   }
 
   entry.count += 1;
-  if (entry.count > DEFAULT_MAX_REQUESTS) {
-    response.setHeader('retry-after', String(Math.ceil(DEFAULT_WINDOW_MS / 1000)));
-    response.setHeader('x-ratelimit-limit', String(DEFAULT_MAX_REQUESTS));
+  if (entry.count > maxRequests) {
+    response.setHeader('retry-after', String(Math.ceil(windowMs / 1000)));
+    response.setHeader('x-ratelimit-limit', String(maxRequests));
     response.setHeader('x-ratelimit-remaining', '0');
     response.writeHead(429, { 'content-type': 'application/json; charset=utf-8' });
     response.end(JSON.stringify({ error: 'Too many requests. Please retry later.' }));

@@ -40,7 +40,7 @@ import {
 import { createServiceTelemetry, startNodeTelemetry } from '../../../packages/telemetry/src/index.js';
 import { createI18nStore } from './lib/i18n-store.js';
 import { featureFlags } from './lib/feature-flags.js';
-import { HttpError, readJsonBody, writeJson } from './lib/http.js';
+import { HttpError, readJsonBody, writeJson, assertShape } from './lib/http.js';
 import { logError, logInfo, logWarn, serializeError } from './lib/log.js';
 import { translateMessages } from './lib/translate.js';
 import { handleCors, checkRateLimit, enforceRbac, enforceTenantScope, callerIdentity } from './lib/security.js';
@@ -1134,7 +1134,7 @@ const server = http.createServer(async (request, response) => {
     if (handleCors(request, response)) return;
 
     // Rate limiting
-    if (checkRateLimit(request, response)) return;
+    if (checkRateLimit(request, response, route)) return;
 
     // Resolve session from cookie (null if unauthenticated or DB not configured)
     session = process.env.DB_NAME ? await resolveSession(request) : null;
@@ -1781,6 +1781,7 @@ server.listen(port, () => {
 
 async function handleAuthLogin(request, response) {
   const payload = await readJsonBody(request);
+  assertShape({ required: ['email', 'password'] }, payload);
   try {
     const profile = await login(payload.email, payload.password, response);
     await emitAudit(
@@ -1849,6 +1850,7 @@ async function handleAuthChangePassword(request, response, session) {
     return;
   }
   const payload = await readJsonBody(request);
+  assertShape({ required: ['currentPassword', 'newPassword'] }, payload);
   try {
     if (session.role === 'client') {
       await changePortalPassword(session.portal_account_id, payload.currentPassword, payload.newPassword);
@@ -1866,6 +1868,7 @@ async function handleAuthChangePassword(request, response, session) {
 
 async function handlePortalPasswordResetRequest(request, response) {
   const payload = await readJsonBody(request);
+  assertShape({ required: ['email'] }, payload);
   try {
     const result = await requestPortalPasswordReset(payload.email);
     await emitAudit(request, 'portal.password_reset.request', 'portal_account', 'lookup');
@@ -1882,6 +1885,7 @@ async function handlePortalPasswordResetRequest(request, response) {
 
 async function handlePortalPasswordResetComplete(request, response) {
   const payload = await readJsonBody(request);
+  assertShape({ required: ['email', 'token', 'newPassword'] }, payload);
   try {
     const result = await completePortalPasswordReset(payload.email, payload.token, payload.newPassword);
     await emitAudit(request, 'portal.password_reset.complete', 'portal_account', result.portalAccountId ?? 'unknown');
@@ -1915,7 +1919,7 @@ async function handleClientsCollection(request, response, requestUrl, session) {
       if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
       sql += ' ORDER BY created_at DESC LIMIT 200';
       const [rows] = await pool.query(sql, args);
-      items = rows.map(dbRowToClient);
+      items = rows.map(dbRowToClientSummary);
     } else {
       // In-memory fallback (no DB configured)
       items = statusFilter ? clients.filter((c) => c.status === statusFilter) : clients;
@@ -2006,6 +2010,29 @@ function dbRowToClient(row) {
     faithBackground:      row.faith_background ?? '',
     createdAt:            row.created_at,
     updatedAt:            row.updated_at,
+  };
+}
+
+/**
+ * Minimal projection for list endpoints — omits high-sensitivity PHI fields
+ * (SSN, DOB, email, employer) that are not needed for a roster view.
+ */
+function dbRowToClientSummary(row) {
+  return {
+    id:                 row.id,
+    tenantId:           row.tenant_id,
+    firstName:          decrypt(row.first_name_enc),
+    lastName:           decrypt(row.last_name_enc),
+    preferredName:      row.preferred_name_enc ? decrypt(row.preferred_name_enc) : null,
+    pronouns:           row.pronouns          ?? null,
+    status:             row.status,
+    faithBackground:    row.faith_background  ?? '',
+    highTouchpoint:     Boolean(row.high_touchpoint),
+    isMinor:            Boolean(row.is_minor),
+    primaryCounselorId: row.primary_counselor_id ?? null,
+    languagePreference: row.language_preference  ?? 'en',
+    createdAt:          row.created_at,
+    updatedAt:          row.updated_at,
   };
 }
 

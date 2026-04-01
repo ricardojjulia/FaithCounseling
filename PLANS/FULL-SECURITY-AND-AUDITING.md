@@ -203,3 +203,127 @@ Minimum policy:
 - Then update `PLANS/FULL-SURFACE-MONITORING.md` for visible-surface monitoring implications.
 - Then update `AGENTS.md` enforcement rules.
 - Update README and release notes when user-visible behavior changes.
+
+## v5.6.0 API Security And Compliance Engineering Standard
+
+**Status:** Active baseline extension
+**Effective:** April 1, 2026
+
+### Baseline Purpose
+
+This section defines the API-specific secure-engineering and privacy-engineering baseline for all new and modified endpoints, workers, integrations, and related data flows.
+
+This baseline is designed for high-trust environments where PHI, PII, confidential business data, and payment-related records may exist now or in the future.
+
+### Security And Compliance Posture
+
+All API work must maintain or improve controls aligned with:
+
+- HIPAA-oriented technical safeguards
+- GDPR-aligned privacy engineering
+- SOC 2-oriented control evidence and repeatability
+- PCI-conscious data minimization and payment isolation
+
+No implementation may claim legal certification by default. Engineering must provide technical safeguards and operational traceability that support formal compliance programs.
+
+### Core Engineering Principles
+
+- secure-by-design and privacy-by-design
+- deny-by-default authorization behavior
+- least privilege for users, services, and background jobs
+- data minimization at collection, storage, and response boundaries
+- explicit, auditable, maintainable implementation over implicit behavior
+
+### API Control Requirements
+
+#### Authentication
+
+- Require strong authentication for all non-public endpoints.
+- Never trust client-provided identity context without server-side verification.
+- Keep credentials and sessions out of logs, telemetry, and client-visible errors.
+
+#### Authorization
+
+- Enforce object-level and tenant-level authorization on every sensitive operation.
+- Prevent cross-tenant and cross-user access by default.
+- Treat missing authorization checks as defects.
+
+#### Input Validation
+
+- Validate body, params, query, headers, and upload payloads as untrusted input.
+- Prefer explicit allowlists and schema-based validation.
+- Reject malformed, oversized, or unexpected payloads.
+
+#### Output Protection
+
+- Return only required response fields.
+- Avoid raw model/entity passthrough in client responses.
+- Mask or omit sensitive fields by default.
+
+#### Error Handling
+
+- Return safe, structured errors without internal implementation details.
+- Keep stack traces, SQL details, and secret-bearing context out of client responses.
+
+#### Abuse And Reliability Controls
+
+- Apply rate limiting and abuse protections to auth, export, search, and expensive endpoints.
+- Use idempotency patterns for critical writes where duplicate side effects are high risk.
+
+### Sensitive Data Handling Rules
+
+Treat as sensitive by default:
+
+- PHI/ePHI and clinical content
+- PII and government identifiers
+- payment-related records and payment tokens
+- passwords, session IDs, API keys, and access/refresh tokens
+- document contents and metadata that can reveal protected context
+
+Required handling:
+
+- no sensitive values in logs/telemetry traces
+- no hardcoded secrets in source or docs
+- minimum necessary storage and propagation
+- parameterized query patterns for DB access
+- tenant-bound query constraints on every data path
+
+### Logging, Audit, And Monitoring
+
+- Preserve structured, request-correlated operational logs with redaction.
+- Preserve append-only audit semantics and canonical result taxonomy (`success`, `failure`, `denied`, `error`).
+- Keep audit and telemetry separate systems.
+- Do not emit raw audit rows or sensitive IDs in telemetry labels.
+
+### Data Lifecycle And Privacy Operations
+
+- Implement retention-aware handling and controlled deletion pathways where data class requires it.
+- Preserve correction/update and export access pathways for personal data workflows where applicable.
+- Avoid repurposing personal data without explicit design and review.
+
+### Delivery Requirements For Security-Relevant Changes
+
+For meaningful API changes, include or update tests for:
+
+- authentication and authorization
+- tenant isolation and negative access cases
+- validation and malformed payload rejection
+- sensitive field redaction and output restrictions
+- secure error handling
+- audit event emission behavior for sensitive operations
+
+### Non-Negotiable Prohibitions
+
+Do not:
+
+- hardcode secrets or credentials
+- bypass authorization for convenience
+- log PHI/PII/payment secrets/tokens
+- expose stack traces or infrastructure internals to clients
+- introduce undocumented privileged behavior or backdoors
+
+### Rollout And Maintenance
+
+- Apply this baseline to all new API work immediately.
+- Treat legacy gaps as remediation backlog and close incrementally during touchpoints.
+- Record user-visible baseline updates in README and changelog entries.

@@ -27,6 +27,25 @@ It is built specifically for Christian counseling practices and supports daily e
 - Monitoring and telemetry: local monitoring + optional OpenTelemetry export
 - Security and audit foundations: role-aware access controls and structured audit event patterns
 
+## API Security And Compliance Baseline (v5.6.0)
+
+This repository now includes a versioned API security and compliance engineering baseline for high-trust environments where sensitive data may exist.
+
+The baseline requires secure-by-design and privacy-by-design implementation patterns across all API work, including:
+
+- strong authentication and deny-by-default authorization
+- tenant-safe object-level access controls
+- strict input validation and minimal output exposure
+- structured safe error handling and secrets-safe logging
+- PHI/PII/payment-aware data minimization and redaction
+- auditable, append-only security and data-event traceability
+
+Canonical reference:
+
+- `PLANS/FULL-SECURITY-AND-AUDITING.md` (includes the `v5.6.0 API Security And Compliance Engineering Standard` section)
+
+This baseline supports HIPAA-oriented safeguards, GDPR-aligned privacy principles, SOC 2 control expectations, and PCI-conscious engineering practices.
+
 ## Architecture At A Glance
 
 - `apps/web`: React + Mantine web UI, served by a lightweight Node server
