@@ -247,11 +247,173 @@ Deliverables:
 - Implement optional AI rationale via `POST /v1/workflows/rationale` (API stub)
 - Template rationale fallback when AI endpoint unavailable
 
-### Phase 4: Action Buttons + Integrations
-Deliverables:
-- Action button handlers (draft generators, note prep, verse suggestions)
-- `POST /v1/workflows/actions/:type` endpoint stubs
-- "Mark complete / defer / hide" status persistence (client-side state, optionally persisted)
+### Phase 4: Action Persistence + Backend Wiring ← NEXT
+
+**Goal:** When a counselor marks a recommendation complete, defers it, hides it, or takes an action, that state is saved to the database and survives page refresh, session switches, and multi-device access.
+
+#### Current gap (confirmed by audit, 2026-04-01)
+
+- Recommendation status (`complete` / `deferred` / `hidden`) lives in React state only — lost on refresh
+- All action buttons (`generate_note_prep`, `add_reminder_task`, etc.) are UI stubs with no handler
+- No `workflow_recommendation_states` table exists in the DB
+- No `POST /v1/workflows/*` endpoints exist in `apps/api/src/index.js`
+- The existing `GET /v1/faith/overview` and related faith endpoints are read-only reference data, not workflow state
+
+---
+
+#### 4a — Database: `workflow_recommendation_states` table
+
+Add to `apps/api/src/db/schema.sql`:
+
+```sql
+CREATE TABLE IF NOT EXISTS workflow_recommendation_states (
+  id               VARCHAR(36)  NOT NULL DEFAULT (gen_random_uuid()),
+  tenant_id        VARCHAR(36)  NOT NULL,
+  practice_id      VARCHAR(36)  NOT NULL,
+  client_id        VARCHAR(36)  NOT NULL,
+  counselor_id     VARCHAR(36)  NOT NULL,           -- staff member who acted
+  rule_id          VARCHAR(128) NOT NULL,            -- e.g. rule_safety_phq9_severe
+  status           VARCHAR(16)  NOT NULL,            -- pending | complete | deferred | hidden
+  deferred_until   DATE         NULL,                -- optional: defer to a date
+  notes            TEXT         NULL,                -- counselor's free-text note on action
+  actioned_at      TIMESTAMP    NOT NULL DEFAULT NOW(),
+  expires_at       TIMESTAMP    NULL,                -- auto-expire deferred/hidden after N days
+  PRIMARY KEY (id),
+  UNIQUE (tenant_id, client_id, rule_id),           -- one state per rule per client
+  FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+  FOREIGN KEY (counselor_id) REFERENCES staff_members(id)
+);
+CREATE INDEX idx_wf_states_client ON workflow_recommendation_states (tenant_id, client_id);
+CREATE INDEX idx_wf_states_counselor ON workflow_recommendation_states (counselor_id, actioned_at);
+```
+
+**Notes:**
+
+- `UNIQUE (tenant_id, client_id, rule_id)` means upsert replaces prior state — no accumulation of rows per rule
+- `expires_at` enforces that deferred/hidden states auto-reset (e.g., hidden states expire in 30 days so safety rules resurface)
+- PHI constraint: `notes` field is counselor-authored free text — encrypt at rest using the same PHI column encryption already in use for `progress_notes.body`
+
+---
+
+#### 4b — API: recommendation state endpoints
+
+Add to `apps/api/src/index.js` (alongside existing `/v1/faith/*` routes):
+
+```
+POST   /v1/workflows/recommendations/state
+GET    /v1/workflows/recommendations/state?clientId=:id
+DELETE /v1/workflows/recommendations/state/:id   (unhide/un-defer)
+```
+
+**`POST /v1/workflows/recommendations/state`** — upsert a recommendation state
+
+Request body:
+
+```json
+{
+  "clientId": "uuid",
+  "ruleId": "rule_safety_phq9_severe",
+  "status": "deferred",
+  "deferredUntil": "2026-04-15",
+  "notes": "Counselor note (optional)"
+}
+```
+
+Response: `{ id, ruleId, status, actionedAt }`
+
+Audit: emit `faith.workflow.state.set` with `result: success`, `ruleId`, `status` — never include `notes` in audit payload (PHI).
+
+**`GET /v1/workflows/recommendations/state?clientId=:id`** — load all persisted states for a client
+
+Response:
+
+```json
+{
+  "states": [
+    { "ruleId": "rule_safety_phq9_severe", "status": "deferred", "deferredUntil": "2026-04-15", "actionedAt": "..." }
+  ]
+}
+```
+
+Used by `FaithWorkflowsPage.jsx` on client select to hydrate recommendation statuses from DB instead of starting fresh.
+
+**Authorization:** Both endpoints require `staff` role. Clients and portals have no access.
+
+---
+
+#### 4c — Frontend: hydrate status from API
+
+In `FaithWorkflowsPage.jsx`, extend `fetchClientWorkflowData`:
+
+1. After fetching clinical data, call `GET /v1/workflows/recommendations/state?clientId=:id`
+2. Merge returned states into the recommendations array from `runWorkflow()`
+3. Skip merge for mock clients (mock clients always start fresh)
+
+Status override priority: DB state > rules engine default (`pending`).
+
+Safety lock still applies after merge: any `rule_id` with `priority >= 9` that comes back as `hidden` or `deferred` from the DB is reset to `pending` in the renderer — same invariant as today.
+
+---
+
+#### 4d — Frontend: action button handlers
+
+Wire the action buttons in `RecommendationDrawer.jsx`:
+
+| Action | Handler |
+| --- | --- |
+| `mark_complete` | `POST /v1/workflows/recommendations/state` with `status: complete` → optimistic UI update |
+| `defer` | Show date picker → `POST` with `status: deferred` + `deferredUntil` |
+| `hide` | Confirm dialog (safety rules show warning) → `POST` with `status: hidden` |
+| `add_reminder_task` | `POST /v1/reminders` (table already exists) with pre-filled title from rule |
+| `generate_note_prep` | Phase 4: render template string from rule's `docNote` field into a read-only text block with copy button. Phase 5 (AI): swap for `POST /v1/workflows/rationale` |
+| `create_treatment_plan_update` | Navigate to treatment plan for this client with pre-filled goal draft (query param) |
+| `generate_session_agenda` | Render ordered list of pending recommendations as a plain-text agenda with copy button |
+| `suggest_verses` / `create_prayer_prompt` / `create_cbt_exercise` / `create_journal_prompt` | Render from static template library in `engine/contentTemplates.js` — no API call needed |
+| `draft_followup_message` | Render from template with copy button — no API call in Phase 4 |
+
+All generated text shows: `⚠ AI-assisted draft — final judgment belongs to the counselor`
+
+---
+
+#### 4e — Expiry enforcement (API + cron or on-read)
+
+Deferred/hidden states must not persist indefinitely, especially for safety rules.
+
+Rules:
+
+- `hidden` states expire after **30 days** (set `expires_at = NOW() + 30 days` on write)
+- `deferred` states expire on `deferred_until` date
+- On `GET /v1/workflows/recommendations/state`, filter out expired rows (do not return them)
+- A nightly cleanup job (or on-read filter) deletes rows where `expires_at < NOW()`
+
+This ensures safety recommendations resurface automatically without manual counselor action.
+
+---
+
+#### 4f — Dashboard count update
+
+The `faithfulWorkflowCounts` in `GET /v1/operations/summary` (line 12362 in `index.js`) currently derives urgency counts from live clinical data without factoring in dismissed recommendations.
+
+In Phase 4, the summary query should factor in state:
+
+- A client with only `complete` or `hidden` workflow recommendations at a given urgency level should **not** count toward the dashboard tile for that urgency
+- A client with any `pending` safety recommendation always counts as `critical`
+
+This keeps the dashboard tile honest — it reflects open/unaddressed items, not raw rule firings.
+
+---
+
+#### Files changed in Phase 4
+
+| File | Change |
+|------|--------|
+| `apps/api/src/db/schema.sql` | Add `workflow_recommendation_states` table + indexes |
+| `apps/api/src/index.js` | Add `POST/GET/DELETE /v1/workflows/recommendations/state` handlers |
+| `apps/web/src/components/FaithWorkflows/FaithWorkflowsPage.jsx` | Hydrate states from API on client select; POST state changes |
+| `apps/web/src/components/FaithWorkflows/RecommendationDrawer.jsx` | Wire action button handlers |
+| `apps/web/src/components/FaithWorkflows/engine/contentTemplates.js` | New file: static content templates for note prep, verse suggestions, journal prompts, etc. |
+
+No new frontend pages. No schema changes to existing tables.
 
 ### Phase 5: Testing + Safety Hardening + Performance
 Deliverables:
