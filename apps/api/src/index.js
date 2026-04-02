@@ -1900,6 +1900,7 @@ async function handlePortalPasswordResetComplete(request, response) {
 async function handleClientsCollection(request, response, requestUrl, session) {
   if (request.method === 'GET') {
     const statusFilter = requestUrl.searchParams.get('status');
+    const counselorScopeId = await resolveCounselorScopeId(request, requestUrl, session);
 
     let items;
     if (process.env.DB_NAME) {
@@ -1916,6 +1917,10 @@ async function handleClientsCollection(request, response, requestUrl, session) {
         conditions.push('status = ?');
         args.push(statusFilter);
       }
+      if (counselorScopeId) {
+        conditions.push('primary_counselor_id = ?');
+        args.push(counselorScopeId);
+      }
       if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
       sql += ' ORDER BY created_at DESC LIMIT 200';
       const [rows] = await pool.query(sql, args);
@@ -1923,6 +1928,9 @@ async function handleClientsCollection(request, response, requestUrl, session) {
     } else {
       // In-memory fallback (no DB configured)
       items = statusFilter ? clients.filter((c) => c.status === statusFilter) : clients;
+      if (counselorScopeId) {
+        items = items.filter((client) => client.primaryCounselorId === counselorScopeId);
+      }
     }
 
     await emitAudit(request, 'client.list.read', 'client', 'collection', session);
@@ -4818,12 +4826,18 @@ async function handleAppointmentsCollection(request, response, session) {
   if (request.method === 'GET') {
     const requestUrl = new URL(request.url, `http://localhost`);
     const filterClientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50) || null;
+    const counselorScopeId = await resolveCounselorScopeId(request, requestUrl, session);
     let items;
     if (process.env.DB_NAME) {
-      items = await listAppointments(callerTenant(request, session), { clientId: filterClientId });
+      items = await listAppointments(callerTenant(request, session), {
+        clientId: filterClientId,
+        counselorId: counselorScopeId,
+      });
     } else {
       const all = [...appointments].sort((left, right) => left.startsAt.localeCompare(right.startsAt));
-      items = filterClientId ? all.filter((a) => a.clientId === filterClientId) : all;
+      items = all
+        .filter((appointment) => !filterClientId || appointment.clientId === filterClientId)
+        .filter((appointment) => !counselorScopeId || appointment.counselorId === counselorScopeId);
     }
     await emitAudit(request, 'appointment.list.read', 'appointment', 'collection', session);
     writeJson(response, 200, { items });
@@ -5651,7 +5665,8 @@ async function handleOperationsSummary(request, response, requestUrl, session) {
     return;
   }
 
-  const summary = await buildOperationsSummary(request, timezone, session);
+  const counselorScopeId = await resolveCounselorScopeId(request, requestUrl, session);
+  const summary = await buildOperationsSummary(request, timezone, session, { counselorScopeId });
   emitAudit(request, 'operations.summary.read', 'system', 'operations-summary', session);
   writeJson(response, 200, { summary });
 }
@@ -12162,7 +12177,7 @@ async function loadOperationsSummaryData(request, session) {
 
   const tenantId = callerTenant(request, session);
   const [clientRows, notesRows, staff, allAppointments, docs, forms, publicRequests, appointmentRequests, templateRows, overrides] = await Promise.all([
-    pool.query('SELECT id, first_name_enc, last_name_enc, status, high_touchpoint, created_at FROM clients WHERE tenant_id = ?', [tenantId]),
+    pool.query('SELECT id, first_name_enc, last_name_enc, status, high_touchpoint, primary_counselor_id, created_at FROM clients WHERE tenant_id = ?', [tenantId]),
     pool.query('SELECT client_id, locked, signed_at, created_at FROM progress_notes WHERE tenant_id = ?', [tenantId]),
     listStaff(tenantId),
     listAppointments(tenantId),
@@ -12180,6 +12195,7 @@ async function loadOperationsSummaryData(request, session) {
     lastName: row.last_name_enc ? decrypt(row.last_name_enc) : '',
     status: row.status,
     highTouchpoint: Boolean(row.high_touchpoint),
+    primaryCounselorId: row.primary_counselor_id ?? null,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     tenantId,
   }));
@@ -12209,9 +12225,10 @@ async function loadOperationsSummaryData(request, session) {
   };
 }
 
-async function buildOperationsSummary(request, timezone, session) {
+async function buildOperationsSummary(request, timezone, session, { counselorScopeId = null } = {}) {
   const todayKey = dateKeyInTimezone(new Date().toISOString(), timezone);
-  const data = await loadOperationsSummaryData(request, session);
+  const rawData = await loadOperationsSummaryData(request, session);
+  const data = scopeOperationsDataToCounselor(rawData, counselorScopeId);
   const tenantAppointments = (data.appointments ?? [])
     .filter((item) => !isCancelledAppointment(item.status))
     .sort((left, right) => String(getAppointmentStart(left)).localeCompare(String(getAppointmentStart(right))));
@@ -12733,6 +12750,51 @@ function callerRole(request, session) {
 function callerClientId(request, session) {
   if (session?.client_id) return sanitizeStr(session.client_id, 50);
   return sanitizeStr(request.headers['x-client-id'] || '', 50);
+}
+
+const COUNSELOR_SESSION_ROLES = new Set(['counselor', 'intern']);
+
+async function resolveCounselorScopeId(request, requestUrl, session) {
+  const requestedCounselorId = sanitizeStr(
+    requestUrl.searchParams.get('counselorId')
+    ?? request.headers['x-staff-id']
+    ?? request.headers['x-staff-member-id']
+    ?? '',
+    64,
+  ) || null;
+  const role = callerRole(request, session);
+
+  if (!COUNSELOR_SESSION_ROLES.has(role)) {
+    return requestedCounselorId;
+  }
+
+  if (!process.env.DB_NAME) {
+    return requestedCounselorId;
+  }
+
+  return await resolveCallerStaffMemberId(session) ?? requestedCounselorId;
+}
+
+function scopeOperationsDataToCounselor(data, counselorId) {
+  if (!counselorId) return data;
+
+  const scopedClients = (data.clients ?? []).filter((client) => client.primaryCounselorId === counselorId);
+  const scopedClientIds = new Set(scopedClients.map((client) => client.id));
+
+  return {
+    ...data,
+    clients: scopedClients,
+    staff: (data.staff ?? []).filter((staff) => staff.id === counselorId),
+    appointments: (data.appointments ?? []).filter((appointment) => (
+      appointment.counselorId === counselorId
+      || (appointment.clientId && scopedClientIds.has(appointment.clientId))
+    )),
+    notes: (data.notes ?? []).filter((note) => note.clientId && scopedClientIds.has(note.clientId)),
+    documentAssignments: (data.documentAssignments ?? []).filter((item) => item.assigneeId && scopedClientIds.has(item.assigneeId)),
+    formAssignments: (data.formAssignments ?? []).filter((item) => item.clientId && scopedClientIds.has(item.clientId)),
+    portalRegistrationRequests: [],
+    portalAppointmentRequests: (data.portalAppointmentRequests ?? []).filter((item) => item.clientId && scopedClientIds.has(item.clientId)),
+  };
 }
 
 function generateTemporaryPassword() {

@@ -163,14 +163,26 @@ function rowToSeries(row) {
 // Appointments
 // ---------------------------------------------------------------------------
 
-export async function listAppointments(tenantId, { clientId } = {}) {
+export async function listAppointments(tenantId, { clientId, counselorId } = {}) {
+  const conditions = ['a.tenant_id = ?'];
+  const args = [tenantId];
+
   if (clientId) {
+    conditions.push('a.client_id = ?');
+    args.push(clientId);
+  }
+
+  if (counselorId) {
+    conditions.push('a.counselor_id = ?');
+    args.push(counselorId);
+  }
+
+  if (clientId || counselorId) {
     const [rows] = await pool.query(
       `${APPOINTMENT_SELECT}
-       WHERE a.tenant_id = ?
-         AND a.client_id = ?
+       WHERE ${conditions.join('\n         AND ')}
        ORDER BY COALESCE(a.starts_at, a.scheduled_at) ASC`,
-      [tenantId, clientId]
+      args
     );
     return rows.map(rowToAppointment);
   }

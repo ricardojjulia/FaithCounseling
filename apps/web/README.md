@@ -57,6 +57,7 @@ Default URL: `http://localhost:3000`
 - Counselor Home consumes the same appointment and operations-summary feeds as the legacy dashboard, but presents them through a counselor-first working surface
 - Counselor task workflows derive counselor-assigned note gaps, outstanding assignments, and unscheduled follow-up clients from the shared operations-summary and client feeds
 - Counselor charting handoffs now open directly into the session-notes tab and can pre-open the draft-note composer for note-gap follow-up
+- Counselor-facing client rosters, operations summaries, and appointment collections now request counselor-scoped API payloads instead of loading whole-practice collections and trimming them in the browser
 - Dashboard audit visibility consumes `/api/v1/audit/intelligence?days=7&limit=1` for admin-capable roles and degrades to an explicit admin-visibility message for other roles
 - The active session identity is intentionally rendered in the metric band, not in the top bar, so the header stays focused on navigation and workspace context
 - The live API connection status is intentionally rendered in the sidebar identity area, directly below the user pill, instead of in the top bar

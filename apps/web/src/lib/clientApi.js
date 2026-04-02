@@ -29,8 +29,23 @@ function withClientId(baseUrl, clientId) {
 }
 
 export function fetchOperationsSummary(timezone = null) {
-  const suffix = timezone ? `?timezone=${encodeURIComponent(timezone)}` : '';
-  return apiFetch(`/api/v1/operations/summary${suffix}`);
+  return fetchOperationsSummaryScoped({ timezone });
+}
+
+export function fetchOperationsSummaryScoped({ timezone = null, counselorId = null } = {}) {
+  const params = new URLSearchParams();
+  if (timezone) params.set('timezone', timezone);
+  if (counselorId) params.set('counselorId', counselorId);
+  const suffix = params.toString();
+  return apiFetch(`/api/v1/operations/summary${suffix ? `?${suffix}` : ''}`);
+}
+
+export function fetchClients({ status = null, counselorId = null } = {}) {
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  if (counselorId) params.set('counselorId', counselorId);
+  const query = params.toString();
+  return apiFetch(`/api/v1/clients${query ? `?${query}` : ''}`);
 }
 
 // ── Portal ───────────────────────────────────────────────────────────────────
@@ -622,8 +637,12 @@ export function fetchAppointmentTypes() {
   return apiFetch('/api/v1/appointment-types');
 }
 
-export function fetchAppointments() {
-  return apiFetch('/api/v1/appointments');
+export function fetchAppointments({ clientId = null, counselorId = null } = {}) {
+  const params = new URLSearchParams();
+  if (clientId) params.set('clientId', clientId);
+  if (counselorId) params.set('counselorId', counselorId);
+  const query = params.toString();
+  return apiFetch(`/api/v1/appointments${query ? `?${query}` : ''}`);
 }
 
 export function fetchSchedulingCalendar({ day, timezone, counselorId, counselorName, locationName } = {}) {

@@ -1519,7 +1519,9 @@ export default function SchedulingPage({
     setError('');
     try {
       const [appointmentsPayload, typesPayload, calendarResponse, staffPayload] = await Promise.all([
-        fetchAppointments(),
+        fetchAppointments({
+          counselorId: canManageAll ? undefined : (currentUser?.staffId ?? undefined),
+        }),
         fetchAppointmentTypes(),
         fetchSchedulingCalendar({
           day: selectedDay,

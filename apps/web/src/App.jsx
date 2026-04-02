@@ -22,7 +22,7 @@ import OfferingsPage from './components/Offerings/OfferingsPage.jsx';
 import ClinicalChartPage from './components/ClinicalChart/ClinicalChartPage.jsx';
 import FaithWorkflowsPage from './components/FaithWorkflows/FaithWorkflowsPage.jsx';
 import { csrfHeaders } from './lib/csrf.js';
-import { fetchOperationsSummary } from './lib/clientApi.js';
+import { fetchClients, fetchOperationsSummaryScoped, fetchAppointments } from './lib/clientApi.js';
 import { frontendTelemetry } from './lib/frontendTelemetry.js';
 import { useSurfaceTelemetry } from './lib/useSurfaceTelemetry.js';
 import { useI18n } from './lib/i18nContext.jsx';
@@ -189,8 +189,9 @@ export default function App() {
       return;
     }
     let isCancelled = false;
-    fetch('/api/v1/clients', { credentials: 'include' })
-      .then((res) => { if (!res.ok) throw new Error(); return res.json(); })
+    fetchClients({
+      counselorId: isCounselorRole(userRole) ? currentUser?.staffId ?? null : null,
+    })
       .then((payload) => {
         if (isCancelled) return;
         setClientsData({ items: Array.isArray(payload?.items) ? payload.items : [], loading: false, error: null });
@@ -200,7 +201,7 @@ export default function App() {
         setClientsData({ items: [], loading: false, error: t('clients.error.loadFailed') });
       });
     return () => { isCancelled = true; };
-  }, [refreshClientsKey, isAuthenticated, t, userRole]);
+  }, [currentUser?.staffId, refreshClientsKey, isAuthenticated, t, userRole]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -217,7 +218,10 @@ export default function App() {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
     setOperationsSummaryData((current) => ({ ...current, loading: true, error: null }));
 
-    fetchOperationsSummary(timezone)
+    fetchOperationsSummaryScoped({
+      timezone,
+      counselorId: isCounselorRole(userRole) ? currentUser?.staffId ?? null : null,
+    })
       .then((payload) => {
         if (cancelled) return;
         const faithfulCounts = payload?.summary?.faithfulWorkflowCounts;
@@ -245,7 +249,7 @@ export default function App() {
       });
 
     return () => { cancelled = true; };
-  }, [isAuthenticated, refreshOperationsKey, t, userRole]);
+  }, [currentUser?.staffId, isAuthenticated, refreshOperationsKey, t, userRole]);
 
   useEffect(() => {
     if (!isAuthenticated || isClientRole(userRole) || !['dashboard', 'counselor-home'].includes(currentView)) return undefined;
@@ -258,11 +262,9 @@ export default function App() {
   useEffect(() => {
     if (!isAuthenticated) return;
     if (isClientRole(userRole)) return;
-    const appointmentUrl = isCounselorRole(userRole) && currentUser?.staffId
-      ? `/api/v1/appointments?counselorId=${encodeURIComponent(currentUser.staffId)}`
-      : '/api/v1/appointments';
-    fetch(appointmentUrl, { credentials: 'include' })
-      .then((res) => { if (!res.ok) throw new Error(); return res.json(); })
+    fetchAppointments({
+      counselorId: isCounselorRole(userRole) ? currentUser?.staffId ?? null : null,
+    })
       .then((payload) => {
         const items = Array.isArray(payload?.items) ? payload.items : [];
         const { sessions, futureAppointments, yearlyAppointments } = summarizeAppointmentMetrics(items);
