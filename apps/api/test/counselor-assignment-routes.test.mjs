@@ -180,7 +180,7 @@ test('broad counselor form submission collection auto-scopes to assigned clients
   assert.equal(allowed.status, 200);
   assert.deepEqual(
     (allowed.body?.items ?? []).map((item) => item.clientId),
-    ['c-001'],
+    ['c-001', 'c-004', 'c-004', 'c-004'],
   );
 
   const deniedScope = await requestJson('/v1/forms/submissions', {

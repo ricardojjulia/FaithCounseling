@@ -29,6 +29,7 @@ Default URL: `http://localhost:3000`
 - dedicated counselor home surface for counselor and intern roles
 - dedicated counselor tasks surface for counselor note follow-up, assigned document/form review, and scheduling handoff
 - counselor home and task queues now hand off directly into scheduling composers and session-note charting flows for assigned clients
+- client detail now includes a counselor-only Intake Preview tab for pre-session clients with completed intake materials
 - global search across today's schedule
 - redesigned `Practice Operations Center` header with an animated counseling mark and stronger operational hierarchy
 - sidebar heading now uses an animated counseling icon with a simplified `Options` label
@@ -59,6 +60,7 @@ Default URL: `http://localhost:3000`
 - Counselor charting handoffs now open directly into the session-notes tab and can pre-open the draft-note composer for note-gap follow-up
 - Counselor-facing client rosters, operations summaries, and appointment collections now request counselor-scoped API payloads instead of loading whole-practice collections and trimming them in the browser
 - Counselor client detail and chart-related API routes now enforce assigned-client access on the server for counselor and intern sessions
+- Counselor-only intake preview reads now follow the same assigned-client authorization model as client detail routes and remain explicitly provisional rather than diagnostic
 - Counselor scheduling, form workflow, assignment, offerings, and faith referral API actions now reuse the same assigned-client access checks for counselor and intern sessions when those routes traverse client context
 - Counselor broad workflow collections now default to assigned-client scope on the server, including reminders, waitlist, document/form/inventory assignment collections, offerings, and faith referral coordination reads
 - Counselor-scoped client, appointment, scheduling calendar, operations-summary, and series collections now ignore caller-supplied counselor overrides for counselor and intern sessions while keeping explicit counselor filters available to admin-capable roles
