@@ -21,6 +21,8 @@ Start every session by:
 2. Scanning the project structure for known config files (`vite.config.*`, `next.config.*`, `tsconfig.json`, `.env*`, `docker-compose.yml`, etc.).
 3. Running `get_errors` across all files to capture static diagnostics.
 4. Identifying the correct dev start command.
+   - For this repository, use `pnpm start` from repo root as canonical startup.
+   - Do not use `node start-servers.js` for normal development startup.
 5. Installing missing dependencies if needed.
 6. Starting the application and opening it in the browser.
 7. Beginning the debug/fix/retest loop.

@@ -2,6 +2,30 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## Unreleased — Local Startup Reliability and DB Preflight
+
+### Summary
+
+Makes `pnpm start` the permanent and reliable local startup path by enforcing environment and database preflight before the application starts.
+
+### Changed
+
+- `ops/start-all.mjs`
+  - added `ensureDatabase()` preflight when `DB_NAME` is configured
+  - verifies Docker daemon availability and attempts to launch Docker Desktop when needed
+  - ensures MySQL container is running via `docker compose up -d mysql`
+  - waits for MySQL health before build, migration, and service startup
+- `README.md`
+  - documents `pnpm start` as the canonical startup command
+  - documents that `node start-servers.js` is not the preferred path for normal development
+
+### Operational impact
+
+- reduces startup failures where API booted without DB env loaded
+- prevents false "DB disconnected" states caused by starting with legacy commands
+- gives humans and AI agents one consistent startup contract
+
+
 ## v5.5.2 — Faithful Workflows: Phase 6 — Visual Impact Upgrade (3 Canvas Views)
 
 **Date:** 2026-04-01

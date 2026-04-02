@@ -85,16 +85,25 @@ flowchart LR
 ```bash
 pnpm install
 cp .env.example .env
-docker compose up -d
-node --env-file=.env apps/api/src/db/migrate.js
 pnpm start
 ```
+
+`pnpm start` is the canonical local startup command. It now performs environment and database preflight automatically:
+
+- loads `.env` via `node --env-file=.env`
+- ensures Docker is running (launches Docker Desktop when needed)
+- ensures `faith-mysql` is running
+- waits for MySQL readiness
+- runs API migration when DB is configured
+- starts API and web services
+
+Avoid starting the app with `node start-servers.js` for normal development, because it does not apply the full startup preflight.
 
 ## Prerequisites
 
 - Node.js >= 20
 - pnpm >= 10
-- Docker (recommended for local MySQL)
+- Docker Desktop (required for local MySQL preflight)
 - Git
 
 ## Local Setup
@@ -113,19 +122,7 @@ cp .env.example .env
 
 Update `.env` values as needed for your local environment.
 
-### 3. Start MySQL (recommended)
-
-```bash
-docker compose up -d
-```
-
-### 4. Run database migration
-
-```bash
-node --env-file=.env apps/api/src/db/migrate.js
-```
-
-### 5. Start the full app stack
+### 3. Start the full app stack
 
 ```bash
 pnpm start
@@ -133,8 +130,8 @@ pnpm start
 
 Default local endpoints:
 
-- web: `http://localhost:3000` (or configured web port)
-- api: `http://localhost:3001` (from `PORT`)
+- web: `http://127.0.0.1:3002/index.html`
+- api: `http://127.0.0.1:3001`
 
 ## Alternative Local Run Commands
 
