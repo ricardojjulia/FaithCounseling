@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, execSync } from 'node:child_process';
 import process from 'node:process';
 
 const node = process.execPath;
@@ -84,7 +84,58 @@ function shutdown(exitCode = 0) {
 process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));
 
+
+function dockerExec(cmd) {
+  try { execSync(cmd, { stdio: 'pipe' }); return true; } catch { return false; }
+}
+
+async function ensureDatabase() {
+  if (!process.env.DB_NAME) {
+    console.log('[start-all] No DB_NAME configured — skipping database preflight.');
+    return;
+  }
+
+  // Ensure Docker daemon is running
+  if (!dockerExec('docker info')) {
+    console.log('[start-all] Docker not running — launching Docker Desktop...');
+    dockerExec('open -a Docker');
+    process.stdout.write('[start-all] Waiting for Docker to start');
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      if (dockerExec('docker info')) break;
+      process.stdout.write('.');
+    }
+    process.stdout.write('\n');
+    if (!dockerExec('docker info')) {
+      console.error('[start-all] Docker did not start. Please launch Docker Desktop manually and retry.');
+      process.exit(1);
+    }
+  }
+
+  // Ensure MySQL container is up
+  const isUp = dockerExec('docker compose ps --status running mysql 2>/dev/null | grep -q faith-mysql');
+  if (!isUp) {
+    console.log('[start-all] Starting MySQL container...');
+    dockerExec('docker compose up -d mysql');
+  }
+
+  // Wait until MySQL is accepting connections
+  const user = process.env.DB_USER || 'faith_app';
+  const pass = process.env.DB_PASSWORD || '';
+  process.stdout.write('[start-all] Waiting for MySQL');
+  for (let i = 0; i < 30; i++) {
+    const ok = dockerExec(`docker compose exec mysql mysqladmin ping -h 127.0.0.1 -u${user} -p${pass} --silent 2>/dev/null`);
+    if (ok) { console.log(' ready.'); return; }
+    await new Promise(r => setTimeout(r, 2000));
+    process.stdout.write('.');
+  }
+  process.stdout.write('\n');
+  console.error('[start-all] MySQL did not become healthy in time. Check Docker logs.');
+  process.exit(1);
+}
+
 async function main() {
+  await ensureDatabase();
   console.log('[start-all] Building web assets...');
   await runStep('web build', node, ['apps/web/build.js']);
 
