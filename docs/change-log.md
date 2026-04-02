@@ -16,26 +16,55 @@ production bugs discovered by the new tests.
 ### What changed
 
 **New: Rules engine integration tests** (`engine/runWorkflow.test.mjs`)
+
 - 51 tests covering all 5 mock clients (Emma, Marcus, Priya, David, Sarah)
 - Verifies: safety rule fires by ruleId, category ordering, no-duplicate IDs, sort correctness, safety lock invariant (priority ≥ 9 → never hidden/deferred), required Recommendation field shapes, deterministic idempotency, null/empty input safety
 
 **Bug fix: `monitoringRules.js` — `buildOverdueRec` crash**
+
 - `data` was referenced inside `buildOverdueRec` but not in scope (only `clientId` and `days` were params)
 - Fixed: `data` added as a parameter; `ruleReassessmentOverdue` passes it through
 - Impact: rule silently threw for every client with assessments > 90 days old — monitoring rec never surfaced
 
 **Bug fix: `safetyRules.js` — `'SI'` keyword false positives**
+
 - `containsRiskKeyword` used `String.includes('si')` which matched common English words: "assigned", "consistent", "transition", "persistent"
 - Fixed: `'SI'` moved to a word-boundary regex (`/\bSI\b/i`); all other phrase keywords retain substring matching
 - Impact: `rule_safety_risk_note` was firing for clinically routine clients (Marcus, David, Sarah) when their notes contained words like "No homework assigned"
 
 **New: Frontend telemetry events in `FaithWorkflowsPage.jsx`**
+
 - `recommendations_surfaced` — when a client's rec list first loads; carries `with_safety`/`no_safety` signal
 - `client_selected` — on left-panel client click
 - `recommendation_opened` — when recommendation drawer opens
 - `recommendation_${status}` — on status change (complete, defer, hide)
 - `action_${actionType}` — on content action button click
 - Zero PHI emitted: only category names and count bands used in telemetry attributes
+
+---
+
+## Unreleased — DSM-5-TR Diagnosis Lookup
+
+### Summary
+
+Maps the repository `docs/DSM5-TR.md` reference into the client diagnosis workflow so staff can search DSM-5-TR diagnoses from within the diagnosis tab instead of manually keying code/description pairs.
+
+### Changed
+
+- `apps/api/src/lib/dsm5-tr-reference.js`
+  - parses the DSM-5-TR alphabetical appendix from `docs/DSM5-TR.md`
+  - builds a cached lookup index with bounded search results
+- `apps/api/src/index.js`
+  - adds authenticated `GET /v1/reference/dsm5-tr?q=&limit=` lookup endpoint
+  - normalizes the new route for request telemetry
+- `apps/web/src/lib/clientApi.js`
+  - adds DSM-5-TR lookup client helper
+- `apps/web/src/components/ClientDetail/tabs/DiagnosesTab.jsx`
+  - adds DSM-5-TR search/select support in the diagnosis editor
+  - fixes diagnosis field mapping to the API's camelCase contract
+  - tracks lookup, add/remove, save, validation, and empty-match telemetry on `client.diagnoses`
+- `apps/api/test/dsm5-tr-reference.test.mjs`
+  - adds parser/search coverage for the DSM-5-TR reference index
 
 ---
 
