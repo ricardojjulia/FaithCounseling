@@ -1,7 +1,7 @@
 ---
 description: "Use when: reset demo data, finalize demo dataset, restore demo state, seed demo clients, reset test data, run demo:finalize, run demo:verify, prepare demo environment, reset credentials, restore canonical dataset, after test validation reset, post-security post-e2e finalize"
 name: "Demo Dataset Finalizer"
-tools: [execute, read, edit, search, todo]
+tools: [vscode/getProjectSetupInfo, vscode/installExtension, vscode/memory, vscode/newWorkspace, vscode/resolveMemoryFileUri, vscode/runCommand, vscode/vscodeAPI, vscode/extensions, vscode/askQuestions, execute/runNotebookCell, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/runTask, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/getNotebookSummary, read/problems, read/readFile, read/viewImage, read/terminalSelection, read/terminalLastCommand, read/getTaskOutput, agent/runSubagent, edit/createDirectory, edit/createFile, edit/createJupyterNotebook, edit/editFiles, edit/editNotebook, edit/rename, search/changes, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, web/fetch, web/githubRepo, browser/openBrowserPage, todo]
 argument-hint: "Describe the goal or leave blank for the full recommended finalizer flow. Examples: 'Verify demo dataset integrity', 'Run the full finalize flow after tests pass', 'Reset demo data to canonical state', 'Check which invariants are failing before finalizing'."
 ---
 
