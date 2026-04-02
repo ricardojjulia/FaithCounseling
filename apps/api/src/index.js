@@ -5234,12 +5234,13 @@ async function handleSchedulingCalendar(request, response, requestUrl, session) 
   }
 
   const day = sanitizeStr(requestUrl.searchParams.get('day') ?? '', 20) || dateKeyInTimezone(new Date().toISOString(), timezone);
-  const counselorIdFilter = sanitizeStr(requestUrl.searchParams.get('counselorId') ?? '', 64);
-  const counselorFilter = sanitizeStr(requestUrl.searchParams.get('counselorName') ?? '', 200);
   const locationFilter = sanitizeStr(requestUrl.searchParams.get('locationName') ?? '', 200);
   const counselorScope = await resolveCounselorCollectionScope(request, response, session, 'scheduling.calendar.read');
   if (counselorScope === false) return;
+  const isCounselorScopedSession = COUNSELOR_SESSION_ROLES.has(callerRole(request, session));
   const scopedCounselorId = counselorScope?.counselorScopeId ?? null;
+  const counselorIdFilter = isCounselorScopedSession ? null : sanitizeStr(requestUrl.searchParams.get('counselorId') ?? '', 64);
+  const counselorFilter = isCounselorScopedSession ? null : sanitizeStr(requestUrl.searchParams.get('counselorName') ?? '', 200);
 
   if (process.env.DB_NAME) {
     const tenantId = callerTenant(request, session);

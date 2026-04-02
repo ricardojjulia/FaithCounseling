@@ -114,6 +114,17 @@ test('filtered counselor form assignment read denies unassigned client access', 
 });
 
 test('broad counselor form assignment collection auto-scopes to assigned clients', async () => {
+  const allowed = await requestJson('/v1/forms/assignments', {
+    role: 'counselor',
+    staffId: 's-001',
+  });
+
+  assert.equal(allowed.status, 200);
+  assert.deepEqual(
+    (allowed.body?.items ?? []).map((item) => item.clientId),
+    ['c-001'],
+  );
+
   const response = await requestJson('/v1/forms/assignments', {
     role: 'counselor',
     staffId: 's-002',
@@ -121,6 +132,63 @@ test('broad counselor form assignment collection auto-scopes to assigned clients
 
   assert.equal(response.status, 200);
   assert.deepEqual(response.body?.items ?? [], []);
+});
+
+test('broad counselor document assignment collection auto-scopes to assigned clients', async () => {
+  const allowed = await requestJson('/v1/document-assignments', {
+    role: 'counselor',
+    staffId: 's-001',
+  });
+  assert.equal(allowed.status, 200);
+  assert.deepEqual(
+    (allowed.body?.items ?? []).map((item) => item.assigneeId),
+    ['c-001'],
+  );
+
+  const deniedScope = await requestJson('/v1/document-assignments', {
+    role: 'counselor',
+    staffId: 's-002',
+  });
+  assert.equal(deniedScope.status, 200);
+  assert.deepEqual(deniedScope.body?.items ?? [], []);
+});
+
+test('broad counselor inventory assignment collection auto-scopes to assigned clients', async () => {
+  const allowed = await requestJson('/v1/inventory-assignments', {
+    role: 'counselor',
+    staffId: 's-001',
+  });
+  assert.equal(allowed.status, 200);
+  assert.deepEqual(
+    (allowed.body?.items ?? []).map((item) => item.clientId),
+    ['c-001'],
+  );
+
+  const deniedScope = await requestJson('/v1/inventory-assignments', {
+    role: 'counselor',
+    staffId: 's-002',
+  });
+  assert.equal(deniedScope.status, 200);
+  assert.deepEqual(deniedScope.body?.items ?? [], []);
+});
+
+test('broad counselor form submission collection auto-scopes to assigned clients', async () => {
+  const allowed = await requestJson('/v1/forms/submissions', {
+    role: 'counselor',
+    staffId: 's-001',
+  });
+  assert.equal(allowed.status, 200);
+  assert.deepEqual(
+    (allowed.body?.items ?? []).map((item) => item.clientId),
+    ['c-001'],
+  );
+
+  const deniedScope = await requestJson('/v1/forms/submissions', {
+    role: 'counselor',
+    staffId: 's-002',
+  });
+  assert.equal(deniedScope.status, 200);
+  assert.deepEqual(deniedScope.body?.items ?? [], []);
 });
 
 test('broad counselor waitlist collection auto-scopes to assigned clients', async () => {
@@ -326,6 +394,45 @@ test('counselor scheduling calendar narrows availability to the signed-in counse
   assert.deepEqual(
     (response.body?.counselorCalendars ?? []).map((item) => item.counselorName),
     ['Hannah Torres'],
+  );
+});
+
+test('counselor scheduling calendar ignores counselor override filters and stays assigned-scoped', async () => {
+  const response = await requestJson('/v1/scheduling/calendar?counselorId=s-001&counselorName=Rachel%20Jordan', {
+    role: 'counselor',
+    staffId: 's-002',
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(
+    (response.body?.availability ?? []).map((item) => item.staffId),
+    ['s-002'],
+  );
+  assert.deepEqual(
+    (response.body?.counselorCalendars ?? []).map((item) => item.counselorName),
+    ['Hannah Torres'],
+  );
+  assert.deepEqual(
+    (response.body?.counselorCalendars?.[0]?.appointments ?? []).map((item) => item.id),
+    ['a-003'],
+  );
+});
+
+test('counselor operations summary ignores counselor override filters and stays assigned-scoped', async () => {
+  const response = await requestJson('/v1/operations/summary?counselorId=s-002', {
+    role: 'counselor',
+    staffId: 's-001',
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body?.summary?.counts?.totalClients, 3);
+  assert.deepEqual(
+    (response.body?.summary?.todaySchedule?.items ?? []).map((item) => item.id),
+    ['a-001', 'a-002', 'a-004'],
+  );
+  assert.deepEqual(
+    (response.body?.summary?.todaySchedule?.workload ?? []).map((item) => item.counselorId),
+    ['s-001'],
   );
 });
 

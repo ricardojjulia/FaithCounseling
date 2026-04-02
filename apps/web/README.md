@@ -61,7 +61,7 @@ Default URL: `http://localhost:3000`
 - Counselor client detail and chart-related API routes now enforce assigned-client access on the server for counselor and intern sessions
 - Counselor scheduling, form workflow, assignment, offerings, and faith referral API actions now reuse the same assigned-client access checks for counselor and intern sessions when those routes traverse client context
 - Counselor broad workflow collections now default to assigned-client scope on the server, including reminders, waitlist, document/form/inventory assignment collections, offerings, and faith referral coordination reads
-- Counselor-scoped client, appointment, operations-summary, and series collections now ignore caller-supplied counselor overrides for counselor and intern sessions while keeping explicit counselor filters available to admin-capable roles
+- Counselor-scoped client, appointment, scheduling calendar, operations-summary, and series collections now ignore caller-supplied counselor overrides for counselor and intern sessions while keeping explicit counselor filters available to admin-capable roles
 - Offerings list and summary routes now follow the same counselor header/session auth path as the other counselor-scoped API surfaces, so route-level coverage can exercise them in the no-DB development path
 - Appointment series now persists through the no-DB development and test path so scheduling recurrence flows exercise real read/create/update behavior instead of empty placeholders
 - Dashboard audit visibility consumes `/api/v1/audit/intelligence?days=7&limit=1` for admin-capable roles and degrades to an explicit admin-visibility message for other roles
