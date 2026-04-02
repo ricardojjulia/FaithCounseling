@@ -111,6 +111,7 @@ Required boundary rules:
 - `client.demographics`
 - `client.contacts`
 - `client.clinical`
+- `client.intake_preview`
 - `client.diagnoses`
 - `client.faith`
 - `client.legal`
