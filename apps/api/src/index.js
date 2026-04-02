@@ -2105,6 +2105,34 @@ async function resolveAuthorizedClient(request, response, clientId, session, den
   return client;
 }
 
+async function resolveOptionalAuthorizedClient(request, response, clientId, session, deniedAction = defaultClientAccessAuditAction(request.method)) {
+  const normalizedClientId = sanitizeStr(clientId, 64) || null;
+  if (!normalizedClientId) return null;
+  return resolveAuthorizedClient(request, response, normalizedClientId, session, deniedAction);
+}
+
+async function resolveAuthorizedAppointment(request, response, appointmentId, session, deniedAction = 'appointment.update') {
+  let appointment;
+  if (process.env.DB_NAME) {
+    appointment = await getAppointmentById(appointmentId, callerTenant(request, session));
+  } else {
+    appointment = appointments.find((item) => item.id === appointmentId) ?? null;
+  }
+
+  if (!appointment) {
+    writeJson(response, 404, { error: 'Appointment not found' });
+    return null;
+  }
+
+  if (enforceTenantScope(request, response, appointment.tenantId, session)) return null;
+  if (appointment.clientId) {
+    const client = await resolveAuthorizedClient(request, response, appointment.clientId, session, deniedAction);
+    if (!client) return null;
+  }
+
+  return appointment;
+}
+
 async function handleClientById(request, response, requestUrl, session) {
   const clientId = requestUrl.pathname.replace('/v1/clients/', '');
   const client = await resolveAuthorizedClient(request, response, clientId, session, defaultClientAccessAuditAction(request.method));
@@ -3398,6 +3426,10 @@ async function handleDocumentAssignments(request, response, requestUrl, session)
     const clientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50);
     const assigneeId = sanitizeStr(requestUrl.searchParams.get('assigneeId') ?? '', 50);
     const templateId = sanitizeStr(requestUrl.searchParams.get('templateId') ?? '', 50);
+    if (clientId) {
+      const client = await resolveOptionalAuthorizedClient(request, response, clientId, session, 'documents.assignment.read');
+      if (!client) return;
+    }
     if (process.env.DB_NAME) {
       const items = await listDocumentAssignments(callerTenant(request, session), { clientId: clientId || undefined, assigneeId: assigneeId || undefined, templateId: templateId || undefined });
       emitAudit(request, 'documents.assignment.read', 'document_assignment', 'collection', session);
@@ -3438,6 +3470,10 @@ async function handleDocumentAssignments(request, response, requestUrl, session)
     if (!assigneeId) {
       writeJson(response, 400, { error: 'assigneeId is required' });
       return;
+    }
+    if (assigneeType === 'client') {
+      const client = await resolveAuthorizedClient(request, response, assigneeId, session, 'documents.assignment.create');
+      if (!client) return;
     }
 
     if (process.env.DB_NAME) {
@@ -3529,6 +3565,10 @@ async function handleDocumentAssignments(request, response, requestUrl, session)
     const tenantId = callerTenant(request, session);
     const [rows] = await pool.query('SELECT * FROM document_assignments WHERE id = ? AND tenant_id = ?', [assignmentId, tenantId]);
     if (!rows[0]) { writeJson(response, 404, { error: 'Document assignment not found' }); return; }
+    if (rows[0].assignee_type === 'client') {
+      const client = await resolveAuthorizedClient(request, response, rows[0].assignee_id, session, 'documents.assignment.update');
+      if (!client) return;
+    }
     const fields = {};
     if (typeof payload.status === 'string') {
       const status = normalizeDocumentAssignmentStatus(payload.status);
@@ -3568,6 +3608,10 @@ async function handleDocumentAssignments(request, response, requestUrl, session)
   }
 
   if (enforceTenantScope(request, response, item.tenantId)) return;
+  if (item.assigneeType === 'client') {
+    const client = await resolveAuthorizedClient(request, response, item.assigneeId, session, 'documents.assignment.update');
+    if (!client) return;
+  }
 
   if (typeof payload.status === 'string') {
     const status = normalizeDocumentAssignmentStatus(payload.status);
@@ -3747,6 +3791,10 @@ async function handleInventoryAssignments(request, response, requestUrl, session
   if (request.method === 'GET') {
     const clientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50);
     const inventoryId = sanitizeStr(requestUrl.searchParams.get('inventoryId') ?? '', 50);
+    if (clientId) {
+      const client = await resolveOptionalAuthorizedClient(request, response, clientId, session, 'inventory.assignment.read');
+      if (!client) return;
+    }
     if (process.env.DB_NAME && clientId) {
       const items = await listInventoryAssignments(clientId, callerTenant(request, session));
       emitAudit(request, 'inventory.assignment.read', 'inventory_assignment', 'collection', session);
@@ -3765,8 +3813,9 @@ async function handleInventoryAssignments(request, response, requestUrl, session
     const payload = await readJsonBody(request);
     const inventoryId = sanitizeStr(payload.inventoryId, 50);
     const clientId = sanitizeStr(payload.clientId, 50);
+    const client = await resolveAuthorizedClient(request, response, clientId, session, 'inventory.assignment.create');
+    if (!client) return;
     let definition;
-    let client;
     if (process.env.DB_NAME) {
       const tenantId = callerTenant(request, session);
       const [definitionRows] = await pool.query('SELECT id, tenant_id, scoring_method FROM inventory_definitions WHERE id = ? AND tenant_id = ?', [inventoryId, tenantId]);
@@ -3775,12 +3824,6 @@ async function handleInventoryAssignments(request, response, requestUrl, session
         return;
       }
       definition = { id: definitionRows[0].id, tenantId: definitionRows[0].tenant_id, scoringMethod: definitionRows[0].scoring_method };
-      const [clientRows] = await pool.query('SELECT id, tenant_id FROM clients WHERE id = ? AND tenant_id = ?', [clientId, tenantId]);
-      if (!clientRows[0]) {
-        writeJson(response, 400, { error: 'Valid clientId is required' });
-        return;
-      }
-      client = { id: clientRows[0].id, tenantId: clientRows[0].tenant_id };
     } else {
       definition = inventoryDefinitions.find((record) => record.id === inventoryId);
       if (!definition) {
@@ -3788,11 +3831,6 @@ async function handleInventoryAssignments(request, response, requestUrl, session
         return;
       }
       if (enforceTenantScope(request, response, definition.tenantId)) return;
-      client = clients.find((record) => record.id === clientId);
-      if (!client) {
-        writeJson(response, 400, { error: 'Valid clientId is required' });
-        return;
-      }
     }
 
     const status = normalizeInventoryAssignmentStatus(payload.status ?? 'assigned');
@@ -3874,6 +3912,8 @@ async function handleInventoryAssignments(request, response, requestUrl, session
     const tenantId = callerTenant(request, session);
     const [rows] = await pool.query('SELECT * FROM inventory_assignments WHERE id = ? AND tenant_id = ?', [assignmentId, tenantId]);
     if (!rows[0]) { writeJson(response, 404, { error: 'Inventory assignment not found' }); return; }
+    const client = await resolveAuthorizedClient(request, response, rows[0].client_id, session, 'inventory.assignment.update');
+    if (!client) return;
     const fields = {};
     if (typeof payload.status === 'string') {
       const status = normalizeInventoryAssignmentStatus(payload.status);
@@ -3906,6 +3946,8 @@ async function handleInventoryAssignments(request, response, requestUrl, session
   }
 
   if (enforceTenantScope(request, response, item.tenantId)) return;
+  const client = await resolveAuthorizedClient(request, response, item.clientId, session, 'inventory.assignment.update');
+  if (!client) return;
 
   const definition = inventoryDefinitions.find((record) => record.id === item.inventoryId);
   if (!definition) {
@@ -4080,6 +4122,10 @@ async function handleFormWorkflowAssignments(request, response, requestUrl, sess
   if (request.method === 'GET') {
     const clientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 64);
     const status = sanitizeStr(requestUrl.searchParams.get('status') ?? '', 64);
+    if (clientId) {
+      const client = await resolveOptionalAuthorizedClient(request, response, clientId, session, 'forms.assignment.read');
+      if (!client) return;
+    }
     if (process.env.DB_NAME) {
       const items = await listFormAssignments(tenantId, { clientId: clientId || undefined, status: status || undefined });
       emitAudit(request, 'forms.assignment.read', 'form_assignment', 'collection', session);
@@ -4109,6 +4155,8 @@ async function handleFormWorkflowAssignments(request, response, requestUrl, sess
       writeJson(response, 400, { error: 'clientId and formKey are required' });
       return;
     }
+    const client = await resolveAuthorizedClient(request, response, clientId, session, 'forms.assignment.create');
+    if (!client) return;
     const assignmentType = normalizeFormAssignmentType(payload.assignmentType ?? 'next_session');
     if (!assignmentType) {
       writeJson(response, 400, { error: 'assignmentType must be valid' });
@@ -4129,7 +4177,7 @@ async function handleFormWorkflowAssignments(request, response, requestUrl, sess
       await createFormAssignment({
         id: genId('fa'),
         tenantId,
-        clientId,
+        clientId: client.id,
         formKey,
         formTitle: formTitle ?? formKey,
         assignmentType,
@@ -4152,7 +4200,7 @@ async function handleFormWorkflowAssignments(request, response, requestUrl, sess
     const item = {
       id: createId('fa', formWorkflowAssignments),
       tenantId,
-      clientId,
+      clientId: client.id,
       formKey,
       formTitle: formTitle ?? formKey,
       assignmentType,
@@ -4200,6 +4248,8 @@ async function handleFormWorkflowAssignments(request, response, requestUrl, sess
       writeJson(response, 404, { error: 'Form assignment not found' });
       return;
     }
+    const client = await resolveAuthorizedClient(request, response, existing.clientId, session, 'forms.assignment.update');
+    if (!client) return;
     await updateFormAssignment(assignmentId, tenantId, {
       assignmentType: assignmentType ?? undefined,
       scheduledFor: payload.scheduledFor !== undefined ? normalizeIsoDate(payload.scheduledFor) : undefined,
@@ -4221,6 +4271,8 @@ async function handleFormWorkflowAssignments(request, response, requestUrl, sess
     writeJson(response, 404, { error: 'Form assignment not found' });
     return;
   }
+  const client = await resolveAuthorizedClient(request, response, item.clientId, session, 'forms.assignment.update');
+  if (!client) return;
   if (assignmentType) item.assignmentType = assignmentType;
   if (payload.scheduledFor !== undefined) item.scheduledFor = normalizeIsoDate(payload.scheduledFor);
   if (payload.recurrenceRule !== undefined) item.recurrenceRule = sanitizeStr(payload.recurrenceRule, 255);
@@ -4242,6 +4294,10 @@ async function handleFormWorkflowSubmissions(request, response, requestUrl, sess
   if (request.method === 'GET') {
     const clientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 64);
     const formKey = sanitizeStr(requestUrl.searchParams.get('formKey') ?? '', 128);
+    if (clientId) {
+      const client = await resolveOptionalAuthorizedClient(request, response, clientId, session, 'forms.submission.read');
+      if (!client) return;
+    }
     if (process.env.DB_NAME) {
       const items = await listFormSubmissions(tenantId, { clientId: clientId || undefined, formKey: formKey || undefined });
       emitAudit(request, 'forms.submission.read', 'form_submission', 'collection', session);
@@ -4280,14 +4336,16 @@ async function handleFormWorkflowSubmissions(request, response, requestUrl, sess
     writeJson(response, 400, { error: 'clientId, formKey, and responses object are required' });
     return;
   }
+  const client = await resolveAuthorizedClient(request, response, clientId, session, 'forms.submission.create');
+  if (!client) return;
 
   if (process.env.DB_NAME) {
-    const submissionVersion = await getNextSubmissionVersion(tenantId, clientId, formKey);
+    const submissionVersion = await getNextSubmissionVersion(tenantId, client.id, formKey);
     await createFormSubmission({
       id: genId('fs'),
       tenantId,
       assignmentId: assignmentId || null,
-      clientId,
+      clientId: client.id,
       formKey,
       formTitle: formTitle ?? formKey,
       submissionVersion,
@@ -4304,7 +4362,7 @@ async function handleFormWorkflowSubmissions(request, response, requestUrl, sess
         completedAt: new Date().toISOString(),
       });
     }
-    const items = await listFormSubmissions(tenantId, { clientId, formKey });
+    const items = await listFormSubmissions(tenantId, { clientId: client.id, formKey });
     const item = items[0] ?? null;
     telemetry.recordMutation('forms.submission.create');
     emitAudit(request, 'forms.submission.create', 'form_submission', item?.id ?? 'unknown', session);
@@ -4313,15 +4371,15 @@ async function handleFormWorkflowSubmissions(request, response, requestUrl, sess
   }
 
   const currentVersion = formWorkflowSubmissions
-    .filter((item) => item.tenantId === tenantId && item.clientId === clientId && item.formKey === formKey)
+    .filter((item) => item.tenantId === tenantId && item.clientId === client.id && item.formKey === formKey)
     .reduce((max, item) => Math.max(max, Number(item.submissionVersion) || 0), 0);
   const submissionVersion = currentVersion + 1;
   const now = new Date().toISOString();
   const item = {
-    id: createId('fs', formWorkflowSubmissions),
-    tenantId,
-    assignmentId: assignmentId || null,
-    clientId,
+      id: createId('fs', formWorkflowSubmissions),
+      tenantId,
+      assignmentId: assignmentId || null,
+      clientId: client.id,
     formKey,
     formTitle: formTitle ?? formKey,
     submissionVersion,
@@ -4359,6 +4417,8 @@ async function handleClientFormOverview(request, response, requestUrl, session) 
     writeJson(response, 400, { error: 'clientId is required' });
     return;
   }
+  const client = await resolveAuthorizedClient(request, response, clientId, session, 'forms.client_overview.read');
+  if (!client) return;
 
   await ensureFormCatalogSeeded(tenantId);
 
@@ -4367,12 +4427,12 @@ async function handleClientFormOverview(request, response, requestUrl, session) 
     : formCatalogRecords.filter((item) => item.tenantId === tenantId && item.isActive !== false);
 
   const assignments = process.env.DB_NAME
-    ? await listFormAssignments(tenantId, { clientId })
-    : formWorkflowAssignments.filter((item) => item.tenantId === tenantId && item.clientId === clientId);
+    ? await listFormAssignments(tenantId, { clientId: client.id })
+    : formWorkflowAssignments.filter((item) => item.tenantId === tenantId && item.clientId === client.id);
 
   const submissions = process.env.DB_NAME
-    ? await listFormSubmissions(tenantId, { clientId })
-    : formWorkflowSubmissions.filter((item) => item.tenantId === tenantId && item.clientId === clientId);
+    ? await listFormSubmissions(tenantId, { clientId: client.id })
+    : formWorkflowSubmissions.filter((item) => item.tenantId === tenantId && item.clientId === client.id);
 
   const byForm = new Map();
   for (const submission of submissions) {
@@ -4401,7 +4461,7 @@ async function handleClientFormOverview(request, response, requestUrl, session) 
 
   const history = [...byForm.values()].sort((left, right) => String(right.lastSubmittedAt || '').localeCompare(String(left.lastSubmittedAt || '')));
 
-  emitAudit(request, 'forms.client_overview.read', 'form_submission', clientId, session);
+  emitAudit(request, 'forms.client_overview.read', 'form_submission', client.id, session);
   writeJson(response, 200, { catalog, assignments, submissions, history });
 }
 
@@ -4790,6 +4850,10 @@ async function handleAppointmentsCollection(request, response, session) {
   if (request.method === 'GET') {
     const requestUrl = new URL(request.url, `http://localhost`);
     const filterClientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50) || null;
+    if (filterClientId) {
+      const client = await resolveOptionalAuthorizedClient(request, response, filterClientId, session, 'appointment.list.read');
+      if (!client) return;
+    }
     const counselorScopeId = await resolveCounselorScopeId(request, requestUrl, session);
     let items;
     if (process.env.DB_NAME) {
@@ -4815,6 +4879,8 @@ async function handleAppointmentsCollection(request, response, session) {
 
   const payload = await readJsonBody(request);
   const clientId = sanitizeStr(payload.clientId, 50) ?? '';
+  const client = await resolveAuthorizedClient(request, response, clientId, session, 'appointment.create');
+  if (!client) return;
   const counselorId = sanitizeStr(payload.counselorId, 64) ?? null;
 
   const startsAt = normalizeIsoDate(payload.startsAt);
@@ -4863,12 +4929,6 @@ async function handleAppointmentsCollection(request, response, session) {
 
   if (process.env.DB_NAME) {
     const tenantId = callerTenant(request, session);
-    const [rows] = await pool.query('SELECT * FROM clients WHERE id = ? AND tenant_id = ?', [clientId, tenantId]);
-    const client = rows[0] ? dbRowToClient(rows[0]) : null;
-    if (!client) {
-      writeJson(response, 400, { error: 'Valid clientId is required' });
-      return;
-    }
     let counselor = null;
     if (counselorId) {
       counselor = await getStaffById(counselorId, tenantId);
@@ -4897,11 +4957,6 @@ async function handleAppointmentsCollection(request, response, session) {
     await emitAudit(request, 'appointment.create', 'appointment', appointment.id, session);
     writeJson(response, 201, { item: appointment });
   } else {
-    const client = clients.find((item) => item.id === clientId);
-    if (!client) {
-      writeJson(response, 400, { error: 'Valid clientId is required' });
-      return;
-    }
     let counselor = null;
     if (counselorId) {
       counselor = staffMembers.find((item) => item.id === counselorId && item.tenantId === callerTenant(request));
@@ -4935,12 +4990,11 @@ async function handleAppointmentsCollection(request, response, session) {
 
 async function handleAppointmentById(request, response, requestUrl, session) {
   const appointmentId = requestUrl.pathname.replace('/v1/appointments/', '');
+  const appointment = await resolveAuthorizedAppointment(request, response, appointmentId, session, request.method === 'DELETE' ? 'appointment.delete' : 'appointment.update');
+  if (!appointment) return;
 
   if (process.env.DB_NAME) {
-    const tenantId = callerTenant(request);
-    const appointment = await getAppointmentById(appointmentId, tenantId);
-    if (!appointment) { writeJson(response, 404, { error: 'Appointment not found' }); return; }
-
+    const tenantId = callerTenant(request, session);
     if (request.method === 'DELETE') {
       await deleteAppointment(appointmentId, tenantId);
       telemetry.recordMutation('appointment.delete');
@@ -4979,15 +5033,6 @@ async function handleAppointmentById(request, response, requestUrl, session) {
     writeJson(response, 200, { item: updated });
     return;
   }
-
-  const appointment = appointments.find((item) => item.id === appointmentId);
-  if (!appointment) {
-    writeJson(response, 404, { error: 'Appointment not found' });
-    return;
-  }
-
-  // Tenant-scope: caller must belong to the same tenant as this appointment
-  if (enforceTenantScope(request, response, appointment.tenantId)) return;
 
   if (request.method === 'DELETE') {
     const index = appointments.findIndex((item) => item.id === appointmentId);
@@ -5181,6 +5226,10 @@ async function handleReminders(request, response, requestUrl, session) {
   if (request.method === 'GET') {
     const statusFilter = sanitizeStr(requestUrl.searchParams.get('status') ?? '', 30);
     const appointmentIdFilter = sanitizeStr(requestUrl.searchParams.get('appointmentId') ?? '', 50);
+    if (appointmentIdFilter) {
+      const appointment = await resolveAuthorizedAppointment(request, response, appointmentIdFilter, session, 'reminder.read');
+      if (!appointment) return;
+    }
     if (process.env.DB_NAME) {
       const tenantId = callerTenant(request, session);
       const items = await listReminders(tenantId, { status: statusFilter || undefined, appointmentId: appointmentIdFilter || undefined });
@@ -5197,10 +5246,12 @@ async function handleReminders(request, response, requestUrl, session) {
   }
 
   if (request.method === 'POST') {
-    const payload = await readJsonBody(request);
-    const appointmentId = sanitizeStr(payload.appointmentId, 50);
+  const payload = await readJsonBody(request);
+  const appointmentId = sanitizeStr(payload.appointmentId, 50);
+  const appointment = await resolveAuthorizedAppointment(request, response, appointmentId, session, 'reminder.create');
+  if (!appointment) return;
 
-    const status = normalizeReminderStatus(payload.status ?? 'pending');
+  const status = normalizeReminderStatus(payload.status ?? 'pending');
     if (!status) {
       writeJson(response, 400, { error: 'status must be valid' });
       return;
@@ -5208,16 +5259,14 @@ async function handleReminders(request, response, requestUrl, session) {
 
     if (process.env.DB_NAME) {
       const tenantId = callerTenant(request, session);
-      const [apptRows] = await pool.query('SELECT * FROM appointments WHERE id = ? AND tenant_id = ?', [appointmentId, tenantId]);
-      if (!apptRows[0]) { writeJson(response, 400, { error: 'Valid appointmentId is required' }); return; }
       const item = await createReminder({
         id: genId('rem'),
         tenantId,
         appointmentId,
-        clientId: apptRows[0].client_id,
+        clientId: appointment.clientId,
         reminderType: sanitizeStr(payload.reminderType, 80) ?? 'appointment',
         deliveryChannel: sanitizeStr(payload.deliveryChannel, 40) ?? 'email',
-        reminderAt: normalizeIsoDate(payload.reminderAt) ?? apptRows[0].starts_at,
+        reminderAt: normalizeIsoDate(payload.reminderAt) ?? appointment.startsAt,
         status,
         sentAt: status === 'sent' ? new Date().toISOString() : null,
       });
@@ -5226,14 +5275,6 @@ async function handleReminders(request, response, requestUrl, session) {
       writeJson(response, 201, { item });
       return;
     }
-
-    const appointment = appointments.find((item) => item.id === appointmentId);
-    if (!appointment) {
-      writeJson(response, 400, { error: 'Valid appointmentId is required' });
-      return;
-    }
-
-    if (enforceTenantScope(request, response, appointment.tenantId)) return;
 
     const item = {
       id: createId('rem', reminderRecords),
@@ -5265,6 +5306,8 @@ async function handleReminders(request, response, requestUrl, session) {
     const tenantId = callerTenant(request, session);
     const [rows] = await pool.query('SELECT * FROM reminders WHERE id = ? AND tenant_id = ?', [reminderId, tenantId]);
     if (!rows[0]) { writeJson(response, 404, { error: 'Reminder not found' }); return; }
+    const appointment = await resolveAuthorizedAppointment(request, response, rows[0].appointment_id, session, 'reminder.update');
+    if (!appointment) return;
     const fields = {};
     if (typeof payload.status === 'string') { const s = normalizeReminderStatus(payload.status); if (!s) { writeJson(response, 400, { error: 'status must be valid' }); return; } fields.status = s; fields.sentAt = s === 'sent' ? new Date().toISOString() : null; }
     if (typeof payload.reminderAt === 'string') fields.reminderAt = normalizeIsoDate(payload.reminderAt);
@@ -5281,6 +5324,8 @@ async function handleReminders(request, response, requestUrl, session) {
   }
 
   if (enforceTenantScope(request, response, item.tenantId)) return;
+  const appointment = await resolveAuthorizedAppointment(request, response, item.appointmentId, session, 'reminder.update');
+  if (!appointment) return;
 
   if (typeof payload.status === 'string') {
     const status = normalizeReminderStatus(payload.status);
@@ -5511,13 +5556,17 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
   }
 
   if (request.method === 'GET') {
+    const clientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50) || undefined;
+    if (clientId) {
+      const client = await resolveOptionalAuthorizedClient(request, response, clientId, session, 'series.read');
+      if (!client) return;
+    }
     if (process.env.DB_NAME) {
       const filters = {};
       const counselorId = requestUrl.searchParams.get('counselorId');
-      const clientId    = requestUrl.searchParams.get('clientId');
       const status      = requestUrl.searchParams.get('status');
       if (counselorId) filters.counselorId = sanitizeStr(counselorId, 50);
-      if (clientId)    filters.clientId    = sanitizeStr(clientId, 50);
+      if (clientId)    filters.clientId    = clientId;
       if (status)      filters.status      = sanitizeStr(status, 20);
       const items = await listSeries(tenantId, filters);
       emitAudit(request, 'series.read', 'appointment_series', 'collection', session);
@@ -5534,12 +5583,14 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
       writeJson(response, 400, { error: 'counselorId, clientId, recurrenceRule, and startDate are required' });
       return;
     }
+    const client = await resolveAuthorizedClient(request, response, payload.clientId, session, 'series.create');
+    if (!client) return;
     if (process.env.DB_NAME) {
       const item = await createSeries({
         id: crypto.randomUUID(),
         tenantId,
         counselorId:     sanitizeStr(payload.counselorId, 50),
-        clientId:        sanitizeStr(payload.clientId, 50),
+        clientId:        client.id,
         clientName:      sanitizeStr(payload.clientName ?? '', 160)    || null,
         counselorName:   sanitizeStr(payload.counselorName ?? '', 160) || null,
         appointmentType: sanitizeStr(payload.appointmentType ?? '', 60) || null,
@@ -5555,7 +5606,7 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
       writeJson(response, 201, { item });
       return;
     }
-    writeJson(response, 201, { item: { id: crypto.randomUUID(), tenantId, status: 'active', ...payload } });
+    writeJson(response, 201, { item: { id: crypto.randomUUID(), tenantId, status: 'active', ...payload, clientId: client.id } });
     return;
   }
 
@@ -5564,6 +5615,10 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
     const id = sanitizeStr(payload.id ?? '', 36);
     if (!id) { writeJson(response, 400, { error: 'id is required' }); return; }
     if (process.env.DB_NAME) {
+      const [rows] = await pool.query('SELECT client_id FROM appointment_series WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+      if (!rows[0]) { writeJson(response, 404, { error: 'Series not found' }); return; }
+      const client = await resolveAuthorizedClient(request, response, rows[0].client_id, session, 'series.update');
+      if (!client) return;
       const fields = {};
       if (payload.status        !== undefined) fields.status        = sanitizeStr(payload.status, 20);
       if (payload.endDate       !== undefined) fields.endDate       = sanitizeStr(payload.endDate, 12) || null;
@@ -8335,6 +8390,10 @@ async function handleOfferings(request, response, requestUrl, session) {
       const portalClient = await resolvePortalClient(request, response, clientId, session);
       if (!portalClient) return;
       clientId = portalClient.id;
+    } else if (clientId) {
+      const client = await resolveOptionalAuthorizedClient(request, response, clientId, session, 'offerings.list');
+      if (!client) return;
+      clientId = client.id;
     }
     const items = await listOfferingsForTenant(tenantId, { clientId });
     emitAudit(request, 'offerings.list', 'offering', tenantId, session);
@@ -8353,13 +8412,15 @@ async function handleOfferings(request, response, requestUrl, session) {
       writeJson(response, 400, { error: 'clientId is required' });
       return;
     }
+    const client = await resolveAuthorizedClient(request, response, clientId, session, 'offerings.record');
+    if (!client) return;
     const receivedOn = sanitizeStr(payload.receivedOn ?? '', 10) || new Date().toISOString().slice(0, 10);
     const amountCents = typeof payload.amountCents === 'number' && Number.isInteger(payload.amountCents) && payload.amountCents >= 0
       ? payload.amountCents : 0;
     const item = {
       id: genId('off'),
       tenantId,
-      clientId,
+      clientId: client.id,
       counselorId: sanitizeStr(payload.counselorId ?? '', 50) || null,
       amountCents,
       receivedOn,
@@ -8383,6 +8444,13 @@ async function handleOfferings(request, response, requestUrl, session) {
       writeJson(response, 400, { error: 'offeringId is required' });
       return;
     }
+    const existing = (await listOfferingsForTenant(tenantId)).find((item) => item.id === offeringId) ?? null;
+    if (!existing) {
+      writeJson(response, 404, { error: 'Offering not found' });
+      return;
+    }
+    const client = await resolveAuthorizedClient(request, response, existing.clientId, session, 'offerings.delete');
+    if (!client) return;
     const deleted = await deleteOfferingRecord(tenantId, offeringId);
     if (!deleted) {
       writeJson(response, 404, { error: 'Offering not found' });
@@ -8440,13 +8508,15 @@ async function handleWorkflowRecommendationState(request, response, requestUrl, 
     }
     if (process.env.DB_NAME) {
       const [rows] = await pool.query(
-        'SELECT id FROM workflow_recommendation_states WHERE id = ? AND tenant_id = ?',
+        'SELECT id, client_id FROM workflow_recommendation_states WHERE id = ? AND tenant_id = ?',
         [stateId, tenantId],
       );
       if (!rows.length) {
         writeJson(response, 404, { error: 'State not found' });
         return;
       }
+      const client = await resolveAuthorizedClient(request, response, rows[0].client_id, session, 'faith.workflow.state.delete');
+      if (!client) return;
       await pool.query(
         'DELETE FROM workflow_recommendation_states WHERE id = ? AND tenant_id = ?',
         [stateId, tenantId],
@@ -8464,6 +8534,8 @@ async function handleWorkflowRecommendationState(request, response, requestUrl, 
       writeJson(response, 400, { error: 'clientId query parameter is required' });
       return;
     }
+    const client = await resolveAuthorizedClient(request, response, clientId, session, 'faith.workflow.state.read');
+    if (!client) return;
     if (process.env.DB_NAME) {
       const [rows] = await pool.query(
         `SELECT id, rule_id, status, deferred_until, actioned_at
@@ -8471,7 +8543,7 @@ async function handleWorkflowRecommendationState(request, response, requestUrl, 
          WHERE tenant_id = ? AND client_id = ?
            AND (expires_at IS NULL OR expires_at > NOW())
          ORDER BY actioned_at DESC`,
-        [tenantId, clientId],
+        [tenantId, client.id],
       );
       const states = rows.map((row) => ({
         id: row.id,
@@ -8480,10 +8552,10 @@ async function handleWorkflowRecommendationState(request, response, requestUrl, 
         deferredUntil: row.deferred_until ?? null,
         actionedAt: row.actioned_at,
       }));
-      await emitAudit(request, 'faith.workflow.state.read', 'workflow_recommendation_state', clientId, session);
+      await emitAudit(request, 'faith.workflow.state.read', 'workflow_recommendation_state', client.id, session);
       writeJson(response, 200, { states });
     } else {
-      await emitAudit(request, 'faith.workflow.state.read', 'workflow_recommendation_state', clientId, session);
+      await emitAudit(request, 'faith.workflow.state.read', 'workflow_recommendation_state', client.id, session);
       writeJson(response, 200, { states: [] });
     }
     return;
@@ -8506,6 +8578,8 @@ async function handleWorkflowRecommendationState(request, response, requestUrl, 
     writeJson(response, 400, { error: 'clientId and ruleId are required' });
     return;
   }
+  const client = await resolveAuthorizedClient(request, response, clientId, session, 'faith.workflow.state.set');
+  if (!client) return;
   if (!VALID_WF_STATUSES.has(status)) {
     writeJson(response, 400, { error: `status must be one of: ${[...VALID_WF_STATUSES].join(', ')}` });
     return;
@@ -8535,7 +8609,7 @@ async function handleWorkflowRecommendationState(request, response, requestUrl, 
     // Verify the client belongs to this tenant
     const [clientRows] = await pool.query(
       'SELECT id FROM clients WHERE id = ? AND tenant_id = ?',
-      [clientId, tenantId],
+      [client.id, tenantId],
     );
     if (!clientRows.length) {
       writeJson(response, 404, { error: 'Client not found' });
@@ -8554,13 +8628,13 @@ async function handleWorkflowRecommendationState(request, response, requestUrl, 
          notes_enc      = VALUES(notes_enc),
          actioned_at    = NOW(),
          expires_at     = VALUES(expires_at)`,
-      [stateId, tenantId, practiceId, clientId, counselorId, ruleId, status, deferredUntil, notesEnc, expiresAt],
+      [stateId, tenantId, practiceId, client.id, counselorId, ruleId, status, deferredUntil, notesEnc, expiresAt],
     );
 
     // Fetch back the actual row id (upsert may have kept the original id)
     const [updated] = await pool.query(
       'SELECT id, actioned_at FROM workflow_recommendation_states WHERE tenant_id = ? AND client_id = ? AND rule_id = ?',
-      [tenantId, clientId, ruleId],
+      [tenantId, client.id, ruleId],
     );
     stateId = updated[0]?.id ?? stateId;
 
@@ -8951,15 +9025,14 @@ async function handleFaithReferralCoordination(request, response, session) {
   const clientId = sanitizeStr(payload.clientId, 50);
   const churchName = sanitizeStr(payload.churchName, 200);
   const status = normalizeFaithCoordinationStatus(payload.status ?? 'proposed');
+  const client = await resolveAuthorizedClient(request, response, clientId, session, 'faith.referral_coordination.create');
+  if (!client) return;
 
   if (process.env.DB_NAME) {
-    const [crows] = await pool.query('SELECT * FROM clients WHERE id = ?', [clientId]);
-    const client = crows[0] ? dbRowToClient(crows[0]) : null;
     if (!client || !churchName || !status) {
       writeJson(response, 400, { error: 'valid clientId, churchName, and status are required' });
       return;
     }
-    if (enforceTenantScope(request, response, client.tenantId, session)) return;
     const item = await createFaithChurchReferral({
       id: genId('crc'),
       tenantId: client.tenantId,
@@ -8977,13 +9050,10 @@ async function handleFaithReferralCoordination(request, response, session) {
     return;
   }
 
-  const client = clients.find((item) => item.id === clientId);
-
   if (!client || !churchName || !status) {
     writeJson(response, 400, { error: 'valid clientId, churchName, and status are required' });
     return;
   }
-  if (enforceTenantScope(request, response, client.tenantId, session)) return;
 
   const item = {
     id: createId('crc', churchReferralCoordinations),
