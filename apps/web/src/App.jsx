@@ -145,7 +145,7 @@ export default function App() {
   const [operationsSummaryData, setOperationsSummaryData] = useState({ summary: null, loading: true, error: null });
   const [refreshClientsKey, setRefreshClientsKey] = useState(0);
   const [refreshOperationsKey, setRefreshOperationsKey] = useState(0);
-  const [selectedClientId, setSelectedClientId] = useState(null);
+  const [selectedClientRequest, setSelectedClientRequest] = useState(null);
   const [selectedCounselorId, setSelectedCounselorId] = useState(null);
   const [currentView, setCurrentView] = useState('dashboard');
   const [workspaceStudioInitialTab, setWorkspaceStudioInitialTab] = useState('portal');
@@ -158,6 +158,7 @@ export default function App() {
     initialPortalRequest: null,
   });
   const userRole = currentUser?.role ?? null;
+  const selectedClientId = selectedClientRequest?.clientId ?? null;
   const counselorWorkspaceData = buildCounselorWorkspaceData(operationsSummaryData.summary, clientsData.items, currentUser);
 
   useEffect(() => {
@@ -284,7 +285,7 @@ export default function App() {
     const normalized = normalizeSessionUser(profile);
     setCurrentUser(normalized);
     setIsAuthenticated(true);
-    setSelectedClientId(null);
+    setSelectedClientRequest(null);
     setSelectedCounselorId(null);
     setCurrentView(defaultViewForRole(normalized?.role ?? null));
   };
@@ -305,7 +306,7 @@ export default function App() {
     setIsAuthenticated(false);
     setCurrentUser(null);
     closeNav();
-    setSelectedClientId(null);
+    setSelectedClientRequest(null);
     setSelectedCounselorId(null);
     setCurrentView('dashboard');
     setClinicalChartState(createDefaultClinicalChartState());
@@ -314,7 +315,7 @@ export default function App() {
 
   const handleNavigate = (view) => {
     setCurrentView(view);
-    if (view !== 'clients') setSelectedClientId(null);
+    if (view !== 'clients') setSelectedClientRequest(null);
     if (view !== 'counselors') setSelectedCounselorId(null);
     if (view !== 'scheduling') {
       setSchedulingState({ composerOpen: false, initialClientId: null, initialView: null, initialPortalRequest: null });
@@ -339,8 +340,20 @@ export default function App() {
     closeNav();
   };
 
-  const handleOpenClient     = (clientId) => { setCurrentView('clients');    setSelectedClientId(clientId); };
-  const handleClientBack     = ()          => { setSelectedClientId(null);   setCurrentView('clients'); };
+  const handleOpenClient = (request) => {
+    const normalizedRequest = typeof request === 'string'
+      ? { clientId: request, initialTab: null }
+      : (request && typeof request === 'object'
+        ? { clientId: request.clientId ?? null, initialTab: request.initialTab ?? null }
+        : { clientId: null, initialTab: null });
+    if (!normalizedRequest.clientId) return;
+    setCurrentView('clients');
+    setSelectedClientRequest(normalizedRequest);
+  };
+  const handleClientBack = () => {
+    setSelectedClientRequest(null);
+    setCurrentView('clients');
+  };
   const handleOpenCounselor  = (staffId)   => { setCurrentView('counselors'); setSelectedCounselorId(staffId); };
   const handleCounselorBack  = ()          => { setSelectedCounselorId(null); };
   const handleOpenScheduling = ({
@@ -495,6 +508,7 @@ export default function App() {
         {selectedClientId ? (
           <ClientDetailPage
             clientId={selectedClientId}
+            initialTab={selectedClientRequest?.initialTab ?? null}
             onBack={handleClientBack}
             onScheduleClient={() => handleOpenScheduling({
               composerOpen: true,

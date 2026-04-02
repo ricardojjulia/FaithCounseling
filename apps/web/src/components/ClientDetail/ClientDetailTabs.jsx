@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Tabs, Box } from '@mantine/core';
 import DemographicsTab    from './tabs/DemographicsTab.jsx';
 import ContactsTab        from './tabs/ContactsTab.jsx';
@@ -20,9 +20,9 @@ const TABS = [
   { id: 'legal', labelKey: 'client.tab.legal' },
 ];
 
-export default function ClientDetailTabs({ client, clientId, currentUser }) {
+export default function ClientDetailTabs({ client, clientId, currentUser, initialTab = null }) {
   const { t } = useI18n();
-  const [activeTab, setActiveTab] = useState('demographics');
+  const [activeTab, setActiveTab] = useState(initialTab || 'demographics');
   const activeSurfaceId = {
     demographics: 'client.demographics',
     contacts: 'client.contacts',
@@ -34,6 +34,10 @@ export default function ClientDetailTabs({ client, clientId, currentUser }) {
   }[activeTab] ?? 'client.demographics';
 
   useSurfaceTelemetry(activeSurfaceId, { surfaceKind: 'tab', workflow: 'client_detail' });
+
+  useEffect(() => {
+    setActiveTab(initialTab || 'demographics');
+  }, [clientId, initialTab]);
 
   return (
     <Tabs value={activeTab} onChange={(value) => setActiveTab(value || 'demographics')} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
