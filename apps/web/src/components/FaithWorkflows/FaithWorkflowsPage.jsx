@@ -362,11 +362,27 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
     <Stack gap={0} style={{ height: '100%', minHeight: 0, flex: 1, overflow: 'hidden' }} data-testid="faith-workflows-page">
       {/* Page header */}
       <Box p="md" pb="xs" style={{ borderBottom: '1px solid var(--mantine-color-default-border)', flexShrink: 0 }}>
-        <Group justify="space-between" align="flex-start">
+        <Group justify="space-between" align="center">
           <div>
             <Title order={2}>{t('workflow.title')}</Title>
             <Text c="dimmed" size="sm">{t('workflow.subtitle')}</Text>
           </div>
+
+          {/* View picker — always visible in the header */}
+          <Tooltip label={VARIANT_LABELS[variant]} withArrow position="bottom">
+            <ActionIcon
+              size="lg"
+              variant="light"
+              color={VARIANT_COLORS[variant]}
+              radius="xl"
+              onClick={cycleVariant}
+              aria-label={VARIANT_LABELS[variant]}
+            >
+              <Text size="sm" style={{ lineHeight: 1 }}>
+                {VARIANT_ICONS[variant]}
+              </Text>
+            </ActionIcon>
+          </Tooltip>
         </Group>
       </Box>
 
@@ -390,7 +406,7 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
         </Box>
 
         {/* Center panel — workflow canvas */}
-        <Box style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--mantine-color-default-border)', position: 'relative' }}>
+        <Box style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--mantine-color-default-border)' }}>
           {!selectedClientId ? (
             <Stack align="center" justify="center" style={{ flex: 1 }} gap="sm">
               <Text size="xl">🗺</Text>
@@ -449,26 +465,6 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
             />
           )}
 
-          {/* Floating view-cycle button — cycles Classic → Radial → Priority → Classic */}
-          <Tooltip
-            label={VARIANT_LABELS[variant]}
-            withArrow
-            position="left"
-          >
-            <ActionIcon
-              size="lg"
-              variant="filled"
-              color={VARIANT_COLORS[variant]}
-              radius="xl"
-              onClick={cycleVariant}
-              aria-label={VARIANT_LABELS[variant]}
-              style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 10, boxShadow: '0 2px 12px rgba(0,0,0,0.15)' }}
-            >
-              <Text size="sm" style={{ lineHeight: 1 }}>
-                {VARIANT_ICONS[variant]}
-              </Text>
-            </ActionIcon>
-          </Tooltip>
         </Box>
 
         {/* Right panel — placeholder when drawer is closed on wider screens */}
