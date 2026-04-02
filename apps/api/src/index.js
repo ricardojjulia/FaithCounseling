@@ -8426,10 +8426,6 @@ async function deleteOfferingRecord(tenantId, offeringId) {
 }
 
 async function handleOfferings(request, response, requestUrl, session) {
-  if (!session) {
-    writeJson(response, 401, { error: 'Authentication required' });
-    return;
-  }
   const tenantId = callerTenant(request, session);
   const role = callerRole(request, session);
   const offeringId = requestUrl.pathname.startsWith('/v1/offerings/')
@@ -8527,10 +8523,6 @@ async function handleOfferings(request, response, requestUrl, session) {
 async function handleOfferingsSummary(request, response, session) {
   if (request.method !== 'GET') {
     writeJson(response, 405, { error: 'Method not allowed' });
-    return;
-  }
-  if (!session) {
-    writeJson(response, 401, { error: 'Authentication required' });
     return;
   }
   const tenantId = callerTenant(request, session);

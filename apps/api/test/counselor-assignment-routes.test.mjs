@@ -128,3 +128,160 @@ test('broad counselor faith referral collection auto-scopes to assigned clients'
     ['c-001'],
   );
 });
+
+test('broad counselor reminder collection auto-scopes to assigned clients', async () => {
+  const allowedScope = await requestJson('/v1/reminders', {
+    role: 'counselor',
+    staffId: 's-001',
+  });
+  assert.equal(allowedScope.status, 200);
+  assert.deepEqual(
+    (allowedScope.body?.items ?? []).map((item) => item.clientId).sort(),
+    ['c-001', 'c-002'],
+  );
+
+  const deniedScope = await requestJson('/v1/reminders', {
+    role: 'counselor',
+    staffId: 's-002',
+  });
+  assert.equal(deniedScope.status, 200);
+  assert.deepEqual(deniedScope.body?.items ?? [], []);
+});
+
+test('counselor cannot create reminders for another counselor client appointment', async () => {
+  const response = await requestJson('/v1/reminders', {
+    method: 'POST',
+    role: 'counselor',
+    staffId: 's-001',
+    body: {
+      appointmentId: 'a-003',
+      status: 'pending',
+      reminderType: 'appointment',
+      deliveryChannel: 'email',
+    },
+  });
+
+  assert.equal(response.status, 403);
+  assert.equal(response.body?.error, 'Access to this resource is not permitted');
+});
+
+test('counselor appointment mutation is assignment-gated', async () => {
+  const denied = await requestJson('/v1/appointments/a-003', {
+    method: 'PATCH',
+    role: 'counselor',
+    staffId: 's-001',
+    body: {
+      status: 'completed',
+    },
+  });
+  assert.equal(denied.status, 403);
+  assert.equal(denied.body?.error, 'Access to this resource is not permitted');
+
+  const allowed = await requestJson('/v1/appointments/a-001', {
+    method: 'PATCH',
+    role: 'counselor',
+    staffId: 's-001',
+    body: {
+      status: 'checked_in',
+    },
+  });
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.body?.item?.id, 'a-001');
+  assert.equal(allowed.body?.item?.status, 'checked_in');
+});
+
+test('counselor waitlist update is assignment-gated', async () => {
+  const denied = await requestJson('/v1/waitlist', {
+    method: 'PATCH',
+    role: 'counselor',
+    staffId: 's-001',
+    body: {
+      clientId: 'c-003',
+      priorityRank: 2,
+    },
+  });
+  assert.equal(denied.status, 403);
+  assert.equal(denied.body?.error, 'Access to this resource is not permitted');
+
+  const allowed = await requestJson('/v1/waitlist', {
+    method: 'PATCH',
+    role: 'counselor',
+    staffId: 's-002',
+    body: {
+      clientId: 'c-003',
+      priorityRank: 2,
+      notes: 'Updated from route-level auth test.',
+    },
+  });
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.body?.item?.clientId, 'c-003');
+  assert.equal(allowed.body?.item?.priorityRank, 2);
+});
+
+test('counselor offerings list and summary stay assignment-scoped after recording an offering', async () => {
+  const beforeSummary = await requestJson('/v1/offerings/summary', {
+    role: 'counselor',
+    staffId: 's-001',
+  });
+  assert.equal(beforeSummary.status, 200);
+
+  const deniedCreate = await requestJson('/v1/offerings', {
+    method: 'POST',
+    role: 'counselor',
+    staffId: 's-001',
+    body: {
+      clientId: 'c-003',
+      amountCents: 2500,
+      receivedOn: '2026-04-02',
+      note: 'Should be denied',
+    },
+  });
+  assert.equal(deniedCreate.status, 403);
+
+  const createResponse = await requestJson('/v1/offerings', {
+    method: 'POST',
+    role: 'counselor',
+    staffId: 's-001',
+    body: {
+      clientId: 'c-001',
+      amountCents: 2500,
+      receivedOn: '2026-04-02',
+      note: 'Recorded in auth route test',
+    },
+  });
+  assert.equal(createResponse.status, 201);
+  assert.equal(createResponse.body?.item?.clientId, 'c-001');
+
+  const listResponse = await requestJson('/v1/offerings', {
+    role: 'counselor',
+    staffId: 's-001',
+  });
+  assert.equal(listResponse.status, 200);
+  assert.ok(
+    (listResponse.body?.items ?? []).some((item) => item.id === createResponse.body?.item?.id && item.clientId === 'c-001'),
+  );
+  assert.ok(
+    !(listResponse.body?.items ?? []).some((item) => item.clientId === 'c-003'),
+  );
+
+  const afterSummary = await requestJson('/v1/offerings/summary', {
+    role: 'counselor',
+    staffId: 's-001',
+  });
+  assert.equal(afterSummary.status, 200);
+  assert.equal(afterSummary.body?.count, (beforeSummary.body?.count ?? 0) + 1);
+  assert.equal(afterSummary.body?.totalCents, (beforeSummary.body?.totalCents ?? 0) + 2500);
+});
+
+test('counselor scheduling calendar narrows availability to the signed-in counselor scope', async () => {
+  const response = await requestJson('/v1/scheduling/calendar', {
+    role: 'counselor',
+    staffId: 's-002',
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(
+    (response.body?.availability ?? []).map((item) => item.staffId),
+    ['s-002'],
+  );
+});
