@@ -40,6 +40,7 @@ Default URL: `http://localhost:3000`
 - key metric cards for today's sessions, future appointments, audit-event visibility, and current session identity/state
 - operations panels for schedule, priority queue, and compliance watch
 - operational alerts now surface when counselor intake previews are available and can deep-link directly into the client Intake Preview tab
+- counselor home and task views now surface assigned intake previews directly and can open the client on the Intake Preview tab without requiring the dashboard
 - care flow progress indicators
 - Offerings workspace and Workspace Studio suggested-giving settings, including correction of incorrect offering entries
 - same-origin `/api/*` proxy for live dashboard hydration from the API service

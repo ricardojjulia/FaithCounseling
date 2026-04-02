@@ -61,6 +61,9 @@ export function buildCounselorWorkspaceData(summary, clients = [], currentUser =
   const outstandingAssignmentItems = Array.isArray(summary?.complianceWatch?.outstandingAssignments?.items)
     ? summary.complianceWatch.outstandingAssignments.items
     : [];
+  const intakePreviewItems = Array.isArray(summary?.clientsBox?.intakePreviews?.items)
+    ? summary.clientsBox.intakePreviews.items
+    : [];
 
   const counselorUnscheduledClients = unscheduledClientItems.filter((item) => {
     const client = clientMap.get(item.clientId);
@@ -73,6 +76,10 @@ export function buildCounselorWorkspaceData(summary, clients = [], currentUser =
   });
 
   const counselorAssignmentItems = outstandingAssignmentItems.filter((item) => {
+    const client = clientMap.get(item.clientId);
+    return isAssignedToCounselor(client, currentUser);
+  });
+  const counselorIntakePreviewItems = intakePreviewItems.filter((item) => {
     const client = clientMap.get(item.clientId);
     return isAssignedToCounselor(client, currentUser);
   });
@@ -92,5 +99,6 @@ export function buildCounselorWorkspaceData(summary, clients = [], currentUser =
     assignmentItems: counselorAssignmentItems,
     assignmentCounts,
     highTouchpointClients: counselorHighTouchpointClients,
+    intakePreviewItems: counselorIntakePreviewItems,
   };
 }

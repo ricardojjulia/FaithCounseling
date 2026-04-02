@@ -70,6 +70,7 @@ export default function CounselorHomePage({
   metricsData,
   workspaceData,
   onOpenScheduling,
+  onOpenClient,
   onOpenClients,
   onOpenClinicalChart,
   onOpenDocuments,
@@ -80,6 +81,7 @@ export default function CounselorHomePage({
   const noteGapItems = workspaceData?.noteGapItems ?? [];
   const unscheduledClients = workspaceData?.unscheduledClients ?? [];
   const highTouchpointClients = workspaceData?.highTouchpointClients ?? [];
+  const intakePreviewItems = workspaceData?.intakePreviewItems ?? [];
   const noteGapChartTarget = noteGapItems[0]?.clientId
     ? {
         clientId: noteGapItems[0].clientId,
@@ -118,6 +120,11 @@ export default function CounselorHomePage({
     unscheduledClients.length > 0 ? {
       title: t('counselorHome.priority.followUpTitle'),
       detail: t('counselorHome.priority.followUpDetail', { count: unscheduledClients.length }),
+      severity: 'warning',
+    } : null,
+    intakePreviewItems.length > 0 ? {
+      title: t('counselorHome.priority.intakePreviewTitle'),
+      detail: t('counselorHome.priority.intakePreviewDetail', { count: intakePreviewItems.length }),
       severity: 'warning',
     } : null,
   ].filter(Boolean);
@@ -173,9 +180,14 @@ export default function CounselorHomePage({
             forms: outstandingAssignments.forms ?? 0,
           })}
         />
+        <SummaryCard
+          label={t('counselorHome.cards.intakePreviews')}
+          value={intakePreviewItems.length}
+          help={t('counselorHome.cards.intakePreviewsHelp')}
+        />
       </SimpleGrid>
 
-      <SimpleGrid cols={{ base: 1, lg: 3 }} spacing="md">
+      <SimpleGrid cols={{ base: 1, lg: 2, xl: 4 }} spacing="md">
         <Paper withBorder radius="md" p="md">
           <Stack gap="sm">
             <div>
@@ -197,6 +209,53 @@ export default function CounselorHomePage({
                       ? t('dashboard.alerts.severity.critical')
                       : t('dashboard.alerts.severity.warning')}
                   </Badge>
+                </Group>
+              </Paper>
+            ))}
+          </Stack>
+        </Paper>
+
+        <Paper withBorder radius="md" p="md">
+          <Stack gap="sm">
+            <div>
+              <Title order={3} fz="md">{t('counselorHome.intakePreviews.title')}</Title>
+              <Text c="dimmed" fz="sm" mt={4}>{t('counselorHome.intakePreviews.subtitle')}</Text>
+            </div>
+
+            {intakePreviewItems.length === 0 ? (
+              <Text c="dimmed" fz="sm">{t('counselorHome.intakePreviews.empty')}</Text>
+            ) : intakePreviewItems.slice(0, 4).map((item) => (
+              <Paper key={item.clientId} withBorder radius="sm" p="sm">
+                <Group justify="space-between" align="flex-start" gap="sm" wrap="nowrap">
+                  <Stack gap={4} style={{ flex: 1 }}>
+                    <Text fw={600} fz="sm">{item.clientName || t('clientsPage.unnamedClient')}</Text>
+                    <Group gap="xs">
+                      <Badge color={statusTone(item.status)} variant="light">
+                        {formatStatusLabel(item.status, t)}
+                      </Badge>
+                      <Badge color="yellow" variant="light">
+                        {t('dashboard.alerts.severity.warning')}
+                      </Badge>
+                    </Group>
+                    <Text c="dimmed" fz="sm">
+                      {t('counselorHome.intakePreviews.itemDetail', {
+                        screenings: item.screeningSignalCount ?? 0,
+                        routes: item.careRouteCount ?? 0,
+                      })}
+                    </Text>
+                  </Stack>
+                  <Button
+                    size="compact-sm"
+                    variant="subtle"
+                    onClick={() => {
+                      frontendTelemetry.trackAction('counselor_home', 'open_intake_preview', 'success', {
+                        workflow: 'counselor_home',
+                      });
+                      onOpenClient?.({ clientId: item.clientId, initialTab: 'intakePreview' });
+                    }}
+                  >
+                    {t('dashboard.drilldown.openPreview')}
+                  </Button>
                 </Group>
               </Paper>
             ))}

@@ -551,26 +551,28 @@ export default function App() {
               onOpenClient={handleOpenClient}
               onViewChart={handleOpenClinicalChart}
             />
-          ) : showCounselorHome ? (
-            <CounselorHomePage
-              currentUser={currentUser}
-              metricsData={metricsData}
-              workspaceData={counselorWorkspaceData}
+        ) : showCounselorHome ? (
+          <CounselorHomePage
+            currentUser={currentUser}
+            metricsData={metricsData}
+            workspaceData={counselorWorkspaceData}
               onOpenScheduling={(clientId = null) => handleOpenScheduling({
                 composerOpen: Boolean(clientId),
                 initialClientId: clientId,
                 initialView: defaultCalendarView(userRole),
-              })}
-              onOpenClients={() => handleNavigate('clients')}
-              onOpenClinicalChart={handleOpenClinicalChart}
-              onOpenDocuments={handleOpenDocuments}
-            />
-          ) : showTasks ? (
-            <CounselorTasksPage
-              workspaceData={counselorWorkspaceData}
-              onOpenChart={handleOpenClinicalChart}
-              onOpenDocuments={handleOpenDocuments}
-              onOpenScheduling={(clientId) => handleOpenScheduling({
+            })}
+            onOpenClients={() => handleNavigate('clients')}
+            onOpenClient={handleOpenClient}
+            onOpenClinicalChart={handleOpenClinicalChart}
+            onOpenDocuments={handleOpenDocuments}
+          />
+        ) : showTasks ? (
+          <CounselorTasksPage
+            workspaceData={counselorWorkspaceData}
+            onOpenClient={handleOpenClient}
+            onOpenChart={handleOpenClinicalChart}
+            onOpenDocuments={handleOpenDocuments}
+            onOpenScheduling={(clientId) => handleOpenScheduling({
                 composerOpen: true,
                 initialClientId: clientId,
                 initialView: defaultCalendarView(userRole),
