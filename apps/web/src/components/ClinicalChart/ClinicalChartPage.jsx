@@ -18,16 +18,28 @@ const CHART_TABS = [
   { id: 'homework',       labelKey: 'chart.tab.homework' },
 ];
 
-export default function ClinicalChartPage({ clients = [], currentUser, initialClientId = '' }) {
+export default function ClinicalChartPage({
+  clients = [],
+  currentUser,
+  initialClientId = '',
+  initialTab = 'sessionNotes',
+  initialSessionNotesComposerOpen = false,
+  initialSessionNotesAppointmentAt = '',
+  handoffKey = 0,
+}) {
   const { t } = useI18n();
   const [selectedClientId, setSelectedClientId] = useState(initialClientId);
-  const [activeTab, setActiveTab] = useState('sessionNotes');
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   useEffect(() => {
-    if (initialClientId) setSelectedClientId(initialClientId);
-  }, [initialClientId]);
+    setSelectedClientId(initialClientId ?? '');
+  }, [handoffKey, initialClientId]);
 
-  useSurfaceTelemetry('clinical_chart', { surfaceKind: 'view', workflow: 'clinical_chart' });
+  useEffect(() => {
+    setActiveTab(initialTab || 'sessionNotes');
+  }, [handoffKey, initialTab]);
+
+  useSurfaceTelemetry('clinical', { surfaceKind: 'view', workflow: 'clinical_chart' });
 
   const clientOptions = clients.map((c) => ({
     value: c.id,
@@ -77,7 +89,14 @@ export default function ClinicalChartPage({ clients = [], currentUser, initialCl
           </Tabs.List>
 
           <Tabs.Panel value="sessionNotes" pt="md">
-            <SessionNotesTab clientId={selectedClientId} client={selectedClient} currentUser={currentUser} />
+            <SessionNotesTab
+              clientId={selectedClientId}
+              client={selectedClient}
+              currentUser={currentUser}
+              initialComposerOpen={initialSessionNotesComposerOpen}
+              initialAppointmentAt={initialSessionNotesAppointmentAt}
+              handoffKey={handoffKey}
+            />
           </Tabs.Panel>
 
           <Tabs.Panel value="internalNotes" pt="md">

@@ -58,7 +58,7 @@ function SummaryCard({ label, value, help }) {
 
 export default function CounselorTasksPage({
   workspaceData,
-  onOpenClient,
+  onOpenChart,
   onOpenDocuments,
   onOpenScheduling,
 }) {
@@ -128,13 +128,18 @@ export default function CounselorTasksPage({
                         size="compact-sm"
                         variant="subtle"
                         onClick={() => {
-                          frontendTelemetry.trackAction('tasks', 'open_client_note_gap', 'success', {
+                          frontendTelemetry.trackAction('tasks', 'open_chart_note_gap', 'success', {
                             workflow: 'counselor_tasks',
                           });
-                          onOpenClient?.(item.clientId);
+                          onOpenChart?.({
+                            clientId: item.clientId,
+                            initialTab: 'sessionNotes',
+                            initialSessionNotesComposerOpen: true,
+                            initialSessionNotesAppointmentAt: item.latestAppointmentAt ?? '',
+                          });
                         }}
                       >
-                        {t('dashboard.drilldown.openClient')}
+                        {t('tasks.notes.reviewAction')}
                       </Button>
                     </Group>
                   </Paper>

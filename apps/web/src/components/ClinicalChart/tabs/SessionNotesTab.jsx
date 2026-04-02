@@ -203,7 +203,13 @@ function NoteCard({ note, appointment, onSign, onUpdate }) {
   );
 }
 
-export default function SessionNotesTab({ clientId, currentUser }) {
+export default function SessionNotesTab({
+  clientId,
+  currentUser,
+  initialComposerOpen = false,
+  initialAppointmentAt = '',
+  handoffKey = 0,
+}) {
   const { t } = useI18n();
   const [appointments, setAppointments] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -257,6 +263,33 @@ export default function SessionNotesTab({ clientId, currentUser }) {
     loadAppointments();
     loadNotes();
   }, [loadAppointments, loadNotes]);
+
+  useEffect(() => {
+    setComposerOpen(false);
+    setDraft({
+      appointmentId: '',
+      noteType: 'progress_note',
+      summary: '',
+      interventions: '',
+    });
+  }, [clientId]);
+
+  useEffect(() => {
+    if (!clientId || !initialComposerOpen) return;
+
+    const matchingAppointmentId = initialAppointmentAt
+      ? (appointments.find((appointment) => (
+          (appointment.startsAt ?? appointment.scheduledAt ?? '') === initialAppointmentAt
+        ))?.id ?? '')
+      : '';
+
+    setDraft((currentDraft) => ({
+      ...currentDraft,
+      appointmentId: matchingAppointmentId,
+      noteType: 'progress_note',
+    }));
+    setComposerOpen(true);
+  }, [appointments, clientId, handoffKey, initialAppointmentAt, initialComposerOpen]);
 
   const apptOptions = appointments.map((a) => ({
     value: a.id,

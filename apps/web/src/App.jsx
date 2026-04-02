@@ -76,6 +76,16 @@ function defaultViewForRole(role) {
   return 'dashboard';
 }
 
+function createDefaultClinicalChartState() {
+  return {
+    initialClientId: '',
+    initialTab: 'sessionNotes',
+    initialSessionNotesComposerOpen: false,
+    initialSessionNotesAppointmentAt: '',
+    handoffKey: 0,
+  };
+}
+
 function toValidDate(value) {
   const date = value ? new Date(value) : null;
   return date && !Number.isNaN(date.getTime()) ? date : null;
@@ -139,7 +149,7 @@ export default function App() {
   const [selectedCounselorId, setSelectedCounselorId] = useState(null);
   const [currentView, setCurrentView] = useState('dashboard');
   const [workspaceStudioInitialTab, setWorkspaceStudioInitialTab] = useState('portal');
-  const [clinicalChartInitialClientId, setClinicalChartInitialClientId] = useState('');
+  const [clinicalChartState, setClinicalChartState] = useState(createDefaultClinicalChartState);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [schedulingState, setSchedulingState] = useState({
     composerOpen: false,
@@ -296,6 +306,7 @@ export default function App() {
     setSelectedClientId(null);
     setSelectedCounselorId(null);
     setCurrentView('dashboard');
+    setClinicalChartState(createDefaultClinicalChartState());
     setOperationsSummaryData({ summary: null, loading: true, error: null });
   };
 
@@ -306,12 +317,22 @@ export default function App() {
     if (view !== 'scheduling') {
       setSchedulingState({ composerOpen: false, initialClientId: null, initialView: null, initialPortalRequest: null });
     }
-    if (view !== 'clinical') setClinicalChartInitialClientId('');
+    if (view !== 'clinical') setClinicalChartState(createDefaultClinicalChartState());
     closeNav();
   };
 
-  const handleOpenClinicalChart = (clientId) => {
-    setClinicalChartInitialClientId(clientId ?? '');
+  const handleOpenClinicalChart = (request = null) => {
+    const normalizedRequest = typeof request === 'string'
+      ? { clientId: request }
+      : (request && typeof request === 'object' ? request : {});
+
+    setClinicalChartState((currentState) => ({
+      initialClientId: normalizedRequest.clientId ?? '',
+      initialTab: normalizedRequest.initialTab ?? 'sessionNotes',
+      initialSessionNotesComposerOpen: Boolean(normalizedRequest.initialSessionNotesComposerOpen),
+      initialSessionNotesAppointmentAt: normalizedRequest.initialSessionNotesAppointmentAt ?? '',
+      handoffKey: currentState.handoffKey + 1,
+    }));
     setCurrentView('clinical');
     closeNav();
   };
@@ -508,19 +529,19 @@ export default function App() {
             currentUser={currentUser}
             metricsData={metricsData}
             workspaceData={counselorWorkspaceData}
-            onOpenScheduling={() => handleOpenScheduling({ initialView: defaultCalendarView(userRole) })}
+            onOpenScheduling={(clientId = null) => handleOpenScheduling({
+              composerOpen: Boolean(clientId),
+              initialClientId: clientId,
+              initialView: defaultCalendarView(userRole),
+            })}
             onOpenClients={() => handleNavigate('clients')}
-            onOpenClinicalChart={() => {
-              setClinicalChartInitialClientId('');
-              handleNavigate('clinical');
-            }}
+            onOpenClinicalChart={handleOpenClinicalChart}
             onOpenDocuments={handleOpenDocuments}
-            onOpenClient={handleOpenClient}
           />
         ) : showTasks ? (
           <CounselorTasksPage
             workspaceData={counselorWorkspaceData}
-            onOpenClient={handleOpenClient}
+            onOpenChart={handleOpenClinicalChart}
             onOpenDocuments={handleOpenDocuments}
             onOpenScheduling={(clientId) => handleOpenScheduling({
               composerOpen: true,
@@ -561,7 +582,15 @@ export default function App() {
         ) : showFaith ? (
           <FaithWorkflowsPage clients={clientsData.items} currentUser={currentUser} />
         ) : showClinical ? (
-          <ClinicalChartPage clients={clientsData.items} currentUser={currentUser} initialClientId={clinicalChartInitialClientId} />
+          <ClinicalChartPage
+            clients={clientsData.items}
+            currentUser={currentUser}
+            initialClientId={clinicalChartState.initialClientId}
+            initialTab={clinicalChartState.initialTab}
+            initialSessionNotesComposerOpen={clinicalChartState.initialSessionNotesComposerOpen}
+            initialSessionNotesAppointmentAt={clinicalChartState.initialSessionNotesAppointmentAt}
+            handoffKey={clinicalChartState.handoffKey}
+          />
         ) : (
           <>
             {showDashboard ? <Metrics data={metricsData} currentUser={currentUser} onTodaySessions={handleViewTodaySessions} onFutureAppointments={handleViewFutureAppointments} /> : null}

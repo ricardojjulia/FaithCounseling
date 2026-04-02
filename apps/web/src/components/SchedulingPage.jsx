@@ -1432,7 +1432,10 @@ function ClientSessionsPanel({ clients = [], onViewChart }) {
                       <Button
                         size="compact-xs"
                         variant="light"
-                        onClick={() => onViewChart?.(selectedClientId)}
+                        onClick={() => onViewChart?.({
+                          clientId: selectedClientId,
+                          initialTab: 'sessionNotes',
+                        })}
                       >
                         View Chart
                       </Button>

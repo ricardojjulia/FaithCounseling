@@ -170,6 +170,7 @@ export const baseMessages = Object.freeze({
   'tasks.notes.subtitle': 'Clients whose latest session still needs note completion or review.',
   'tasks.notes.empty': 'No documentation follow-up is currently surfaced.',
   'tasks.notes.daysWithoutNote': '{days} days without a completed note',
+  'tasks.notes.reviewAction': 'Open chart',
   'tasks.assignments.title': 'Assigned forms and documents',
   'tasks.assignments.subtitle': 'Review the items assigned to your clients without switching between multiple pages.',
   'tasks.assignments.empty': 'No assigned forms or documents are currently waiting.',

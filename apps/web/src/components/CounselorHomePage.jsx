@@ -73,13 +73,21 @@ export default function CounselorHomePage({
   onOpenClients,
   onOpenClinicalChart,
   onOpenDocuments,
-  onOpenClient,
 }) {
   const { t } = useI18n();
   const noteGapClients = workspaceData?.noteGapCounts ?? { over1Day: 0, over3Days: 0, over7Days: 0 };
   const outstandingAssignments = workspaceData?.assignmentCounts ?? { total: 0, documents: 0, forms: 0 };
+  const noteGapItems = workspaceData?.noteGapItems ?? [];
   const unscheduledClients = workspaceData?.unscheduledClients ?? [];
   const highTouchpointClients = workspaceData?.highTouchpointClients ?? [];
+  const noteGapChartTarget = noteGapItems[0]?.clientId
+    ? {
+        clientId: noteGapItems[0].clientId,
+        initialTab: 'sessionNotes',
+        initialSessionNotesComposerOpen: true,
+        initialSessionNotesAppointmentAt: noteGapItems[0].latestAppointmentAt ?? '',
+      }
+    : null;
   const topFollowUpClients = unscheduledClients.length > 0
     ? unscheduledClients.slice(0, 4)
     : highTouchpointClients.slice(0, 4).map((client) => ({
@@ -132,7 +140,7 @@ export default function CounselorHomePage({
           <ActionButton action="open_clients" onClick={() => onOpenClients?.()}>
             {t('counselorHome.actions.clients')}
           </ActionButton>
-          <ActionButton action="open_chart" onClick={() => onOpenClinicalChart?.()}>
+          <ActionButton action="open_chart" onClick={() => onOpenClinicalChart?.(noteGapChartTarget)}>
             {t('counselorHome.actions.chart')}
           </ActionButton>
           <ActionButton action="open_documents" onClick={() => onOpenDocuments?.()}>
@@ -225,13 +233,13 @@ export default function CounselorHomePage({
                       size="compact-sm"
                       variant="subtle"
                       onClick={() => {
-                        frontendTelemetry.trackAction('counselor_home', 'open_follow_up_client', 'success', {
+                        frontendTelemetry.trackAction('counselor_home', 'schedule_follow_up_client', 'success', {
                           workflow: 'counselor_home',
                         });
-                        onOpenClient?.(client.clientId);
+                        onOpenScheduling?.(client.clientId);
                       }}
                     >
-                      {t('dashboard.drilldown.openClient')}
+                      {t('dashboard.drilldown.scheduleClient')}
                     </Button>
                   ) : null}
                 </Group>
@@ -283,7 +291,7 @@ export default function CounselorHomePage({
                   frontendTelemetry.trackAction('counselor_home', 'open_charting', 'success', {
                     workflow: 'counselor_home',
                   });
-                  onOpenClinicalChart?.();
+                  onOpenClinicalChart?.(noteGapChartTarget);
                 }}
               >
                 {t('counselorHome.documentation.chartAction')}
