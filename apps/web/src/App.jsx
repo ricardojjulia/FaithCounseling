@@ -551,26 +551,28 @@ export default function App() {
               onOpenClient={handleOpenClient}
               onViewChart={handleOpenClinicalChart}
             />
-          ) : showCounselorHome ? (
-            <CounselorHomePage
-              currentUser={currentUser}
-              metricsData={metricsData}
-              workspaceData={counselorWorkspaceData}
+        ) : showCounselorHome ? (
+          <CounselorHomePage
+            currentUser={currentUser}
+            metricsData={metricsData}
+            workspaceData={counselorWorkspaceData}
               onOpenScheduling={(clientId = null) => handleOpenScheduling({
                 composerOpen: Boolean(clientId),
                 initialClientId: clientId,
                 initialView: defaultCalendarView(userRole),
-              })}
-              onOpenClients={() => handleNavigate('clients')}
-              onOpenClinicalChart={handleOpenClinicalChart}
-              onOpenDocuments={handleOpenDocuments}
-            />
-          ) : showTasks ? (
-            <CounselorTasksPage
-              workspaceData={counselorWorkspaceData}
-              onOpenChart={handleOpenClinicalChart}
-              onOpenDocuments={handleOpenDocuments}
-              onOpenScheduling={(clientId) => handleOpenScheduling({
+            })}
+            onOpenClients={() => handleNavigate('clients')}
+            onOpenClient={handleOpenClient}
+            onOpenClinicalChart={handleOpenClinicalChart}
+            onOpenDocuments={handleOpenDocuments}
+          />
+        ) : showTasks ? (
+          <CounselorTasksPage
+            workspaceData={counselorWorkspaceData}
+            onOpenClient={handleOpenClient}
+            onOpenChart={handleOpenClinicalChart}
+            onOpenDocuments={handleOpenDocuments}
+            onOpenScheduling={(clientId) => handleOpenScheduling({
                 composerOpen: true,
                 initialClientId: clientId,
                 initialView: defaultCalendarView(userRole),
@@ -588,13 +590,14 @@ export default function App() {
             />
           ) : showDocuments ? (
             <DocumentsPage />
-          ) : showClients ? (
-            <ClientsPage
-              clientsData={clientsData}
-              onClientsUpdated={() => {
-                setRefreshClientsKey((k) => k + 1);
-                setRefreshOperationsKey((value) => value + 1);
-              }}
+        ) : showClients ? (
+          <ClientsPage
+            clientsData={clientsData}
+            intakePreviewItems={operationsSummaryData?.summary?.clientsBox?.intakePreviews?.items ?? []}
+            onClientsUpdated={() => {
+              setRefreshClientsKey((k) => k + 1);
+              setRefreshOperationsKey((value) => value + 1);
+            }}
               onViewClient={handleOpenClient}
               onScheduleClient={(clientId) => handleOpenScheduling({
                 composerOpen: true,

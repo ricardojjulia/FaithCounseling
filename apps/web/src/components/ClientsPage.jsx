@@ -59,6 +59,7 @@ function SummaryCard({ label, value, help }) {
 
 export default function ClientsPage({
   clientsData,
+  intakePreviewItems = [],
   onClientsUpdated,
   onViewClient,
   onScheduleClient,
@@ -96,6 +97,11 @@ export default function ClientsPage({
   const activeCount = localItems.filter((client) => client?.status === 'active').length;
   const waitlistCount = localItems.filter((client) => client?.status === 'waitlist').length;
   const highTouchpointCount = localItems.filter((client) => Boolean(client?.highTouchpoint)).length;
+  const intakePreviewClientIds = new Set(
+    (Array.isArray(intakePreviewItems) ? intakePreviewItems : [])
+      .map((item) => item?.clientId)
+      .filter(Boolean),
+  );
 
   const openCreateModal = () => setModalState({ open: true, client: null });
   const closeModal = () => setModalState({ open: false, client: null });
@@ -201,6 +207,7 @@ export default function ClientsPage({
                 const fullName = resolveClientFullName(client) || t('clientsPage.unnamedClient');
                 const faithBackground = client?.faithBackground || t('clients.faithUndeclared');
                 const isHtp = Boolean(client?.highTouchpoint);
+                const hasIntakePreview = intakePreviewClientIds.has(client.id);
 
                 return (
                   <Paper key={client.id} withBorder radius="md" p="md">
@@ -221,6 +228,11 @@ export default function ClientsPage({
                           >
                             {t('clientsPage.highTouchpointBadge')}
                           </Button>
+                          {hasIntakePreview ? (
+                            <Badge color="yellow" variant="light">
+                              {t('clientsPage.intakePreviewBadge')}
+                            </Badge>
+                          ) : null}
                         </Group>
                         <Text c="dimmed" fz="sm">
                           {t('clients.faithPrefix')}: {faithBackground}
@@ -230,6 +242,15 @@ export default function ClientsPage({
                         </Text>
                       </Stack>
                       <Group gap="xs">
+                        {hasIntakePreview ? (
+                          <Button
+                            variant="default"
+                            size="xs"
+                            onClick={() => onViewClient?.({ clientId: client.id, initialTab: 'intakePreview' })}
+                          >
+                            {t('clientsPage.openPreview')}
+                          </Button>
+                        ) : null}
                         <Button variant="default" size="xs" onClick={() => onViewClient?.(client.id)}>
                           {t('actions.edit')}
                         </Button>

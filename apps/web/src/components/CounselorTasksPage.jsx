@@ -58,6 +58,7 @@ function SummaryCard({ label, value, help }) {
 
 export default function CounselorTasksPage({
   workspaceData,
+  onOpenClient,
   onOpenChart,
   onOpenDocuments,
   onOpenScheduling,
@@ -66,6 +67,7 @@ export default function CounselorTasksPage({
   const noteGapItems = workspaceData?.noteGapItems ?? [];
   const assignmentItems = workspaceData?.assignmentItems ?? [];
   const unscheduledClients = workspaceData?.unscheduledClients ?? [];
+  const intakePreviewItems = workspaceData?.intakePreviewItems ?? [];
   const noteGapCounts = workspaceData?.noteGapCounts ?? { over1Day: 0, over3Days: 0, over7Days: 0 };
   const assignmentCounts = workspaceData?.assignmentCounts ?? { total: 0, documents: 0, forms: 0 };
 
@@ -100,9 +102,14 @@ export default function CounselorTasksPage({
           value={unscheduledClients.length}
           help={t('tasks.cards.followUpHelp')}
         />
+        <SummaryCard
+          label={t('tasks.cards.intakePreviews')}
+          value={intakePreviewItems.length}
+          help={t('tasks.cards.intakePreviewsHelp')}
+        />
       </SimpleGrid>
 
-      <SimpleGrid cols={{ base: 1, lg: 3 }} spacing="md">
+      <SimpleGrid cols={{ base: 1, lg: 2, xl: 4 }} spacing="md">
         <SectionCard
           title={t('tasks.notes.title')}
           subtitle={t('tasks.notes.subtitle')}
@@ -222,6 +229,49 @@ export default function CounselorTasksPage({
                       }}
                     >
                       {t('dashboard.drilldown.scheduleClient')}
+                    </Button>
+                  </Group>
+                </Paper>
+              ))}
+            </Stack>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title={t('tasks.intakePreviews.title')}
+          subtitle={t('tasks.intakePreviews.subtitle')}
+          empty={t('tasks.intakePreviews.empty')}
+        >
+          {intakePreviewItems.length === 0 ? (
+            <Text c="dimmed" fz="sm">{t('tasks.intakePreviews.empty')}</Text>
+          ) : (
+            <Stack gap="sm">
+              {intakePreviewItems.map((item) => (
+                <Paper key={item.clientId} withBorder radius="sm" p="sm">
+                  <Group justify="space-between" align="flex-start" gap="sm" wrap="nowrap">
+                    <Stack gap={4} style={{ flex: 1 }}>
+                      <Text fw={600} fz="sm">{item.clientName}</Text>
+                      <Text c="dimmed" fz="sm">
+                        {t('tasks.intakePreviews.itemDetail', {
+                          screenings: item.screeningSignalCount ?? 0,
+                          routes: item.careRouteCount ?? 0,
+                        })}
+                      </Text>
+                      <Badge color={statusTone(item.status)} variant="light">
+                        {formatStatusLabel(item.status, t)}
+                      </Badge>
+                    </Stack>
+                    <Button
+                      size="compact-sm"
+                      variant="subtle"
+                      onClick={() => {
+                        frontendTelemetry.trackAction('tasks', 'open_intake_preview', 'success', {
+                          workflow: 'counselor_tasks',
+                        });
+                        onOpenClient?.({ clientId: item.clientId, initialTab: 'intakePreview' });
+                      }}
+                    >
+                      {t('dashboard.drilldown.openPreview')}
                     </Button>
                   </Group>
                 </Paper>
