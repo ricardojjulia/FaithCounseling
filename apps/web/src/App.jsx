@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { AppShell, Center, Paper, Text, Loader } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import AuthGate from './components/AuthGate';
@@ -6,21 +6,6 @@ import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import Metrics from './components/Metrics';
 import WorkspaceGrid from './components/WorkspaceGrid';
-import CounselorHomePage from './components/CounselorHomePage.jsx';
-import CounselorTasksPage from './components/CounselorTasksPage.jsx';
-import ClientsPage from './components/ClientsPage.jsx';
-import ClientDetailPage from './components/ClientDetail/ClientDetailPage.jsx';
-import CounselorDetailPage from './components/CounselorDetail/CounselorDetailPage.jsx';
-import UserMaintenance from './components/UserMaintenance.jsx';
-import CounselorMaintenance from './components/CounselorMaintenance.jsx';
-import ClientPickerModal from './components/ClientPickerModal.jsx';
-import WorkspaceStudioPage from './components/WorkspaceStudio/WorkspaceStudioPage.jsx';
-import SchedulingPage from './components/SchedulingPage.jsx';
-import DocumentsPage from './components/Documents/DocumentsPage.jsx';
-import ClientPortalPage from './components/Portal/ClientPortalPage.jsx';
-import OfferingsPage from './components/Offerings/OfferingsPage.jsx';
-import ClinicalChartPage from './components/ClinicalChart/ClinicalChartPage.jsx';
-import FaithWorkflowsPage from './components/FaithWorkflows/FaithWorkflowsPage.jsx';
 import { csrfHeaders } from './lib/csrf.js';
 import { fetchClients, fetchOperationsSummaryScoped, fetchAppointments } from './lib/clientApi.js';
 import { frontendTelemetry } from './lib/frontendTelemetry.js';
@@ -29,6 +14,22 @@ import { useI18n } from './lib/i18nContext.jsx';
 import { buildCounselorWorkspaceData } from './lib/counselorWorkspace.js';
 import { isClientRole, isCounselorRole } from './lib/roles.js';
 import './App.css';
+
+const CounselorHomePage = lazy(() => import('./components/CounselorHomePage.jsx'));
+const CounselorTasksPage = lazy(() => import('./components/CounselorTasksPage.jsx'));
+const ClientsPage = lazy(() => import('./components/ClientsPage.jsx'));
+const ClientDetailPage = lazy(() => import('./components/ClientDetail/ClientDetailPage.jsx'));
+const CounselorDetailPage = lazy(() => import('./components/CounselorDetail/CounselorDetailPage.jsx'));
+const UserMaintenance = lazy(() => import('./components/UserMaintenance.jsx'));
+const CounselorMaintenance = lazy(() => import('./components/CounselorMaintenance.jsx'));
+const ClientPickerModal = lazy(() => import('./components/ClientPickerModal.jsx'));
+const WorkspaceStudioPage = lazy(() => import('./components/WorkspaceStudio/WorkspaceStudioPage.jsx'));
+const SchedulingPage = lazy(() => import('./components/SchedulingPage.jsx'));
+const DocumentsPage = lazy(() => import('./components/Documents/DocumentsPage.jsx'));
+const ClientPortalPage = lazy(() => import('./components/Portal/ClientPortalPage.jsx'));
+const OfferingsPage = lazy(() => import('./components/Offerings/OfferingsPage.jsx'));
+const ClinicalChartPage = lazy(() => import('./components/ClinicalChart/ClinicalChartPage.jsx'));
+const FaithWorkflowsPage = lazy(() => import('./components/FaithWorkflows/FaithWorkflowsPage.jsx'));
 
 function firstString(...values) {
   for (const value of values) {
@@ -145,7 +146,7 @@ export default function App() {
   const [operationsSummaryData, setOperationsSummaryData] = useState({ summary: null, loading: true, error: null });
   const [refreshClientsKey, setRefreshClientsKey] = useState(0);
   const [refreshOperationsKey, setRefreshOperationsKey] = useState(0);
-  const [selectedClientId, setSelectedClientId] = useState(null);
+  const [selectedClientRequest, setSelectedClientRequest] = useState(null);
   const [selectedCounselorId, setSelectedCounselorId] = useState(null);
   const [currentView, setCurrentView] = useState('dashboard');
   const [workspaceStudioInitialTab, setWorkspaceStudioInitialTab] = useState('portal');
@@ -158,7 +159,17 @@ export default function App() {
     initialPortalRequest: null,
   });
   const userRole = currentUser?.role ?? null;
+  const selectedClientId = selectedClientRequest?.clientId ?? null;
   const counselorWorkspaceData = buildCounselorWorkspaceData(operationsSummaryData.summary, clientsData.items, currentUser);
+  const surfaceLoadingFallback = (
+    <Center h="100%" mih={280}>
+      <Paper p="xl" radius="lg" withBorder style={{ textAlign: 'center', minWidth: 280 }}>
+        <Loader size="sm" mb="md" />
+        <Text fw={600}>{t('state.loading')}</Text>
+        <Text fz="sm" c="dimmed" mt={4}>{t('state.loadingWorkspace')}</Text>
+      </Paper>
+    </Center>
+  );
 
   useEffect(() => {
     fetch('/api/health', { credentials: 'include' })
@@ -284,7 +295,7 @@ export default function App() {
     const normalized = normalizeSessionUser(profile);
     setCurrentUser(normalized);
     setIsAuthenticated(true);
-    setSelectedClientId(null);
+    setSelectedClientRequest(null);
     setSelectedCounselorId(null);
     setCurrentView(defaultViewForRole(normalized?.role ?? null));
   };
@@ -305,7 +316,7 @@ export default function App() {
     setIsAuthenticated(false);
     setCurrentUser(null);
     closeNav();
-    setSelectedClientId(null);
+    setSelectedClientRequest(null);
     setSelectedCounselorId(null);
     setCurrentView('dashboard');
     setClinicalChartState(createDefaultClinicalChartState());
@@ -314,7 +325,7 @@ export default function App() {
 
   const handleNavigate = (view) => {
     setCurrentView(view);
-    if (view !== 'clients') setSelectedClientId(null);
+    if (view !== 'clients') setSelectedClientRequest(null);
     if (view !== 'counselors') setSelectedCounselorId(null);
     if (view !== 'scheduling') {
       setSchedulingState({ composerOpen: false, initialClientId: null, initialView: null, initialPortalRequest: null });
@@ -339,8 +350,20 @@ export default function App() {
     closeNav();
   };
 
-  const handleOpenClient     = (clientId) => { setCurrentView('clients');    setSelectedClientId(clientId); };
-  const handleClientBack     = ()          => { setSelectedClientId(null);   setCurrentView('clients'); };
+  const handleOpenClient = (request) => {
+    const normalizedRequest = typeof request === 'string'
+      ? { clientId: request, initialTab: null }
+      : (request && typeof request === 'object'
+        ? { clientId: request.clientId ?? null, initialTab: request.initialTab ?? null }
+        : { clientId: null, initialTab: null });
+    if (!normalizedRequest.clientId) return;
+    setCurrentView('clients');
+    setSelectedClientRequest(normalizedRequest);
+  };
+  const handleClientBack = () => {
+    setSelectedClientRequest(null);
+    setCurrentView('clients');
+  };
   const handleOpenCounselor  = (staffId)   => { setCurrentView('counselors'); setSelectedCounselorId(staffId); };
   const handleCounselorBack  = ()          => { setSelectedCounselorId(null); };
   const handleOpenScheduling = ({
@@ -484,140 +507,143 @@ export default function App() {
       </AppShell.Navbar>
 
       <AppShell.Main style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-        <ClientPickerModal
-          isOpen={clientPickerOpen}
-          clients={clientsData.items}
-          loading={clientsData.loading}
-          onSelectClient={handleOpenClient}
-          onClose={() => setClientPickerOpen(false)}
-        />
+        <Suspense fallback={surfaceLoadingFallback}>
+          <ClientPickerModal
+            isOpen={clientPickerOpen}
+            clients={clientsData.items}
+            loading={clientsData.loading}
+            onSelectClient={handleOpenClient}
+            onClose={() => setClientPickerOpen(false)}
+          />
 
-        {selectedClientId ? (
-          <ClientDetailPage
-            clientId={selectedClientId}
-            onBack={handleClientBack}
-            onScheduleClient={() => handleOpenScheduling({
-              composerOpen: true,
-              initialClientId: selectedClientId,
-              initialView: defaultCalendarView(userRole),
-            })}
-          />
-        ) : selectedCounselorId ? (
-          <CounselorDetailPage staffId={selectedCounselorId} onBack={handleCounselorBack} currentUser={currentUser} />
-        ) : showUsers ? (
-          <div style={{ padding: '20px' }}>
-            <UserMaintenance userRole={userRole} />
-          </div>
-        ) : showCounselors ? (
-          <div style={{ padding: '20px' }}>
-            <CounselorMaintenance userRole={userRole} onViewCounselor={handleOpenCounselor} />
-          </div>
-        ) : showScheduling ? (
-          <SchedulingPage
-            currentUser={currentUser}
-            clients={clientsData.items}
-            initialComposerOpen={schedulingState.composerOpen}
-            initialClientId={schedulingState.initialClientId}
-            initialView={schedulingState.initialView}
-            initialPortalRequest={schedulingState.initialPortalRequest}
-            onComposerHandled={() => setSchedulingState((state) => ({ ...state, composerOpen: false, initialPortalRequest: null }))}
-            onPortalRequestScheduled={handlePortalRequestScheduled}
-            onAppointmentsUpdated={() => setRefreshOperationsKey((value) => value + 1)}
-            onOpenClient={handleOpenClient}
-            onViewChart={handleOpenClinicalChart}
-          />
-        ) : showCounselorHome ? (
-          <CounselorHomePage
-            currentUser={currentUser}
-            metricsData={metricsData}
-            workspaceData={counselorWorkspaceData}
-            onOpenScheduling={(clientId = null) => handleOpenScheduling({
-              composerOpen: Boolean(clientId),
-              initialClientId: clientId,
-              initialView: defaultCalendarView(userRole),
-            })}
-            onOpenClients={() => handleNavigate('clients')}
-            onOpenClinicalChart={handleOpenClinicalChart}
-            onOpenDocuments={handleOpenDocuments}
-          />
-        ) : showTasks ? (
-          <CounselorTasksPage
-            workspaceData={counselorWorkspaceData}
-            onOpenChart={handleOpenClinicalChart}
-            onOpenDocuments={handleOpenDocuments}
-            onOpenScheduling={(clientId) => handleOpenScheduling({
-              composerOpen: true,
-              initialClientId: clientId,
-              initialView: defaultCalendarView(userRole),
-            })}
-          />
-        ) : showWorkspaceStudio ? (
-          <WorkspaceStudioPage
-            initialTab={workspaceStudioInitialTab}
-            onSchedulePortalRequest={(clientId, portalRequest) => handleOpenScheduling({
-              composerOpen: true,
-              initialClientId: clientId,
-              initialView: 'practice',
-              initialPortalRequest: portalRequest,
-            })}
-          />
-        ) : showDocuments ? (
-          <DocumentsPage />
-        ) : showClients ? (
-          <ClientsPage
-            clientsData={clientsData}
-            onClientsUpdated={() => {
-              setRefreshClientsKey((k) => k + 1);
-              setRefreshOperationsKey((value) => value + 1);
-            }}
-            onViewClient={handleOpenClient}
-            onScheduleClient={(clientId) => handleOpenScheduling({
-              composerOpen: true,
-              initialClientId: clientId,
-              initialView: defaultCalendarView(userRole),
-            })}
-          />
-        ) : showPortal ? (
-          <ClientPortalPage currentUser={currentUser} clients={clientsData.items} onSignOut={handleSignOut} />
-        ) : showOfferings ? (
-          <OfferingsPage clients={clientsData.items} />
-        ) : showFaith ? (
-          <FaithWorkflowsPage clients={clientsData.items} currentUser={currentUser} />
-        ) : showClinical ? (
-          <ClinicalChartPage
-            clients={clientsData.items}
-            currentUser={currentUser}
-            initialClientId={clinicalChartState.initialClientId}
-            initialTab={clinicalChartState.initialTab}
-            initialSessionNotesComposerOpen={clinicalChartState.initialSessionNotesComposerOpen}
-            initialSessionNotesAppointmentAt={clinicalChartState.initialSessionNotesAppointmentAt}
-            handoffKey={clinicalChartState.handoffKey}
-          />
-        ) : (
-          <>
-            {showDashboard ? <Metrics data={metricsData} currentUser={currentUser} onTodaySessions={handleViewTodaySessions} onFutureAppointments={handleViewFutureAppointments} /> : null}
-            {showFallbackWorkspace || showDashboard ? (
-              <WorkspaceGrid
-                clientsData={clientsData}
-                operationsSummaryData={operationsSummaryData}
-                onClientsUpdated={() => {
-                  setRefreshClientsKey((k) => k + 1);
-                  setRefreshOperationsKey((value) => value + 1);
-                }}
-                onViewClient={handleOpenClient}
-                onViewCalendar={() => handleOpenScheduling({ initialView: defaultCalendarView(userRole) })}
-                onNewAppointment={() => handleOpenScheduling({ composerOpen: true, initialView: defaultCalendarView(userRole) })}
-                onScheduleClient={(clientId) => handleOpenScheduling({
-                  composerOpen: true,
-                  initialClientId: clientId,
-                  initialView: defaultCalendarView(userRole),
-                })}
-                onOpenDocuments={handleOpenDocuments}
-                onOpenPortalQueue={() => handleOpenWorkspaceStudio('portal')}
-              />
-            ) : null}
-          </>
-        )}
+          {selectedClientId ? (
+            <ClientDetailPage
+              clientId={selectedClientId}
+              initialTab={selectedClientRequest?.initialTab ?? null}
+              onBack={handleClientBack}
+              onScheduleClient={() => handleOpenScheduling({
+                composerOpen: true,
+                initialClientId: selectedClientId,
+                initialView: defaultCalendarView(userRole),
+              })}
+            />
+          ) : selectedCounselorId ? (
+            <CounselorDetailPage staffId={selectedCounselorId} onBack={handleCounselorBack} currentUser={currentUser} />
+          ) : showUsers ? (
+            <div style={{ padding: '20px' }}>
+              <UserMaintenance userRole={userRole} />
+            </div>
+          ) : showCounselors ? (
+            <div style={{ padding: '20px' }}>
+              <CounselorMaintenance userRole={userRole} onViewCounselor={handleOpenCounselor} />
+            </div>
+          ) : showScheduling ? (
+            <SchedulingPage
+              currentUser={currentUser}
+              clients={clientsData.items}
+              initialComposerOpen={schedulingState.composerOpen}
+              initialClientId={schedulingState.initialClientId}
+              initialView={schedulingState.initialView}
+              initialPortalRequest={schedulingState.initialPortalRequest}
+              onComposerHandled={() => setSchedulingState((state) => ({ ...state, composerOpen: false, initialPortalRequest: null }))}
+              onPortalRequestScheduled={handlePortalRequestScheduled}
+              onAppointmentsUpdated={() => setRefreshOperationsKey((value) => value + 1)}
+              onOpenClient={handleOpenClient}
+              onViewChart={handleOpenClinicalChart}
+            />
+          ) : showCounselorHome ? (
+            <CounselorHomePage
+              currentUser={currentUser}
+              metricsData={metricsData}
+              workspaceData={counselorWorkspaceData}
+              onOpenScheduling={(clientId = null) => handleOpenScheduling({
+                composerOpen: Boolean(clientId),
+                initialClientId: clientId,
+                initialView: defaultCalendarView(userRole),
+              })}
+              onOpenClients={() => handleNavigate('clients')}
+              onOpenClinicalChart={handleOpenClinicalChart}
+              onOpenDocuments={handleOpenDocuments}
+            />
+          ) : showTasks ? (
+            <CounselorTasksPage
+              workspaceData={counselorWorkspaceData}
+              onOpenChart={handleOpenClinicalChart}
+              onOpenDocuments={handleOpenDocuments}
+              onOpenScheduling={(clientId) => handleOpenScheduling({
+                composerOpen: true,
+                initialClientId: clientId,
+                initialView: defaultCalendarView(userRole),
+              })}
+            />
+          ) : showWorkspaceStudio ? (
+            <WorkspaceStudioPage
+              initialTab={workspaceStudioInitialTab}
+              onSchedulePortalRequest={(clientId, portalRequest) => handleOpenScheduling({
+                composerOpen: true,
+                initialClientId: clientId,
+                initialView: 'practice',
+                initialPortalRequest: portalRequest,
+              })}
+            />
+          ) : showDocuments ? (
+            <DocumentsPage />
+          ) : showClients ? (
+            <ClientsPage
+              clientsData={clientsData}
+              onClientsUpdated={() => {
+                setRefreshClientsKey((k) => k + 1);
+                setRefreshOperationsKey((value) => value + 1);
+              }}
+              onViewClient={handleOpenClient}
+              onScheduleClient={(clientId) => handleOpenScheduling({
+                composerOpen: true,
+                initialClientId: clientId,
+                initialView: defaultCalendarView(userRole),
+              })}
+            />
+          ) : showPortal ? (
+            <ClientPortalPage currentUser={currentUser} clients={clientsData.items} onSignOut={handleSignOut} />
+          ) : showOfferings ? (
+            <OfferingsPage clients={clientsData.items} />
+          ) : showFaith ? (
+            <FaithWorkflowsPage clients={clientsData.items} currentUser={currentUser} />
+          ) : showClinical ? (
+            <ClinicalChartPage
+              clients={clientsData.items}
+              currentUser={currentUser}
+              initialClientId={clinicalChartState.initialClientId}
+              initialTab={clinicalChartState.initialTab}
+              initialSessionNotesComposerOpen={clinicalChartState.initialSessionNotesComposerOpen}
+              initialSessionNotesAppointmentAt={clinicalChartState.initialSessionNotesAppointmentAt}
+              handoffKey={clinicalChartState.handoffKey}
+            />
+          ) : (
+            <>
+              {showDashboard ? <Metrics data={metricsData} currentUser={currentUser} onTodaySessions={handleViewTodaySessions} onFutureAppointments={handleViewFutureAppointments} /> : null}
+              {showFallbackWorkspace || showDashboard ? (
+                <WorkspaceGrid
+                  clientsData={clientsData}
+                  operationsSummaryData={operationsSummaryData}
+                  onClientsUpdated={() => {
+                    setRefreshClientsKey((k) => k + 1);
+                    setRefreshOperationsKey((value) => value + 1);
+                  }}
+                  onViewClient={handleOpenClient}
+                  onViewCalendar={() => handleOpenScheduling({ initialView: defaultCalendarView(userRole) })}
+                  onNewAppointment={() => handleOpenScheduling({ composerOpen: true, initialView: defaultCalendarView(userRole) })}
+                  onScheduleClient={(clientId) => handleOpenScheduling({
+                    composerOpen: true,
+                    initialClientId: clientId,
+                    initialView: defaultCalendarView(userRole),
+                  })}
+                  onOpenDocuments={handleOpenDocuments}
+                  onOpenPortalQueue={() => handleOpenWorkspaceStudio('portal')}
+                />
+              ) : null}
+            </>
+          )}
+        </Suspense>
       </AppShell.Main>
     </AppShell>
   );

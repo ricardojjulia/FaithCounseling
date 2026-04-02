@@ -185,6 +185,7 @@ export default function WorkspaceGrid({
   const noteGapClients = complianceWatch?.noteGapClients ?? {};
   const outstandingAssignments = complianceWatch?.outstandingAssignments ?? {};
   const portalRequests = clientsBox?.portalRequests ?? {};
+  const intakePreviews = clientsBox?.intakePreviews ?? {};
   const alertItems = Array.isArray(summary?.alerts?.items) ? summary.alerts.items : [];
   const trendSchedule = Array.isArray(summary?.trends?.schedule) ? summary.trends.schedule : [];
   const trendCompliance = Array.isArray(summary?.trends?.compliance) ? summary.trends.compliance : [];
@@ -231,6 +232,13 @@ export default function WorkspaceGrid({
           'noteGap',
           t('dashboard.drilldown.noteGapOneWeekTitle'),
           (complianceWatch.noteGapItems || []).filter((entry) => Number(entry.daysWithoutNote ?? 0) >= 7),
+        );
+        return;
+      case 'intakePreviews':
+        openDrilldown(
+          'intakePreviews',
+          t('dashboard.drilldown.intakePreviewsTitle'),
+          intakePreviews.items,
         );
         return;
       case 'portalRequests':
@@ -413,6 +421,34 @@ export default function WorkspaceGrid({
                   </Button>
                 </>
               )}
+            />
+          ))}
+        </Stack>
+      );
+    }
+
+    if (drilldown.type === 'intakePreviews') {
+      return (
+        <Stack gap="sm">
+          {drilldown.items.map((item) => (
+            <DrilldownItemCard
+              key={item.clientId}
+              title={item.clientName}
+              subtitle={`${t('dashboard.drilldown.clientStatus')}: ${formatStatusLabel(item.status, t)}`}
+              meta={[
+                item.nextAppointmentAt ? `${t('dashboard.drilldown.nextAppointment')}: ${formatDateTime(item.nextAppointmentAt)}` : null,
+                `${t('dashboard.drilldown.screeningSignals')}: ${item.screeningSignalCount ?? 0}`,
+                `${t('dashboard.drilldown.careRoutes')}: ${item.careRouteCount ?? 0}`,
+              ].filter(Boolean).join(' · ')}
+              actions={item.clientId ? (
+                <Button size="xs" variant="light" onClick={() => {
+                  closeDrilldown();
+                  onViewClient?.({ clientId: item.clientId, initialTab: 'intakePreview' });
+                }}
+                >
+                  {t('dashboard.drilldown.openPreview')}
+                </Button>
+              ) : null}
             />
           ))}
         </Stack>

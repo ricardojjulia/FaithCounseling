@@ -92,3 +92,21 @@ test('unassigned counselor is denied from reading another counselor intake previ
   assert.equal(response.status, 403);
   assert.equal(response.body?.error, 'Access to this resource is not permitted');
 });
+
+test('operations summary includes intake preview alert and list items for assigned counselor scope', async () => {
+  const response = await requestJson('/v1/operations/summary', {
+    role: 'counselor',
+    staffId: 's-001',
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body?.summary?.clientsBox?.intakePreviews?.total, 1);
+  assert.deepEqual(
+    (response.body?.summary?.clientsBox?.intakePreviews?.items ?? []).map((item) => item.clientId),
+    ['c-004'],
+  );
+  assert.ok(
+    (response.body?.summary?.alerts?.items ?? []).some((item) => item.id === 'intake_previews_available'),
+    'expected intake preview alert in operations summary',
+  );
+});

@@ -12188,6 +12188,7 @@ const DEFAULT_WORKDAY_WINDOWS = Object.freeze([
 ]);
 const DEFAULT_OPERATIONS_ALERT_THRESHOLDS = Object.freeze({
   highTouchpointWithoutFutureAppointment: 1,
+  intakePreviewsAvailable: 1,
   noteGapOver1Day: 5,
   noteGapOver3Days: 3,
   noteGapOver7Days: 1,
@@ -12202,6 +12203,7 @@ function readPositiveEnvInt(name, fallback) {
 function getOperationsAlertThresholds() {
   return {
     highTouchpointWithoutFutureAppointment: readPositiveEnvInt('OPERATIONS_ALERT_HIGH_TOUCHPOINT_UNSCHEDULED_THRESHOLD', DEFAULT_OPERATIONS_ALERT_THRESHOLDS.highTouchpointWithoutFutureAppointment),
+    intakePreviewsAvailable: readPositiveEnvInt('OPERATIONS_ALERT_INTAKE_PREVIEW_THRESHOLD', DEFAULT_OPERATIONS_ALERT_THRESHOLDS.intakePreviewsAvailable),
     noteGapOver1Day: readPositiveEnvInt('OPERATIONS_ALERT_NOTE_GAP_1DAY_THRESHOLD', DEFAULT_OPERATIONS_ALERT_THRESHOLDS.noteGapOver1Day),
     noteGapOver3Days: readPositiveEnvInt('OPERATIONS_ALERT_NOTE_GAP_3DAY_THRESHOLD', DEFAULT_OPERATIONS_ALERT_THRESHOLDS.noteGapOver3Days),
     noteGapOver7Days: readPositiveEnvInt('OPERATIONS_ALERT_NOTE_GAP_7DAY_THRESHOLD', DEFAULT_OPERATIONS_ALERT_THRESHOLDS.noteGapOver7Days),
@@ -12582,8 +12584,10 @@ async function loadOperationsSummaryData(request, session) {
       clients: filterByTenant(clients, request),
       staff: filterByTenant(staffMembers, request),
       notes: filterByTenant(progressNotes, request),
+      intakePackets: filterByTenant(intakePackets, request),
       documentAssignments: filterByTenant(documentAssignments, request),
       formAssignments: filterByTenant(formWorkflowAssignments, request),
+      formSubmissions: filterByTenant(formWorkflowSubmissions, request),
       portalRegistrationRequests: filterByTenant(portalRegistrationRequests, request),
       portalAppointmentRequests: filterByTenant(portalAppointmentRequests, request),
       availabilityTemplatesByStaffId: { ...availabilityTemplates },
@@ -12592,13 +12596,15 @@ async function loadOperationsSummaryData(request, session) {
   }
 
   const tenantId = callerTenant(request, session);
-  const [clientRows, notesRows, staff, allAppointments, docs, forms, publicRequests, appointmentRequests, templateRows, overrides] = await Promise.all([
+  const [clientRows, notesRows, intakePacketRows, staff, allAppointments, docs, forms, formSubmissions, publicRequests, appointmentRequests, templateRows, overrides] = await Promise.all([
     pool.query('SELECT id, first_name_enc, last_name_enc, status, high_touchpoint, primary_counselor_id, created_at FROM clients WHERE tenant_id = ?', [tenantId]),
     pool.query('SELECT client_id, locked, signed_at, created_at FROM progress_notes WHERE tenant_id = ?', [tenantId]),
+    pool.query('SELECT * FROM intake_packets WHERE tenant_id = ?', [tenantId]),
     listStaff(tenantId),
     listAppointments(tenantId),
     listDocumentAssignments(tenantId),
     listFormAssignments(tenantId),
+    listFormSubmissions(tenantId),
     listPortalRegistrationRequests(tenantId),
     listPortalAppointmentRequests(tenantId),
     pool.query('SELECT staff_id, slots FROM availability_templates WHERE tenant_id = ?', [tenantId]),
@@ -12621,6 +12627,16 @@ async function loadOperationsSummaryData(request, session) {
     signedAt: row.signed_at instanceof Date ? row.signed_at.toISOString() : row.signed_at,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
   }));
+  const intakePacketData = intakePacketRows[0].map((row) => ({
+    id: row.id,
+    clientId: row.client_id,
+    tenantId: row.tenant_id,
+    status: row.status,
+    assignedForms: row.assigned_forms
+      ? (typeof row.assigned_forms === 'string' ? JSON.parse(row.assigned_forms) : row.assigned_forms)
+      : null,
+    submittedAt: row.submitted_at instanceof Date ? row.submitted_at.toISOString() : row.submitted_at,
+  }));
   const availabilityTemplatesByStaffId = templateRows[0].reduce((result, row) => {
     result[row.staff_id] = typeof row.slots === 'string' ? JSON.parse(row.slots) : (row.slots ?? []);
     return result;
@@ -12632,8 +12648,10 @@ async function loadOperationsSummaryData(request, session) {
     clients: clientsData,
     staff,
     notes: notesData,
+    intakePackets: intakePacketData,
     documentAssignments: docs,
     formAssignments: forms,
+    formSubmissions,
     portalRegistrationRequests: publicRequests,
     portalAppointmentRequests: appointmentRequests,
     availabilityTemplatesByStaffId,
@@ -12742,6 +12760,26 @@ async function buildOperationsSummary(request, timezone, session, { counselorSco
 
   const incompleteDocuments = (data.documentAssignments ?? []).filter((item) => item.status !== 'completed' && item.status !== 'signed');
   const incompleteForms = (data.formAssignments ?? []).filter((item) => item.status !== 'completed');
+  const intakePreviewItems = (data.clients ?? [])
+    .map((client) => {
+      const preview = buildIntakePreview({
+        client,
+        intakePacket: (data.intakePackets ?? []).find((item) => item.clientId === client.id) ?? null,
+        submissions: (data.formSubmissions ?? []).filter((item) => item.clientId === client.id),
+        appointments: tenantAppointments.filter((item) => item.clientId === client.id),
+      });
+      if (!preview?.eligible) return null;
+      return {
+        clientId: client.id,
+        clientName: [client.firstName, client.lastName].filter(Boolean).join(' ').trim() || client.id,
+        status: client.status,
+        nextAppointmentAt: preview?.sessions?.nextAppointmentAt ?? null,
+        screeningSignalCount: Array.isArray(preview?.screeningSignals) ? preview.screeningSignals.length : 0,
+        careRouteCount: Array.isArray(preview?.careRoutes) ? preview.careRoutes.length : 0,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => String(left.nextAppointmentAt ?? '').localeCompare(String(right.nextAppointmentAt ?? '')));
   const highTouchpointClients = (data.clients ?? []).filter((client) => client.highTouchpoint).length;
   const highTouchpointWithoutFutureAppointmentItems = unscheduledClientItems.filter((item) => item.highTouchpoint);
   const highTouchpointItems = (data.clients ?? [])
@@ -12880,6 +12918,15 @@ async function buildOperationsSummary(request, timezone, session, { counselorSco
       actionType: 'highTouchpointUnscheduled',
     });
   }
+  if (intakePreviewItems.length >= thresholds.intakePreviewsAvailable) {
+    alerts.push({
+      id: 'intake_previews_available',
+      severity: 'warning',
+      count: intakePreviewItems.length,
+      threshold: thresholds.intakePreviewsAvailable,
+      actionType: 'intakePreviews',
+    });
+  }
   if (noteGapClients.over1Day >= thresholds.noteGapOver1Day) {
     alerts.push({
       id: 'note_gap_over_1day',
@@ -12987,6 +13034,10 @@ async function buildOperationsSummary(request, timezone, session, { counselorSco
       totalClients: (data.clients ?? []).length,
       withoutScheduledAppointment: clientsWithoutScheduledAppointment.length,
       unscheduledClientItems,
+      intakePreviews: {
+        total: intakePreviewItems.length,
+        items: intakePreviewItems,
+      },
       portalRequests: {
         total: (data.portalRegistrationRequests?.length ?? 0) + (data.portalAppointmentRequests?.length ?? 0),
         publicRegistrationStatuses,
@@ -12998,6 +13049,7 @@ async function buildOperationsSummary(request, timezone, session, { counselorSco
       activeAlerts: alerts.length,
       highTouchpointClients,
       highTouchpointWithoutFutureAppointment: highTouchpointWithoutFutureAppointmentItems.length,
+      intakePreviewsAvailable: intakePreviewItems.length,
       noteGapOver1Day: noteGapClients.over1Day,
       noteGapOver3Days: noteGapClients.over3Days,
       noteGapOver7Days: noteGapClients.over7Days,
@@ -13239,8 +13291,10 @@ function scopeOperationsDataToCounselor(data, counselorId) {
       || (appointment.clientId && scopedClientIds.has(appointment.clientId))
     )),
     notes: (data.notes ?? []).filter((note) => note.clientId && scopedClientIds.has(note.clientId)),
+    intakePackets: (data.intakePackets ?? []).filter((item) => item.clientId && scopedClientIds.has(item.clientId)),
     documentAssignments: (data.documentAssignments ?? []).filter((item) => item.assigneeId && scopedClientIds.has(item.assigneeId)),
     formAssignments: (data.formAssignments ?? []).filter((item) => item.clientId && scopedClientIds.has(item.clientId)),
+    formSubmissions: (data.formSubmissions ?? []).filter((item) => item.clientId && scopedClientIds.has(item.clientId)),
     portalRegistrationRequests: [],
     portalAppointmentRequests: (data.portalAppointmentRequests ?? []).filter((item) => item.clientId && scopedClientIds.has(item.clientId)),
   };
