@@ -54,6 +54,12 @@ Relationship of the two files:
 
 ## Local workflow guardrails
 
+Startup policy for all humans and agents:
+
+- Use `pnpm start` from the repo root as the canonical local startup command.
+- Do not use `node start-servers.js` for standard development runs.
+- `pnpm start` is responsible for env loading, Docker or MySQL preflight, DB readiness checks, migrations, and starting API+web.
+
 A shared pre-push hook exists at `.githooks/pre-push`. Enable it in your clone:
 
 ```sh

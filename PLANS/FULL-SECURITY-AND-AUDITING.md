@@ -34,6 +34,7 @@ Excluded from initial implementation slices:
 - Unbounded topology rendering of entire tenant event graphs.
 - AI anomaly detection and speculative causality inference.
 - Export of raw audit rows through telemetry pipelines.
+- Protected-trait, geography, education, or socioeconomic inference from intake or portal data.
 
 ## Non-Negotiable Rules
 
@@ -203,6 +204,20 @@ Minimum policy:
 - Then update `PLANS/FULL-SURFACE-MONITORING.md` for visible-surface monitoring implications.
 - Then update `AGENTS.md` enforcement rules.
 - Update README and release notes when user-visible behavior changes.
+
+## Intake Preview Guardrails
+
+Any counselor-facing pre-session intake synthesis or preview feature must follow these rules:
+
+- The feature is review-only support for counselors, interns, practice admins, and practice owners. It is never client-facing.
+- The feature may summarize only data explicitly submitted by the client, scored assessments, or existing structured clinical records already stored by the system.
+- The feature must not infer race, ethnicity, sex, gender identity, education level, socioeconomic status, geography-based risk, or other protected/sensitive traits when they were not explicitly provided.
+- The feature must not present speculative causality as fact. It may surface only `reported contributors` or `reported stressors` taken from the client-submitted record.
+- The feature must not auto-create diagnoses or write back to the chart. At most, it may provide bounded `areas to assess`, `care route hypotheses`, or `review prompts`.
+- Any diagnostic or route suggestion must be explicitly labeled as provisional and counselor-reviewed.
+- Access to preview payloads must follow the same tenant-scoped and object-level authorization model as client detail routes.
+- Reads of the preview payload must be audited as sensitive client-record access.
+- Telemetry for the preview surface must remain aggregate-only and must never include client content, diagnosis text, or free-text intake responses.
 
 ## v5.6.0 API Security And Compliance Engineering Standard
 

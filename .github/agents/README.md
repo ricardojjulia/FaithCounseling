@@ -73,6 +73,14 @@ Recommended flow:
 pnpm test:security && pnpm test:e2e && pnpm test:launch-readiness && pnpm demo:finalize
 ```
 
+## Startup Policy
+
+For any agent in this catalog that needs to boot the application locally:
+
+- Use `pnpm start` from the repository root.
+- Do not use `node start-servers.js` for normal startup.
+- `pnpm start` is the canonical path because it loads `.env`, verifies Docker/MySQL readiness, runs migrations when configured, and then starts API and web services.
+
 ## Notes
 
 - Security and auditing work must follow [FULL-SECURITY-AND-AUDITING.md](/Users/rjulia/FaithCounseling/PLANS/FULL-SECURITY-AND-AUDITING.md).
