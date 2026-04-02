@@ -44,6 +44,7 @@ import { HttpError, readJsonBody, writeJson, assertShape } from './lib/http.js';
 import { logError, logInfo, logWarn, serializeError } from './lib/log.js';
 import { translateMessages } from './lib/translate.js';
 import { handleCors, checkRateLimit, enforceRbac, enforceTenantScope, callerIdentity } from './lib/security.js';
+import { searchDsm5TrDiagnoses } from './lib/dsm5-tr-reference.js';
 import pool, { verifyConnection } from './db/pool.js';
 import { encrypt, decrypt, encryptJson, decryptJson, deriveLookupHash } from './lib/encrypt.js';
 import {
@@ -1367,6 +1368,11 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/reference/dsm5-tr') {
+      await handleDsm5TrReferenceLookup(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/billing/service-codes') {
       await handleServiceCodes(request, response, session);
       return;
@@ -2425,6 +2431,45 @@ async function handleClientDiagnosesRoute(request, response, { clientId, subId }
     writeJson(response, 204, {}); return;
   }
   writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleDsm5TrReferenceLookup(request, response, requestUrl, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (!session) {
+    writeJson(response, 401, { error: 'Authentication required' });
+    return;
+  }
+
+  const query = sanitizeStr(requestUrl.searchParams.get('q'), 100) ?? '';
+  const requestedLimit = Number.parseInt(requestUrl.searchParams.get('limit') ?? '12', 10);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(requestedLimit, 1), 25)
+    : 12;
+
+  if (query.trim().length < 2) {
+    writeJson(response, 200, {
+      items: [],
+      meta: {
+        query,
+        limit,
+        count: 0,
+      },
+    });
+    return;
+  }
+
+  const items = await searchDsm5TrDiagnoses(query, { limit });
+  writeJson(response, 200, {
+    items,
+    meta: {
+      query,
+      limit,
+      count: items.length,
+    },
+  });
 }
 
 async function handleClientMedicationsRoute(request, response, { clientId, subId }, session) {
@@ -12974,6 +13019,7 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/reminders') return '/v1/reminders';
   if (pathname === '/v1/waitlist') return '/v1/waitlist';
   if (pathname === '/v1/operations/summary') return '/v1/operations/summary';
+  if (pathname === '/v1/reference/dsm5-tr') return '/v1/reference/dsm5-tr';
   if (pathname === '/v1/monitoring/db') return '/v1/monitoring/db';
   if (pathname === '/v1/billing/service-codes') return '/v1/billing/service-codes';
   if (pathname === '/v1/billing/fee-schedules') return '/v1/billing/fee-schedules';
