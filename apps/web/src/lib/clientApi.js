@@ -340,6 +340,13 @@ export function deleteClientDiagnosis(clientId, dxId) {
   });
 }
 
+export function fetchDsm5TrLookup(query, limit = 12) {
+  const params = new URLSearchParams();
+  if (query) params.set('q', query);
+  params.set('limit', String(limit));
+  return apiFetch(`/api/v1/reference/dsm5-tr?${params.toString()}`);
+}
+
 // ── Medications ───────────────────────────────────────────────────────────────
 
 export function fetchClientMedications(clientId) {
