@@ -455,10 +455,49 @@ const portalRegistrationRequests = [
 ];
 
 const appointments = [
-  { id: 'a-001', tenantId: 'system', clientId: 'c-001', clientName: 'Sarah Kim', counselorName: 'Rachel Jordan', startsAt: atToday(9, 0), endsAt: atToday(9, 50), status: 'scheduled', appointmentType: 'individual_therapy', locationName: 'Cedar Room', remoteSession: false },
-  { id: 'a-002', tenantId: 'system', clientId: 'c-002', clientName: 'David Miller', counselorName: 'Michael Park', startsAt: atToday(10, 30), endsAt: atToday(11, 20), status: 'scheduled', appointmentType: 'couples_therapy', locationName: 'Remote Session', remoteSession: true },
-  { id: 'a-003', tenantId: 'system', clientId: 'c-003', clientName: 'Emily Reyes', counselorName: 'Hannah Torres', startsAt: atToday(13, 0), endsAt: atToday(13, 50), status: 'checked_in', appointmentType: 'intake_assessment', locationName: 'Willow Room', remoteSession: false },
-  { id: 'a-004', tenantId: 'system', clientId: 'c-001', clientName: 'Sarah Kim', counselorName: 'Rachel Jordan', startsAt: atToday(15, 15), endsAt: atToday(16, 0), status: 'scheduled', appointmentType: 'family_therapy', locationName: 'Remote Session', remoteSession: true },
+  { id: 'a-001', tenantId: 'system', clientId: 'c-001', clientName: 'Sarah Kim', counselorId: 's-001', counselorName: 'Rachel Jordan', startsAt: atToday(9, 0), endsAt: atToday(9, 50), status: 'scheduled', appointmentType: 'individual_therapy', locationName: 'Cedar Room', remoteSession: false },
+  { id: 'a-002', tenantId: 'system', clientId: 'c-002', clientName: 'David Miller', counselorId: 's-001', counselorName: 'Rachel Jordan', startsAt: atToday(10, 30), endsAt: atToday(11, 20), status: 'scheduled', appointmentType: 'couples_therapy', locationName: 'Remote Session', remoteSession: true },
+  { id: 'a-003', tenantId: 'system', clientId: 'c-003', clientName: 'Emily Reyes', counselorId: 's-002', counselorName: 'Hannah Torres', startsAt: atToday(13, 0), endsAt: atToday(13, 50), status: 'checked_in', appointmentType: 'intake_assessment', locationName: 'Willow Room', remoteSession: false },
+  { id: 'a-004', tenantId: 'system', clientId: 'c-001', clientName: 'Sarah Kim', counselorId: 's-001', counselorName: 'Rachel Jordan', startsAt: atToday(15, 15), endsAt: atToday(16, 0), status: 'scheduled', appointmentType: 'family_therapy', locationName: 'Remote Session', remoteSession: true },
+];
+
+const appointmentSeriesRecords = [
+  {
+    id: 'ser-001',
+    tenantId: 'system',
+    counselorId: 's-001',
+    clientId: 'c-001',
+    clientName: 'Sarah Kim',
+    counselorName: 'Rachel Jordan',
+    appointmentType: 'individual_therapy',
+    recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO',
+    startDate: new Date().toISOString().slice(0, 10),
+    endDate: null,
+    durationMinutes: 50,
+    locationId: 'l-001',
+    remoteSession: false,
+    status: 'active',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'ser-002',
+    tenantId: 'system',
+    counselorId: 's-002',
+    clientId: 'c-003',
+    clientName: 'Emily Reyes',
+    counselorName: 'Hannah Torres',
+    appointmentType: 'intake_assessment',
+    recurrenceRule: 'FREQ=WEEKLY;BYDAY=TU',
+    startDate: new Date().toISOString().slice(0, 10),
+    endDate: null,
+    durationMinutes: 50,
+    locationId: 'l-002',
+    remoteSession: false,
+    status: 'active',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
 ];
 
 const practices = [
@@ -1904,7 +1943,8 @@ async function handlePortalPasswordResetComplete(request, response) {
 async function handleClientsCollection(request, response, requestUrl, session) {
   if (request.method === 'GET') {
     const statusFilter = requestUrl.searchParams.get('status');
-    const counselorScopeId = await resolveCounselorScopeId(request, requestUrl, session);
+    const counselorScopeId = await resolveEffectiveCounselorFilterId(request, response, requestUrl, session, 'client.list.read');
+    if (counselorScopeId === false) return;
 
     let items;
     if (process.env.DB_NAME) {
@@ -4886,7 +4926,8 @@ async function handleAppointmentsCollection(request, response, session) {
       const client = await resolveOptionalAuthorizedClient(request, response, filterClientId, session, 'appointment.list.read');
       if (!client) return;
     }
-    const counselorScopeId = await resolveCounselorScopeId(request, requestUrl, session);
+    const counselorScopeId = await resolveEffectiveCounselorFilterId(request, response, requestUrl, session, 'appointment.list.read');
+    if (counselorScopeId === false) return;
     let items;
     if (process.env.DB_NAME) {
       items = await listAppointments(callerTenant(request, session), {
@@ -5617,11 +5658,12 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
       const client = await resolveOptionalAuthorizedClient(request, response, clientId, session, 'series.read');
       if (!client) return;
     }
+    const counselorIdFilter = await resolveEffectiveCounselorFilterId(request, response, requestUrl, session, 'series.read');
+    if (counselorIdFilter === false) return;
     if (process.env.DB_NAME) {
       const filters = {};
-      const counselorId = requestUrl.searchParams.get('counselorId');
       const status      = requestUrl.searchParams.get('status');
-      if (counselorId) filters.counselorId = sanitizeStr(counselorId, 50);
+      if (counselorIdFilter) filters.counselorId = counselorIdFilter;
       if (clientId)    filters.clientId    = clientId;
       if (status)      filters.status      = sanitizeStr(status, 20);
       const items = await listSeries(tenantId, filters);
@@ -5629,7 +5671,14 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
       writeJson(response, 200, { items });
       return;
     }
-    writeJson(response, 200, { items: [] });
+    const statusFilter = sanitizeStr(requestUrl.searchParams.get('status') ?? '', 20) || null;
+    let items = filterByTenant(appointmentSeriesRecords, request)
+      .filter((item) => !clientId || item.clientId === clientId)
+      .filter((item) => !counselorIdFilter || item.counselorId === counselorIdFilter)
+      .filter((item) => !statusFilter || item.status === statusFilter)
+      .sort((left, right) => String(left.startDate ?? '').localeCompare(String(right.startDate ?? '')));
+    emitAudit(request, 'series.read', 'appointment_series', 'collection');
+    writeJson(response, 200, { items });
     return;
   }
 
@@ -5662,7 +5711,34 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
       writeJson(response, 201, { item });
       return;
     }
-    writeJson(response, 201, { item: { id: crypto.randomUUID(), tenantId, status: 'active', ...payload, clientId: client.id } });
+    const counselorId = sanitizeStr(payload.counselorId, 50);
+    const counselor = staffMembers.find((item) => item.id === counselorId && item.tenantId === tenantId);
+    if (!counselor) {
+      writeJson(response, 400, { error: 'Valid counselorId is required' });
+      return;
+    }
+    const item = {
+      id: createId('ser', appointmentSeriesRecords),
+      tenantId,
+      counselorId: counselor.id,
+      clientId: client.id,
+      clientName: sanitizeStr(payload.clientName ?? '', 160) || `${client.firstName} ${client.lastName}`.trim(),
+      counselorName: sanitizeStr(payload.counselorName ?? '', 160) || `${counselor.firstName} ${counselor.lastName}`.trim(),
+      appointmentType: sanitizeStr(payload.appointmentType ?? '', 60) || 'individual_therapy',
+      recurrenceRule: sanitizeStr(payload.recurrenceRule, 200),
+      startDate: sanitizeStr(payload.startDate, 12),
+      endDate: sanitizeStr(payload.endDate ?? '', 12) || null,
+      durationMinutes: Number.isFinite(Number(payload.durationMinutes)) ? Number(payload.durationMinutes) : 50,
+      locationId: sanitizeStr(payload.locationId ?? '', 50) || null,
+      remoteSession: !!payload.remoteSession,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    appointmentSeriesRecords.push(item);
+    telemetry.recordMutation('series.create');
+    emitAudit(request, 'series.create', 'appointment_series', item.id);
+    writeJson(response, 201, { item });
     return;
   }
 
@@ -5686,7 +5762,21 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
       writeJson(response, 200, { item });
       return;
     }
-    writeJson(response, 200, { item: { id, tenantId, ...payload } });
+    const item = appointmentSeriesRecords.find((record) => record.id === id);
+    if (!item) {
+      writeJson(response, 404, { error: 'Series not found' });
+      return;
+    }
+    if (enforceTenantScope(request, response, item.tenantId, session)) return;
+    const client = await resolveAuthorizedClient(request, response, item.clientId, session, 'series.update');
+    if (!client) return;
+    if (payload.status !== undefined) item.status = sanitizeStr(payload.status, 20) ?? item.status;
+    if (payload.endDate !== undefined) item.endDate = sanitizeStr(payload.endDate, 12) || null;
+    if (payload.recurrenceRule !== undefined) item.recurrenceRule = sanitizeStr(payload.recurrenceRule, 200) ?? item.recurrenceRule;
+    item.updatedAt = new Date().toISOString();
+    telemetry.recordMutation('series.update');
+    emitAudit(request, 'series.update', 'appointment_series', id);
+    writeJson(response, 200, { item });
     return;
   }
 
@@ -5740,7 +5830,8 @@ async function handleOperationsSummary(request, response, requestUrl, session) {
     return;
   }
 
-  const counselorScopeId = await resolveCounselorScopeId(request, requestUrl, session);
+  const counselorScopeId = await resolveEffectiveCounselorFilterId(request, response, requestUrl, session, 'operations.summary.read');
+  if (counselorScopeId === false) return;
   const summary = await buildOperationsSummary(request, timezone, session, { counselorScopeId });
   emitAudit(request, 'operations.summary.read', 'system', 'operations-summary', session);
   writeJson(response, 200, { summary });
@@ -12852,24 +12943,27 @@ function callerClientId(request, session) {
 const COUNSELOR_SESSION_ROLES = new Set(['counselor', 'intern']);
 
 async function resolveCounselorScopeId(request, requestUrl, session) {
-  const requestedCounselorId = sanitizeStr(
-    requestUrl.searchParams.get('counselorId')
-    ?? request.headers['x-staff-id']
-    ?? request.headers['x-staff-member-id']
-    ?? '',
-    64,
-  ) || null;
+  const requestedCounselorId = sanitizeStr(requestUrl.searchParams.get('counselorId') ?? '', 64) || null;
   const role = callerRole(request, session);
 
   if (!COUNSELOR_SESSION_ROLES.has(role)) {
     return requestedCounselorId;
   }
 
-  if (!process.env.DB_NAME) {
-    return requestedCounselorId;
+  return await resolveCallerCounselorScopeIdForAccess(request, session);
+}
+
+async function resolveEffectiveCounselorFilterId(request, response, requestUrl, session, deniedAction = 'client.record.read') {
+  if (!COUNSELOR_SESSION_ROLES.has(callerRole(request, session))) {
+    return await resolveCounselorScopeId(request, requestUrl, session);
   }
 
-  return await resolveCallerStaffMemberId(session) ?? requestedCounselorId;
+  const counselorScope = await resolveCounselorCollectionScope(request, response, session, deniedAction);
+  if (counselorScope === false) {
+    return false;
+  }
+
+  return counselorScope.counselorScopeId;
 }
 
 async function resolveCounselorCollectionScope(request, response, session, deniedAction = 'client.record.read') {

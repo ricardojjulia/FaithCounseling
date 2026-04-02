@@ -77,6 +77,32 @@ test('assigned counselor is denied from reading another counselor client detail 
   assert.equal(response.body?.error, 'Access to this resource is not permitted');
 });
 
+test('practice admin client collections are not implicitly scoped by staff header identity', async () => {
+  const response = await requestJson('/v1/clients', {
+    role: 'practice_admin',
+    staffId: 's-001',
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(
+    (response.body?.items ?? []).map((item) => item.id),
+    ['c-001', 'c-002', 'c-003', 'c-004', 'c-005'],
+  );
+});
+
+test('counselor client collections stay on assigned scope even with a counselorId override', async () => {
+  const response = await requestJson('/v1/clients?counselorId=s-002', {
+    role: 'counselor',
+    staffId: 's-001',
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(
+    (response.body?.items ?? []).map((item) => item.id),
+    ['c-001', 'c-002', 'c-004'],
+  );
+});
+
 test('filtered counselor form assignment read denies unassigned client access', async () => {
   const response = await requestJson('/v1/forms/assignments?clientId=c-003', {
     role: 'counselor',
@@ -190,6 +216,19 @@ test('counselor appointment mutation is assignment-gated', async () => {
   assert.equal(allowed.body?.item?.status, 'checked_in');
 });
 
+test('counselor appointment collections stay on assigned scope even with a counselorId override', async () => {
+  const response = await requestJson('/v1/appointments?counselorId=s-002', {
+    role: 'counselor',
+    staffId: 's-001',
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(
+    (response.body?.items ?? []).map((item) => item.id),
+    ['a-001', 'a-002', 'a-004'],
+  );
+});
+
 test('counselor waitlist update is assignment-gated', async () => {
   const denied = await requestJson('/v1/waitlist', {
     method: 'PATCH',
@@ -284,4 +323,70 @@ test('counselor scheduling calendar narrows availability to the signed-in counse
     (response.body?.availability ?? []).map((item) => item.staffId),
     ['s-002'],
   );
+  assert.deepEqual(
+    (response.body?.counselorCalendars ?? []).map((item) => item.counselorName),
+    ['Hannah Torres'],
+  );
+});
+
+test('counselor appointment series supports no-db list create update flows with assigned-client scope', async () => {
+  const initialList = await requestJson('/v1/scheduling/series?counselorId=s-002', {
+    role: 'counselor',
+    staffId: 's-001',
+  });
+  assert.equal(initialList.status, 200);
+  assert.deepEqual(
+    (initialList.body?.items ?? []).map((item) => item.id),
+    ['ser-001'],
+  );
+
+  const deniedCreate = await requestJson('/v1/scheduling/series', {
+    method: 'POST',
+    role: 'counselor',
+    staffId: 's-001',
+    body: {
+      counselorId: 's-001',
+      clientId: 'c-003',
+      recurrenceRule: 'FREQ=WEEKLY;BYDAY=WE',
+      startDate: '2026-04-02',
+      durationMinutes: 50,
+    },
+  });
+  assert.equal(deniedCreate.status, 403);
+
+  const createResponse = await requestJson('/v1/scheduling/series', {
+    method: 'POST',
+    role: 'counselor',
+    staffId: 's-001',
+    body: {
+      counselorId: 's-001',
+      clientId: 'c-001',
+      recurrenceRule: 'FREQ=WEEKLY;BYDAY=WE',
+      startDate: '2026-04-02',
+      durationMinutes: 50,
+    },
+  });
+  assert.equal(createResponse.status, 201);
+  assert.equal(createResponse.body?.item?.clientId, 'c-001');
+
+  const listAfterCreate = await requestJson('/v1/scheduling/series?clientId=c-001', {
+    role: 'counselor',
+    staffId: 's-001',
+  });
+  assert.equal(listAfterCreate.status, 200);
+  assert.ok(
+    (listAfterCreate.body?.items ?? []).some((item) => item.id === createResponse.body?.item?.id),
+  );
+
+  const updateResponse = await requestJson('/v1/scheduling/series', {
+    method: 'PATCH',
+    role: 'counselor',
+    staffId: 's-001',
+    body: {
+      id: createResponse.body?.item?.id,
+      status: 'paused',
+    },
+  });
+  assert.equal(updateResponse.status, 200);
+  assert.equal(updateResponse.body?.item?.status, 'paused');
 });
