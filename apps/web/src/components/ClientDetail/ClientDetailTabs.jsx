@@ -3,6 +3,7 @@ import { Tabs, Box } from '@mantine/core';
 import DemographicsTab    from './tabs/DemographicsTab.jsx';
 import ContactsTab        from './tabs/ContactsTab.jsx';
 import ClinicalHistoryTab from './tabs/ClinicalHistoryTab.jsx';
+import IntakePreviewTab   from './tabs/IntakePreviewTab.jsx';
 import DiagnosesTab       from './tabs/DiagnosesTab.jsx';
 import FaithProfileTab    from './tabs/FaithProfileTab.jsx';
 import LegalAdminTab      from './tabs/LegalAdminTab.jsx';
@@ -13,6 +14,7 @@ const TABS = [
   { id: 'demographics', labelKey: 'client.tab.demographics' },
   { id: 'contacts', labelKey: 'client.tab.contacts' },
   { id: 'clinical', labelKey: 'client.tab.clinical' },
+  { id: 'intakePreview', labelKey: 'client.tab.intakePreview' },
   { id: 'diagnoses', labelKey: 'client.tab.diagnoses' },
   { id: 'faith', labelKey: 'client.tab.faith' },
   { id: 'legal', labelKey: 'client.tab.legal' },
@@ -25,6 +27,7 @@ export default function ClientDetailTabs({ client, clientId, currentUser }) {
     demographics: 'client.demographics',
     contacts: 'client.contacts',
     clinical: 'client.clinical',
+    intakePreview: 'client.intake_preview',
     diagnoses: 'client.diagnoses',
     faith: 'client.faith',
     legal: 'client.legal',
@@ -41,6 +44,7 @@ export default function ClientDetailTabs({ client, clientId, currentUser }) {
         <Tabs.Panel value="demographics" p="md"><DemographicsTab    client={client} clientId={clientId} currentUser={currentUser} /></Tabs.Panel>
         <Tabs.Panel value="contacts"     p="md"><ContactsTab        client={client} clientId={clientId} currentUser={currentUser} /></Tabs.Panel>
         <Tabs.Panel value="clinical"     p="md"><ClinicalHistoryTab client={client} clientId={clientId} currentUser={currentUser} /></Tabs.Panel>
+        <Tabs.Panel value="intakePreview" p="md"><IntakePreviewTab  clientId={clientId} /></Tabs.Panel>
         <Tabs.Panel value="diagnoses"    p="md"><DiagnosesTab       client={client} clientId={clientId} currentUser={currentUser} /></Tabs.Panel>
         <Tabs.Panel value="faith"        p="md"><FaithProfileTab    client={client} clientId={clientId} currentUser={currentUser} /></Tabs.Panel>
         <Tabs.Panel value="legal"        p="md"><LegalAdminTab      client={client} clientId={clientId} currentUser={currentUser} /></Tabs.Panel>

@@ -40,6 +40,7 @@ import {
 import { createServiceTelemetry, startNodeTelemetry } from '../../../packages/telemetry/src/index.js';
 import { createI18nStore } from './lib/i18n-store.js';
 import { featureFlags } from './lib/feature-flags.js';
+import { buildIntakePreview } from './lib/intake-preview.js';
 import { HttpError, readJsonBody, writeJson, assertShape } from './lib/http.js';
 import { logError, logInfo, logWarn, serializeError } from './lib/log.js';
 import { translateMessages } from './lib/translate.js';
@@ -281,6 +282,14 @@ const intakePackets = [
     assignedForms: ['Demographics', 'Consent Packet'],
     submittedAt: null,
   }) },
+  { ...createIntakePacketRecord({
+    id: 'ip-004',
+    tenantId: 'system',
+    clientId: 'c-004',
+    status: 'completed',
+    assignedForms: ['Long Intake Form', 'PHQ-9 Depression Screener', 'Anxiety Assessment'],
+    submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  }) },
 ];
 
 const treatmentPlans = [
@@ -433,6 +442,112 @@ const formWorkflowSubmissions = [
     interpretationLabel: 'Mild Depression',
     submittedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'fs-004',
+    tenantId: 'system',
+    assignmentId: 'fa-004',
+    clientId: 'c-004',
+    formKey: 'LongIntakeForm',
+    formTitle: 'Long Intake Form',
+    submissionVersion: 1,
+    submittedByType: 'client',
+    responses: {
+      firstName: 'Michael',
+      lastName: 'Owens',
+      dob: '1990-08-14',
+      gender: 'Male',
+      pronouns: 'He / Him',
+      city: 'Nashville',
+      state: 'TN',
+      maritalStatus: 'Married',
+      livingSituation: 'With spouse / partner',
+      occupation: 'Project manager',
+      primaryConcern: 'Constant anxiety, panic at night, and grief after a recent miscarriage.',
+      secondaryConcerns: 'Sleep disruption and tension with my spouse.',
+      onsetDate: '3–6 months ago',
+      precipitatingEvent: 'Symptoms worsened after a pregnancy loss and increased work pressure.',
+      severity: 8,
+      dailyImpact: 'Sleep is poor, concentration is down, and conflict at home has increased.',
+      priorAttempts: 'Prayer, journaling, exercise, and trying to stay busy.',
+      whatHelps: 'Prayer, walks, and talking with my wife when I can slow down enough to do it.',
+      previousTherapy: 'No',
+      psychiatricHospitalization: 'No',
+      diagnosedConditions: 'No',
+      generalHealth: 'Good',
+      chronicConditions: '',
+      christianIntegration: 'Yes, please',
+      churchAffiliation: 'Yes, regularly',
+      faithBackground: 'Evangelical Christian',
+      faithImportance: '9',
+      spiritualStrengths: 'Prayer, worship music, and a men’s Bible study.',
+      selfHarmThoughts: 'No',
+      suicidalThoughts: 'No',
+      goals: 'Feel steady again, sleep through the night, and reconnect with my spouse and God.',
+      successLooks: 'Less panic, better sleep, and less tension at home.',
+    },
+    scoreLabel: null,
+    scoreValue: null,
+    interpretationLabel: null,
+    submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'fs-005',
+    tenantId: 'system',
+    assignmentId: 'fa-005',
+    clientId: 'c-004',
+    formKey: 'PHQ9',
+    formTitle: 'PHQ-9 Depression Screener',
+    submissionVersion: 1,
+    submittedByType: 'client',
+    responses: {
+      phq1: '2',
+      phq2: '2',
+      phq3: '2',
+      phq4: '2',
+      phq5: '1',
+      phq6: '1',
+      phq7: '1',
+      phq8: '0',
+      phq9: '0',
+    },
+    scoreLabel: 'PHQ-9 Score',
+    scoreValue: 11,
+    interpretationLabel: 'Moderate Depression',
+    submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'fs-006',
+    tenantId: 'system',
+    assignmentId: 'fa-006',
+    clientId: 'c-004',
+    formKey: 'AnxietyAssessment',
+    formTitle: 'Anxiety Assessment',
+    submissionVersion: 1,
+    submittedByType: 'client',
+    responses: {
+      gad1: '2',
+      gad2: '2',
+      gad3: '2',
+      gad4: '2',
+      gad5: '1',
+      gad6: '1',
+      gad7: '2',
+      anxietyTriggers: 'Nighttime quiet, work deadlines, and conversations about the loss.',
+      panicAttacks: 'Yes',
+      panicFrequency: 'Occasionally (monthly)',
+      avoidance: 'Yes',
+      avoidanceDetails: 'I avoid bedtime because that is when panic feels strongest.',
+      anxietyDuration2: '1–6 months',
+      functionalImpact: 'Very difficult',
+    },
+    scoreLabel: 'GAD-7 Score',
+    scoreValue: 12,
+    interpretationLabel: 'Moderate Anxiety',
+    submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
   },
 ];
 
@@ -902,6 +1017,33 @@ const portalClientProfiles = [
     createdAt: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString(),
     updatedAt: new Date().toISOString(),
   },
+  {
+    id: 'pcp-004',
+    tenantId: 'system',
+    clientId: 'c-004',
+    preferredName: 'Michael',
+    contactEmail: 'michael.owens@example.test',
+    contactPhone: '555-0174',
+    contactPreferences: {
+      preferredContactMethod: 'email',
+      okToText: false,
+      okToLeaveMessage: true,
+      enabledChannels: ['email', 'portal_message'],
+    },
+    profileDetails: {
+      demographics: {
+        pronouns: 'he/him',
+        maritalStatus: 'married',
+      },
+      education: {
+        level: 'masters',
+        occupation: 'Project manager',
+      },
+      affiliations: ['Men’s Bible study'],
+    },
+    createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
 ];
 
 const portalSettingsRecords = [
@@ -1305,6 +1447,7 @@ export async function handleApiRequest(request, response) {
         if (sub.subresource === 'medications')         { await handleClientMedicationsRoute(request, response, sub, session); return; }
         if (sub.subresource === 'allergies')           { await handleClientAllergiesRoute(request, response, sub, session); return; }
         if (sub.subresource === 'clinical-history')    { await handleClientClinicalHistoryRoute(request, response, sub, session); return; }
+        if (sub.subresource === 'intake-preview')      { await handleClientIntakePreviewRoute(request, response, sub, session); return; }
         if (sub.subresource === 'faith-profile')       { await handleClientFaithProfileRoute(request, response, sub, session); return; }
         if (sub.subresource === 'legal')               { await handleClientLegalRoute(request, response, sub, session); return; }
       }
@@ -2684,6 +2827,45 @@ async function handleClientClinicalHistoryRoute(request, response, { clientId },
     writeJson(response, 200, { item }); return;
   }
   writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleClientIntakePreviewRoute(request, response, { clientId }, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const client = await resolveClientForSubresource(request, response, clientId, session);
+  if (!client) return;
+
+  if (process.env.DB_NAME) {
+    const [intakePacket, portalProfile, submissions, appointments] = await Promise.all([
+      getIntakePacket(clientId, client.tenantId),
+      getPortalClientProfile(clientId, client.tenantId),
+      listFormSubmissions(client.tenantId, { clientId }),
+      listAppointments(client.tenantId, { clientId }),
+    ]);
+    const item = buildIntakePreview({
+      client,
+      intakePacket,
+      portalProfile,
+      submissions,
+      appointments,
+    });
+    await emitAudit(request, 'client.intake_preview.read', 'client', clientId, session);
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  const item = buildIntakePreview({
+    client,
+    intakePacket: intakePackets.find((entry) => entry.clientId === clientId && entry.tenantId === client.tenantId) ?? null,
+    portalProfile: portalClientProfiles.find((entry) => entry.clientId === clientId && entry.tenantId === client.tenantId) ?? null,
+    submissions: formWorkflowSubmissions.filter((entry) => entry.clientId === clientId && entry.tenantId === client.tenantId),
+    appointments: appointments.filter((entry) => entry.clientId === clientId && entry.tenantId === client.tenantId),
+  });
+  await emitAudit(request, 'client.intake_preview.read', 'client', clientId, session);
+  writeJson(response, 200, { item });
 }
 
 async function handleClientFaithProfileRoute(request, response, { clientId }, session) {
@@ -13291,6 +13473,7 @@ function resolveRoute(pathname) {
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/lifecycle')) return '/v1/clients/:id/lifecycle';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/consents')) return '/v1/clients/:id/consents';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/intake-packets')) return '/v1/clients/:id/intake-packets';
+  if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/intake-preview')) return '/v1/clients/:id/intake-preview';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/treatment-plan')) return '/v1/clients/:id/treatment-plan';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/progress-notes')) return '/v1/clients/:id/progress-notes';
   if (pathname.startsWith('/v1/document-templates/')) return '/v1/document-templates/:id';

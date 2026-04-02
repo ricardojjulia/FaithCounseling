@@ -29,6 +29,7 @@ export const SURFACE_DEFINITIONS = Object.freeze([
   { id: 'client.demographics', kind: 'tab' },
   { id: 'client.contacts', kind: 'tab' },
   { id: 'client.clinical', kind: 'tab' },
+  { id: 'client.intake_preview', kind: 'tab' },
   { id: 'client.diagnoses', kind: 'tab' },
   { id: 'client.faith', kind: 'tab' },
   { id: 'client.legal', kind: 'tab' },

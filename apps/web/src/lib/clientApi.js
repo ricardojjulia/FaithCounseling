@@ -173,6 +173,10 @@ export function fetchClient(clientId) {
   return apiFetch(`/api/v1/clients/${clientId}?expand=${expand}`);
 }
 
+export function fetchClientIntakePreview(clientId) {
+  return apiFetch(`/api/v1/clients/${clientId}/intake-preview`);
+}
+
 export function patchClient(clientId, data) {
   return apiFetch(`/api/v1/clients/${clientId}`, {
     method: 'PATCH',

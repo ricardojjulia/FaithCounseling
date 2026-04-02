@@ -604,6 +604,7 @@ export const baseMessages = Object.freeze({
   'client.tab.insurance': 'Insurance',
   'client.tab.contacts': 'Contacts',
   'client.tab.clinical': 'Clinical History',
+  'client.tab.intakePreview': 'Intake Preview',
   'client.tab.diagnoses': 'Diagnoses & Meds',
   'client.diagnoses.lookupLabel': 'DSM-5-TR Lookup',
   'client.diagnoses.lookupPlaceholder': 'Search by code or diagnosis name',
