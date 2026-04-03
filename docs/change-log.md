@@ -31,7 +31,24 @@ Admin users and any user whose toggle attempt went through the browser received 
 
 - `apps/web/server.js` — `readRequestBody` now collects raw `Buffer` chunks and returns `Buffer.concat(chunks)`. A `Buffer` / `Uint8Array` body passed to `fetch` carries no implicit Content-Type, so the explicitly forwarded `content-type: application/json` header is preserved end-to-end.
 
+### fix: duplicate Content-Type header causing 415 for all browser POST/PATCH mutations
 
+**Date:** April 3, 2026
+**Affected area:** Frontend headers, all browser-initiated POST/PATCH mutations
+
+Every browser-originated mutation (high-touchpoint toggle, session notes, internal notes, offerings) returned HTTP 415, while the same requests via curl succeeded. The UI showed "Failed to update high-touchpoint flag. Please try again." and similar errors on clinical chart saves.
+
+**Root cause:** `csrfHeaders()` (in `apps/web/src/lib/csrf.js`) already returns `'content-type': 'application/json'` (lowercase). Nine callsites across five components also added `'Content-Type': 'application/json'` (mixed case) to the same headers object. JavaScript object keys are case-sensitive, so both keys coexisted in the plain object. When passed to the browser's native `fetch`, the `Headers` constructor normalizes both to lowercase `content-type` and joins the values with a comma: `"application/json, application/json"`. The proxy forwarded this verbatim. The API's `isJsonMediaType` split only on `;`, leaving the full string `"application/json, application/json"` which is not equal to `"application/json"` → 415.
+
+**What changed:**
+
+- `apps/web/src/components/ClientsPage.jsx` — removed redundant `'Content-Type': 'application/json'` from `handleToggleHighTouchpoint`.
+- `apps/web/src/components/WorkspaceStudio/tabs/OfferingsTab.jsx` — same fix.
+- `apps/web/src/components/Offerings/OfferingsPage.jsx` — same fix.
+- `apps/web/src/components/ClinicalChart/tabs/TreatmentPlanTab.jsx` — same fix.
+- `apps/web/src/components/ClinicalChart/tabs/SessionNotesTab.jsx` — same fix (3 callsites).
+- `apps/web/src/components/ClinicalChart/tabs/InternalNotesTab.jsx` — same fix (2 callsites).
+- `apps/api/src/lib/http.js` — `isJsonMediaType` now splits the content-type on `,` before `;` to evaluate only the first value, making the API resilient to browser duplicate-header joining.
 
 ### fix: restart stale local services and normalize portal conversion routes
 
