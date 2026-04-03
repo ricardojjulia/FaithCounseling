@@ -216,16 +216,13 @@ If `OTEL_EXPORTER_OTLP_ENDPOINT` is unset, telemetry remains local/console-only.
 
 Only the latest two entries are listed here. Full release history is in `docs/change-log.md`.
 
-### Maintenance (April 2, 2026)
+### v5.6.0 (April 3, 2026)
 
-Two bug fixes shipped on main:
-
-- **Login copy restored:** faith-centered welcome messaging ("Caring for the whole person") was missing from the main branch — `packages/i18n/src/index.js`, `apps/api/data/i18n/en.json`, and `apps/api/data/i18n/es.json` updated; web bundle rebuilt
-- **Operations Dashboard portal backlog aligned:** the backlog alert was counting all 68 historical portal requests while the Practice Operations tile showed 0 — both now derive from the same open/actionable request set (`requested` and `reviewing` statuses only)
+Portal client conversion flow: approved `account_signup` portal requests now link to the client they created. A **"View Client"** button on any approved request navigates directly to that client record in the Clients workspace. The `portal_registration_requests` table gains a `converted_client_id` column (zero-downtime column migration) written on activation.
 
 ### v5.5.2 (April 1, 2026)
 
-Faithful Workflows visual upgrade: adds two new parallel canvas views (Radial Hub and Priority Matrix) alongside the original Classic List view. A floating cycle button in the canvas panel switches between all three. Zero functional or engine changes; all 51 engine tests pass.
+Faithful Workflows visual upgrade: adds two new parallel canvas views (Radial Hub and Priority Matrix) alongside the original Classic List view. A floating cycle button in the page header switches between all three. Zero functional or engine changes; all 51 engine tests pass.
 
 - Full summary: `docs/v5.5.2-RELEASE-SUMMARY.md`
 

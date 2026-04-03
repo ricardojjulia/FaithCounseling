@@ -2,6 +2,69 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v5.6.0 — April 3, 2026 — Portal Client Conversion and Plan Hygiene
+
+### release: portal request → client conversion flow (v5.6.0)
+
+Closes the approval dead-end in the public portal request workflow. Previously, approving an `account_signup` request created a client and portal account but provided no way to navigate back to that client. The approved request was a dead end.
+
+**What changed:**
+
+- `portal_registration_requests` now stores `converted_client_id` (new column, added via zero-downtime column migration)
+- `activatePortalSignupRequest` writes the new client ID back to the registration request on activation
+- Public requests list now returns `convertedClientId` in every API response
+- **"View Client" button** appears on every approved `account_signup` request that has a linked client — navigates directly to the client record in the Clients workspace
+- Prop threading: `onViewClient` → `PortalTab` → `WorkspaceStudioPage` → `App.jsx`
+
+**Files changed:**
+
+| File | Change |
+| --- | --- |
+| `apps/api/src/db/migrate.js` | Column migration: `portal_registration_requests.converted_client_id VARCHAR(64) NULL` |
+| `apps/api/src/db/queries/formWorkflows.js` | `rowToPortalRegistrationRequest` maps new column; `updatePortalRegistrationRequest` accepts `convertedClientId` |
+| `apps/api/src/index.js` | `activatePortalSignupRequest` writes `convertedClientId` on activation |
+| `apps/web/src/components/WorkspaceStudio/tabs/PortalTab.jsx` | `PublicRequestsSection` + `PortalTab` accept `onViewClient`; "View Client" button wired |
+| `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx` | `onViewClient` prop threaded through to `PortalTab` |
+| `apps/web/src/App.jsx` | `onViewClient={handleOpenClient}` passed to `WorkspaceStudioPage` |
+
+### chore: plan evaluation pass and PLAN-TRACKER
+
+- Evaluated all 20 plans in `PLANS/` against shipped code
+- Marked 17 plans ✅ COMPLETE with verification evidence and dates
+- Added `PLANS/PLAN-TRACKER.md` as a single-view index of plan status
+- Executed remaining `PROJECT-CLEANUP` items: removed `__pycache__`, stale `.github/agents/translation_guardian/` copy, and `test-results/` artifacts
+
+### chore: database reset and backup tooling
+
+- Full DB backup workflow validated: `docker exec faith-mysql mysqldump` → `backups/`
+- Database wiped to clean state: all client, clinical, portal, financial, and session data removed; staff accounts and form catalog preserved
+
+---
+
+## April 2, 2026
+
+### fix: intake preview form key mismatch causing "Preview not currently active" for all real clients
+
+The `INTAKE_FORM_KEYS` constant in `buildIntakePreview` used PascalCase JS export names (`'LongIntakeForm'`, `'ShortIntakeForm'`) instead of the snake_case `form_key` values actually stored in the `form_submissions` table (`'long_intake'`, `'short_intake'`). This caused `hasIntakeFormSubmission` to always evaluate to `false` for any client who submitted forms through the live UI, blocking the preview for every real client. The `submittedAt` fallback in the return object had the same wrong keys. The `packetStatus` field returned `null` (displayed as "Not on file") for clients without a formal intake packet row even when they had completed form submissions.
+
+**Changes:**
+- `INTAKE_FORM_KEYS` now includes all four variants (`'long_intake'`, `'short_intake'`, `'LongIntakeForm'`, `'ShortIntakeForm'`) to cover both real UI submissions and legacy seed data
+- `submittedAt` fallback chain now tries snake_case keys first, then PascalCase, so the submission timestamp is returned correctly for all clients
+- `packetStatus` now synthesizes `'submitted'` from form submissions when no formal `intake_packets` row exists, so clients who completed forms directly see the correct status
+
+Affected files: `apps/api/src/lib/intake-preview.js`
+
+---
+
+### fix: remove held session constraint from intake preview eligibility
+
+Removed the `heldSessions.length === 0` gate from `buildIntakePreview` so that clients with any prior held or started session can now receive an intake preview once their intake paperwork is on file. Also removed the now-unused `isHeldSession()` helper function and its orphaned `heldSessionCount` reference from the return object, which was causing a `ReferenceError` at runtime.
+
+- `apps/api/src/lib/intake-preview.js` — removed `heldSessions` variable, `isHeldSession()` function, eligibility compound condition, held-session reason message, and the stale `heldSessionCount` field in the sessions return object
+- `AGENTS.md` — added commit documentation requirements: every commit must update `README.md` and `docs/change-log.md`; bug fixes use `### fix:` entries; major revisions require `### release:` entries and a release summary file in `docs/`
+
+---
+
 ## Maintenance — April 2, 2026 — Login Copy and Dashboard Bug Fixes
 
 ### fix(auth): faith-centered login welcome messaging restored

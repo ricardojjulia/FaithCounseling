@@ -571,7 +571,7 @@ function BalanceSection({ balances }) {
   );
 }
 
-function PublicRequestsSection({ items, loading, onRefresh }) {
+function PublicRequestsSection({ items, loading, onRefresh, onViewClient }) {
   const [updatingId, setUpdatingId] = useState(null);
 
   const setStatus = async (requestId, status) => {
@@ -709,6 +709,16 @@ function PublicRequestsSection({ items, loading, onRefresh }) {
                     onClick={() => setStatus(item.id, 'approved')}
                   >
                     Approve
+                  </Button>
+                )}
+                {item.status === 'approved' && item.convertedClientId && (
+                  <Button
+                    size="xs"
+                    color="teal"
+                    variant="light"
+                    onClick={() => onViewClient?.({ clientId: item.convertedClientId })}
+                  >
+                    View Client
                   </Button>
                 )}
                 {item.status !== 'declined' && (
@@ -866,7 +876,7 @@ function AccordionLabel({ title, count, countColor }) {
 
 // ── main component ────────────────────────────────────────────────────────────
 
-export default function PortalTab({ onSchedulePortalRequest }) {
+export default function PortalTab({ onSchedulePortalRequest, onViewClient }) {
   const [clients,        setClients]        = useState([]);
   const [clientId,       setClientId]       = useState(null);
   const [overview,       setOverview]       = useState(null);
@@ -1027,6 +1037,7 @@ export default function PortalTab({ onSchedulePortalRequest }) {
         items={publicRequests}
         loading={publicRequestsLoading}
         onRefresh={loadPublicRequests}
+        onViewClient={onViewClient}
       />
 
       <DataRightsRequestsSection

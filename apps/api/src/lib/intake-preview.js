@@ -1,4 +1,4 @@
-const INTAKE_FORM_KEYS = ['LongIntakeForm', 'ShortIntakeForm'];
+const INTAKE_FORM_KEYS = ['long_intake', 'short_intake', 'LongIntakeForm', 'ShortIntakeForm'];
 
 const PREVIEW_DISCLAIMER =
   'AI-assisted and supportive only. Final clinical judgment belongs to the counselor. Crisis situations require immediate human intervention.';
@@ -98,14 +98,6 @@ function isCancelledAppointment(item) {
   return status === 'cancelled' || status === 'canceled';
 }
 
-function isHeldSession(item, now = Date.now()) {
-  if (!item || isCancelledAppointment(item)) return false;
-  const status = String(item.status ?? '').toLowerCase();
-  if (['checked_in', 'completed', 'no_show'].includes(status)) return true;
-  const startsAt = normalizeDate(item.startsAt ?? item.scheduledAt);
-  return Boolean(startsAt && startsAt.getTime() < now);
-}
-
 function classifyScreeningUrgency(formKey, scoreValue, interpretationLabel) {
   const score = Number(scoreValue);
   if (formKey === 'PHQ9') {
@@ -178,7 +170,6 @@ export function buildIntakePreview({
   const hasCompletedPacket = ['completed', 'reviewed'].includes(String(intakePacket?.status ?? '').toLowerCase());
   const hasIntakeFormSubmission = INTAKE_FORM_KEYS.some((formKey) => latestForms.has(formKey));
   const now = Date.now();
-  const heldSessions = appointments.filter((item) => isHeldSession(item, now));
   const futureAppointments = appointments
     .filter((item) => !isCancelledAppointment(item))
     .filter((item) => {
@@ -187,13 +178,10 @@ export function buildIntakePreview({
     })
     .sort((left, right) => String(left.startsAt ?? left.scheduledAt).localeCompare(String(right.startsAt ?? right.scheduledAt)));
 
-  const eligible = (hasCompletedPacket || hasIntakeFormSubmission) && heldSessions.length === 0;
+  const eligible = hasCompletedPacket || hasIntakeFormSubmission;
   const reasons = [];
   if (!hasCompletedPacket && !hasIntakeFormSubmission) {
     reasons.push('Intake preview becomes available after intake paperwork is completed.');
-  }
-  if (heldSessions.length > 0) {
-    reasons.push('This client already has a held or started session on record.');
   }
 
   const primaryConcern = trimText(firstResponse(intakeResponses, ['primaryConcern', 'concern']), 420);
@@ -487,8 +475,8 @@ export function buildIntakePreview({
     disclaimer: PREVIEW_DISCLAIMER,
     intake: {
       completed: hasCompletedPacket || hasIntakeFormSubmission,
-      packetStatus: intakePacket?.status ?? null,
-      submittedAt: intakePacket?.submittedAt ?? latestForms.get('LongIntakeForm')?.submittedAt ?? latestForms.get('ShortIntakeForm')?.submittedAt ?? null,
+      packetStatus: intakePacket?.status ?? (hasIntakeFormSubmission ? 'submitted' : null),
+      submittedAt: intakePacket?.submittedAt ?? latestForms.get('long_intake')?.submittedAt ?? latestForms.get('short_intake')?.submittedAt ?? latestForms.get('LongIntakeForm')?.submittedAt ?? latestForms.get('ShortIntakeForm')?.submittedAt ?? null,
       sourceForms: [...latestForms.values()]
         .filter((item) => INTAKE_FORM_KEYS.includes(item.formKey))
         .map((item) => ({
@@ -498,7 +486,6 @@ export function buildIntakePreview({
         })),
     },
     sessions: {
-      heldSessionCount: heldSessions.length,
       futureAppointmentCount: futureAppointments.length,
       nextAppointmentAt: futureAppointments[0]?.startsAt ?? futureAppointments[0]?.scheduledAt ?? null,
     },
