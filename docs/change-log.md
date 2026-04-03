@@ -2,6 +2,13 @@
 
 <!-- markdownlint-disable MD024 -->
 
+### chore: include full pending web public assets bundle
+
+**Date:** April 3, 2026
+**Affected area:** `apps/web/public/index.html`, `apps/web/public/assets/*`
+
+Included all currently pending generated web public bundle artifacts so checked-in deployable/public assets remain in sync with recently shipped UI workflow updates.
+
 ### feat: client detail direct documents action
 
 **Date:** April 3, 2026

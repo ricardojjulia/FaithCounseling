@@ -55,6 +55,10 @@ All `DateInput` components (Mantine v8) across the application accept dates in `
 
 Client Detail now includes a direct header action to open documents for the active client. The action routes staff into the Client Portal Documents tab with that client preselected, so records can be viewed and document tasks can be assigned without manually switching surfaces or reselecting the client.
 
+## Public Web Build Artifacts
+
+The `apps/web/public/assets` bundle files may be refreshed and committed when shipping UI workflow updates so the checked-in public web surface stays aligned with the latest source behavior.
+
 ## Architecture At A Glance
 
 - `apps/web`: React + Mantine web UI, served by a lightweight Node server
