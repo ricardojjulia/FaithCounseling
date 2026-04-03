@@ -204,6 +204,7 @@ async function applyColumnMigrations(conn) {
   await addColumnIfMissing('portal_registration_requests', 'preferred_contact_method', 'VARCHAR(64) NULL AFTER phone_enc');
   await addColumnIfMissing('portal_registration_requests', 'preferred_contact_window', 'VARCHAR(128) NULL AFTER preferred_contact_method');
   await addColumnIfMissing('portal_registration_requests', 'onboarding_details_enc', 'MEDIUMTEXT NULL AFTER requested_services');
+  await addColumnIfMissing('portal_registration_requests', 'converted_client_id', 'VARCHAR(64) NULL AFTER status');
   await addColumnIfMissing('portal_settings', 'financial_mode', "VARCHAR(64) NOT NULL DEFAULT 'offerings' AFTER show_public_counselor_directory");
   await addColumnIfMissing('portal_settings', 'suggested_offering_cents', 'INT NOT NULL DEFAULT 0 AFTER financial_mode');
   await addColumnIfMissing('portal_settings', 'offering_ministry_note', 'TEXT NULL AFTER suggested_offering_cents');

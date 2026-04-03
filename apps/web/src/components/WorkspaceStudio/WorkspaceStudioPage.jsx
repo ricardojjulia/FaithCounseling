@@ -19,7 +19,7 @@ const STUDIO_TABS = [
   { id: 'portal', labelKey: 'studio.tab.portal' },
 ];
 
-export default function WorkspaceStudioPage({ initialTab = 'portal', onSchedulePortalRequest }) {
+export default function WorkspaceStudioPage({ initialTab = 'portal', onSchedulePortalRequest, onViewClient }) {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState(initialTab || 'portal');
   const activeSurfaceId = `studio.${activeTab === 'documentsStudio' ? 'documents' : activeTab}`;
@@ -49,7 +49,7 @@ export default function WorkspaceStudioPage({ initialTab = 'portal', onScheduleP
           {STUDIO_TABS.map((tab) => (
             <Tabs.Panel key={tab.id} value={tab.id} pt="md">
               {tab.id === 'portal' ? (
-                <PortalTab onSchedulePortalRequest={onSchedulePortalRequest} />
+                <PortalTab onSchedulePortalRequest={onSchedulePortalRequest} onViewClient={onViewClient} />
               ) : tab.id === 'documentsStudio' ? (
                 <DocumentsStudioTab />
               ) : tab.id === 'offerings' ? (

@@ -4842,6 +4842,9 @@ async function activatePortalSignupRequest({ tenantId, requestRecord, actorId = 
       clientId: client.id,
       assignedBy: actorId,
     });
+    if (requestRecord.id) {
+      await updatePortalRegistrationRequest(requestRecord.id, tenantId, { convertedClientId: client.id });
+    }
     return {
       status: 'activated',
       email: normalizedEmail,

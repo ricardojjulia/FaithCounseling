@@ -2,6 +2,45 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v5.6.0 — April 3, 2026 — Portal Client Conversion and Plan Hygiene
+
+### release: portal request → client conversion flow (v5.6.0)
+
+Closes the approval dead-end in the public portal request workflow. Previously, approving an `account_signup` request created a client and portal account but provided no way to navigate back to that client. The approved request was a dead end.
+
+**What changed:**
+
+- `portal_registration_requests` now stores `converted_client_id` (new column, added via zero-downtime column migration)
+- `activatePortalSignupRequest` writes the new client ID back to the registration request on activation
+- Public requests list now returns `convertedClientId` in every API response
+- **"View Client" button** appears on every approved `account_signup` request that has a linked client — navigates directly to the client record in the Clients workspace
+- Prop threading: `onViewClient` → `PortalTab` → `WorkspaceStudioPage` → `App.jsx`
+
+**Files changed:**
+
+| File | Change |
+| --- | --- |
+| `apps/api/src/db/migrate.js` | Column migration: `portal_registration_requests.converted_client_id VARCHAR(64) NULL` |
+| `apps/api/src/db/queries/formWorkflows.js` | `rowToPortalRegistrationRequest` maps new column; `updatePortalRegistrationRequest` accepts `convertedClientId` |
+| `apps/api/src/index.js` | `activatePortalSignupRequest` writes `convertedClientId` on activation |
+| `apps/web/src/components/WorkspaceStudio/tabs/PortalTab.jsx` | `PublicRequestsSection` + `PortalTab` accept `onViewClient`; "View Client" button wired |
+| `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx` | `onViewClient` prop threaded through to `PortalTab` |
+| `apps/web/src/App.jsx` | `onViewClient={handleOpenClient}` passed to `WorkspaceStudioPage` |
+
+### chore: plan evaluation pass and PLAN-TRACKER
+
+- Evaluated all 20 plans in `PLANS/` against shipped code
+- Marked 17 plans ✅ COMPLETE with verification evidence and dates
+- Added `PLANS/PLAN-TRACKER.md` as a single-view index of plan status
+- Executed remaining `PROJECT-CLEANUP` items: removed `__pycache__`, stale `.github/agents/translation_guardian/` copy, and `test-results/` artifacts
+
+### chore: database reset and backup tooling
+
+- Full DB backup workflow validated: `docker exec faith-mysql mysqldump` → `backups/`
+- Database wiped to clean state: all client, clinical, portal, financial, and session data removed; staff accounts and form catalog preserved
+
+---
+
 ## April 2, 2026
 
 ### fix: intake preview form key mismatch causing "Preview not currently active" for all real clients
