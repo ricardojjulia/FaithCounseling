@@ -2,6 +2,20 @@
 
 <!-- markdownlint-disable MD024 -->
 
+### feat: client detail direct documents action
+
+**Date:** April 3, 2026
+**Affected area:** Client Detail navigation, Portal Documents workflow
+
+Added a new Client Detail header action: "View / Assign Documents". Selecting this action opens the Client Portal surface directly on the Documents tab and preselects the current client.
+
+**What changed:**
+
+- `apps/web/src/components/ClientDetail/ClientDetailHeader.jsx` — added the new header button.
+- `apps/web/src/components/ClientDetail/ClientDetailPage.jsx` — forwards a client-scoped documents action callback.
+- `apps/web/src/App.jsx` — introduced portal handoff state and `handleOpenPortal` to open a specific portal tab with a selected client.
+- `apps/web/src/components/Portal/ClientPortalPage.jsx` — added `initialClientId` and `initialTab` props with effect-based handoff handling.
+
 ### fix: date pickers calendar close and manual entry across all forms
 
 **Date:** April 3, 2026

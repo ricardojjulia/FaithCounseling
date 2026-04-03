@@ -51,6 +51,10 @@ This baseline supports HIPAA-oriented safeguards, GDPR-aligned privacy principle
 
 All `DateInput` components (Mantine v8) across the application accept dates in `MM/DD/YYYY` format for manual entry and display. The calendar popover closes automatically when a day is selected. Date values are stored internally as `YYYY-MM-DD` strings. Affected forms: intake/form runner, client demographics, legal/admin, insurance, diagnoses, employment, certifications, and licenses.
 
+## Client Detail Documents Shortcut
+
+Client Detail now includes a direct header action to open documents for the active client. The action routes staff into the Client Portal Documents tab with that client preselected, so records can be viewed and document tasks can be assigned without manually switching surfaces or reselecting the client.
+
 ## Architecture At A Glance
 
 - `apps/web`: React + Mantine web UI, served by a lightweight Node server

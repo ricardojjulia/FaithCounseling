@@ -226,7 +226,13 @@ function fileToBase64(file) {
   });
 }
 
-export default function ClientPortalPage({ currentUser, clients = [], onSignOut = async () => {} }) {
+export default function ClientPortalPage({
+  currentUser,
+  clients = [],
+  initialClientId = null,
+  initialTab = 'dashboard',
+  onSignOut = async () => {},
+}) {
   const { t } = useI18n();
   const userRole = currentUser?.role ?? null;
   const isClientRole = userRole === 'client';
@@ -268,6 +274,16 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
   const activeSurfaceId = PORTAL_TAB_SURFACES[activeTab] ?? 'portal.dashboard';
   const overview = portalData.overview;
   const profile = portalData.profile;
+
+  useEffect(() => {
+    setActiveTab(initialTab || 'dashboard');
+  }, [initialTab]);
+
+  useEffect(() => {
+    if (isClientRole) return;
+    if (!initialClientId) return;
+    setSelectedClientId(initialClientId);
+  }, [initialClientId, isClientRole]);
 
   useSurfaceTelemetry(activeSurfaceId, {
     surfaceKind: 'tab',
