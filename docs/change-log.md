@@ -2,6 +2,83 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## Maintenance — April 2, 2026 — Login Copy and Dashboard Bug Fixes
+
+### fix(auth): faith-centered login welcome messaging restored
+
+The welcome copy on the login page showed generic workspace account text because the faith-centered messaging commit existed only on a feature branch that was never merged to main.
+
+- `packages/i18n/src/index.js` — `auth.welcomeBack` and `auth.workspaceIntro` restored to faith-centered values ("Caring for the whole person")
+- `apps/api/data/i18n/en.json` — English locale catalog updated with matching values
+- `apps/api/data/i18n/es.json` — Spanish locale catalog updated (`auth.welcomeBack`: "Cuidando a la persona integral")
+- Web bundle rebuilt and committed
+
+### fix(dashboard): portal request backlog count aligned with Practice Operations
+
+The operations dashboard alerted "68 portal requests waiting in backlog" while the Practice Operations tile showed 0. Root cause: two separate counters used incompatible logic.
+
+- The alert used `portalRequestItems.length` — all requests ever created regardless of status
+- `pendingPortalRequests` filtered for `status === 'pending'`, which does not exist in the portal request status vocabulary (`requested`, `reviewing`, `approved`, `declined`, `scheduled`) — always returning 0
+
+Fix applied to `apps/api/src/index.js`:
+
+- `portalRequestItems` now filtered to open/actionable statuses only (`requested`, `reviewing`) before the sort
+- Both `pendingPortalRequests` and `clientsBox.portalRequests.total` now derive from the same filtered set
+- Alert and Practice Operations tile now report the same number and only count genuine open requests
+
+---
+
+## Unreleased — Operations Dashboard Upgrade
+
+**Completed:** April 2, 2026
+
+### Summary
+
+Upgrades the staff-facing Operations Dashboard from placeholder cards into a live daily operations summary. All four cards are backed by a fully upgraded `GET /v1/operations/summary` endpoint with real-time counselor workload, compliance signals, portal request tracking, and configurable operational alerts with 7-day trend context.
+
+**Full summary:** `docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md`
+
+### What changed
+
+**Backend — `apps/api/src/index.js`**
+
+- `todaySchedule`: total appointments, counselors with entries, 1-hour availability gaps, per-counselor workload rows
+- `priorityQueue`: high-touchpoint client count with explanatory copy
+- `complianceWatch`: note-gap clients at 1 day / 3 days / 1 week; outstanding document and form assignments
+- `clientsBox`: total clients, clients without scheduled appointment, portal request totals with status buckets separated by request type
+- Availability calculation: declared templates → same-day overrides → fallback `09:00–12:00` / `13:00–17:00` workday
+- Operational alerts (env-configured thresholds): high-touchpoint clients unscheduled, note-gap threshold crossings, no remaining counselor capacity, portal request backlog
+- 7-day trend payloads: counselor utilization, documentation backlog, portal request flow, unscheduled-client backlog
+- `high_touchpoint` flag added to `clients` table and all create/read/update payloads
+
+**Frontend — `apps/web/src/components/WorkspaceGrid.jsx` and `apps/web/src/App.jsx`**
+
+- All four dashboard cards wired to live API data; loading, error, and empty states handled
+- Drill-down modals for: unscheduled clients, portal request backlog, outstanding document/form assignments
+- Alert strip with threshold-aware severity badges and action routing (calendar or portal queue)
+- Compact 7-day trend bars (utilization, compliance, portal flow, unscheduled backlog)
+- Dashboard refreshes on: staff boot, client mutations, scheduling mutations, timed interval while dashboard is visible
+
+---
+
+## Unreleased — Intake Preview Operational Alerts and Counselor Workspace Visibility
+
+### Summary
+
+Adds intake preview alerts to the operations dashboard and surfaces intake-preview clients in counselor workspaces, so counselors can identify clients who have completed intake materials but have not yet had a held session.
+
+### What changed
+
+- `apps/api/src/index.js`
+  - `buildOperationsSummary` surfaces `intakePreviewItems` — clients who completed intake materials with no held sessions
+  - Operational alert fires when `intakePreviewItems.length >= thresholds.intakePreviews`
+  - Alert ID: `intake_previews_available` with severity `info`
+- `apps/web/src/components/WorkspaceGrid.jsx`
+  - Clients card shows intake previews total with drill-down into the specific client list
+  - Counselor-scoped workspace surfaces intake-preview flag for each counselor's own clients
+
+---
+
 ## Unreleased — Local Startup Reliability and DB Preflight
 
 ### Summary

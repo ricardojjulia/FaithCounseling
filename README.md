@@ -22,6 +22,7 @@ It is built specifically for Christian counseling practices and supports daily e
 
 - **Faithful Workflows:** counselor-facing recommendation workspace powered by 27 deterministic clinical rules across 8 care categories, with explainable rationale, trend analysis, and three interchangeable canvas views (Classic List, Radial Hub, Priority Matrix)
 - **Clinical Chart:** session notes, internal notes, treatment plans, progress tracking, and homework
+- **Operations Dashboard:** live daily operations summary with counselor workload, note-gap compliance watch, portal request tracking, configurable operational alerts, and 7-day trend context
 - **Scheduling and operations workflows:** appointments, waitlists, reminders, and utilization visibility
 - **Client portal workflows:** onboarding, forms, documents, and client self-service surfaces
 - **Monitoring and telemetry:** local monitoring + optional OpenTelemetry export
@@ -213,19 +214,20 @@ If `OTEL_EXPORTER_OTLP_ENDPOINT` is unset, telemetry remains local/console-only.
 
 ## Recent Updates
 
-Only the latest two releases are listed here. Full release history is in `docs/change-log.md`.
+Only the latest two entries are listed here. Full release history is in `docs/change-log.md`.
+
+### Maintenance (April 2, 2026)
+
+Two bug fixes shipped on main:
+
+- **Login copy restored:** faith-centered welcome messaging ("Caring for the whole person") was missing from the main branch — `packages/i18n/src/index.js`, `apps/api/data/i18n/en.json`, and `apps/api/data/i18n/es.json` updated; web bundle rebuilt
+- **Operations Dashboard portal backlog aligned:** the backlog alert was counting all 68 historical portal requests while the Practice Operations tile showed 0 — both now derive from the same open/actionable request set (`requested` and `reviewing` statuses only)
 
 ### v5.5.2 (April 1, 2026)
 
 Faithful Workflows visual upgrade: adds two new parallel canvas views (Radial Hub and Priority Matrix) alongside the original Classic List view. A floating cycle button in the canvas panel switches between all three. Zero functional or engine changes; all 51 engine tests pass.
 
 - Full summary: `docs/v5.5.2-RELEASE-SUMMARY.md`
-
-### v5.5.0 (March 31, 2026)
-
-Faithful Workflows release: introduced a counselor-facing recommendation workspace with deterministic rules, explainable rationales, and enriched canonical demo-data wiring.
-
-- Full summary: `docs/v5.5.0-RELEASE-SUMMARY.md`
 
 ## Change Log
 
@@ -239,6 +241,7 @@ The change log summarizes completed work across releases and documents the detai
 - Domain model: `docs/domain-model.md`
 - Faithful Workflows visual upgrade (v5.5.2): `docs/v5.5.2-RELEASE-SUMMARY.md`
 - Faithful Workflows full feature release (v5.5.0): `docs/v5.5.0-RELEASE-SUMMARY.md`
+- Operations Dashboard upgrade summary: `docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md`
 - Monitoring baseline: `PLANS/FULL-SURFACE-MONITORING.md`
 - Security and auditing baseline: `PLANS/FULL-SECURITY-AND-AUDITING.md`
 - Database implementation details: `docs/DATABASE-IMPLEMENTATION.md`
