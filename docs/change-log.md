@@ -4,6 +4,22 @@
 
 ## v5.6.0 — April 3, 2026 — Portal Client Conversion and Plan Hygiene
 
+### fix: counselor high-touchpoint toggle returning 403
+
+**Date:** April 3, 2026
+**Affected area:** Client access control, high-touchpoint flag toggle
+
+Counselors received a 403 "Access to this resource is not permitted" when attempting to toggle the high-touchpoint flag on any client, even clients assigned to them. The UI displayed "Failed to update high-touchpoint flag. Please try again."
+
+**Root cause:** `enforceAssignedClientAccess` blocked counselors whenever `client.primaryCounselorId` was `null`. All seed clients in the DB had `primary_counselor_id = NULL` because the migration INSERT did not include that column. As a result, every counselor was denied on every client.
+
+**What changed:**
+
+- `apps/api/src/index.js` — `enforceAssignedClientAccess` now allows counselor access when: (a) the client has no assigned primary counselor (unassigned clients are accessible to any counselor in the practice), or (b) the counselor is the assigned primary counselor for that client. Previously it only allowed case (b) and only when the scope ID resolved.
+- `apps/api/src/db/migrate.js` — seed INSERT for `c-001` (Sarah Kim) now includes `primary_counselor_id = 'staff-counselor-mercy'`. The `ensureDevPortalClient` idempotent path also sets `primary_counselor_id` via `COALESCE` so it only backfills when the column is null.
+
+
+
 ### fix: restart stale local services and normalize portal conversion routes
 
 Fixes a local startup failure mode where `pnpm start` could keep reusing an older repo-managed API or web process and continue serving stale behavior after code changes. This showed up in Workspace Studio Portal as approved care requests displaying **"Create Client"** while the click hit an older API process and returned a generic `Not found`.

@@ -2275,7 +2275,9 @@ async function enforceAssignedClientAccess(request, response, client, session, d
   }
 
   const counselorScopeId = await resolveCallerCounselorScopeIdForAccess(request, session);
-  if (counselorScopeId && client?.primaryCounselorId === counselorScopeId) {
+  // Allow access when: client has no assigned primary counselor (unassigned clients are open),
+  // OR the calling counselor is the assigned primary counselor for this client.
+  if (!client?.primaryCounselorId || client?.primaryCounselorId === counselorScopeId) {
     return false;
   }
 

@@ -373,8 +373,8 @@ async function seedDevData(conn) {
 
   await conn.query(
     `INSERT INTO clients
-       (id, tenant_id, first_name_enc, last_name_enc, status, faith_background, high_touchpoint)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (id, tenant_id, first_name_enc, last_name_enc, status, faith_background, high_touchpoint, primary_counselor_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       'c-001',
       'system',
@@ -383,6 +383,7 @@ async function seedDevData(conn) {
       'active',
       'Evangelical',
       1,
+      'staff-counselor-mercy',
     ],
   );
 
@@ -451,14 +452,14 @@ async function ensureDevPortalClient(conn) {
   if (!client) {
     await conn.query(
       `INSERT INTO clients
-         (id, tenant_id, first_name_enc, last_name_enc, status, faith_background, high_touchpoint)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ['c-001', 'system', encrypt('Sarah'), encrypt('Kim'), 'active', 'Evangelical', 1],
+         (id, tenant_id, first_name_enc, last_name_enc, status, faith_background, high_touchpoint, primary_counselor_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['c-001', 'system', encrypt('Sarah'), encrypt('Kim'), 'active', 'Evangelical', 1, 'staff-counselor-mercy'],
     );
   } else {
     await conn.query(
-      'UPDATE clients SET high_touchpoint = 1 WHERE id = ? AND tenant_id = ?',
-      ['c-001', 'system'],
+      'UPDATE clients SET high_touchpoint = 1, primary_counselor_id = COALESCE(primary_counselor_id, ?) WHERE id = ? AND tenant_id = ?',
+      ['staff-counselor-mercy', 'c-001', 'system'],
     );
   }
 
