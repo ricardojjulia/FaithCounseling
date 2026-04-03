@@ -2,6 +2,13 @@
 
 <!-- markdownlint-disable MD024 -->
 
+### feat: auto-assign default signup forms when creating client from portal request
+
+**Date:** April 4, 2026
+**Affected area:** `apps/api/src/index.js` — `handlePortalPublicRequestConversion`
+
+When a practice admin presses "Create Client" on an approved portal care request, the platform now automatically assigns any forms configured in the practice's Default Signup Forms settings to the newly created client. Assignment uses `assignmentType: 'account_signup'` consistent with other portal signup flows. Already-converted requests (status `already_converted`) are skipped to avoid duplicate assignments.
+
 ### fix: portal navigation not switching when client detail is open
 
 **Date:** April 3, 2026

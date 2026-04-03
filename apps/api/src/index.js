@@ -5090,6 +5090,15 @@ async function handlePortalPublicRequestConversion(request, response, session) {
     return;
   }
 
+  if (conversion.status === 'created') {
+    const actorId = callerIdentity(request, session)?.staffId ?? null;
+    await autoAssignStandardSignupForms({
+      tenantId,
+      clientId: conversion.clientId,
+      assignedBy: actorId ?? 'system',
+    });
+  }
+
   let item = requestRecord;
   if (process.env.DB_NAME) {
     const items = await listPortalRegistrationRequests(tenantId);
