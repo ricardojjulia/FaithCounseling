@@ -39,6 +39,17 @@ Closes the approval dead-end in the public portal request workflow. Previously, 
 - Full DB backup workflow validated: `docker exec faith-mysql mysqldump` → `backups/`
 - Database wiped to clean state: all client, clinical, portal, financial, and session data removed; staff accounts and form catalog preserved
 
+### fix: disable Faithful Workflows demo fallback by default
+
+Faithful Workflows no longer injects hardcoded mock clients after a real database reset. The page now defaults to real client data only, while keeping an explicit opt-in demo switch for later use.
+
+- `apps/web/src/components/FaithWorkflows/FaithWorkflowsPage.jsx`
+  - demo/mock clients now load only when `VITE_ENABLE_FAITH_WORKFLOWS_DEMO=true` or `localStorage['faith_workflows.demo_mode']='true'`
+  - mock-client preload cache now runs only in explicit demo mode
+  - mock-client API fallback is disabled when demo mode is off
+- `README.md`, `apps/web/README.md`, `.env.example`
+  - documented the new default-off behavior and the supported re-enable options
+
 ---
 
 ## April 2, 2026

@@ -33,13 +33,32 @@ const VARIANT_LABELS = {
   priority: 'Priority Matrix — click for Classic List',
 };
 
+const FAITH_WORKFLOW_DEMO_STORAGE_KEY = 'faith_workflows.demo_mode';
+
+function readOptionalBoolean(value) {
+  if (value === true || value === 'true') return true;
+  if (value === false || value === 'false') return false;
+  return null;
+}
+
+function isFaithWorkflowDemoEnabled() {
+  try {
+    const stored = readOptionalBoolean(window.localStorage.getItem(FAITH_WORKFLOW_DEMO_STORAGE_KEY));
+    if (stored !== null) return stored;
+  } catch {
+    // localStorage is optional for this feature flag
+  }
+
+  return readOptionalBoolean(import.meta.env?.VITE_ENABLE_FAITH_WORKFLOWS_DEMO) ?? false;
+}
+
 /**
  * Fetches enriched client workflow data from the API.
  * Falls back to mock data if the client ID is a mock ID.
  */
-async function fetchClientWorkflowData(clientId) {
+async function fetchClientWorkflowData(clientId, demoModeEnabled) {
   // Use mock data for demo clients
-  const mockData = getMockClientData(clientId);
+  const mockData = demoModeEnabled ? getMockClientData(clientId) : null;
   if (mockData) return mockData;
 
   // Parallel fetch of all data sources
@@ -149,6 +168,7 @@ async function persistStateChange(clientId, ruleId, status, deferredUntil = null
 export default function FaithWorkflowsPage({ clients = [], currentUser }) {
   const { t } = useI18n();
   useSurfaceTelemetry('faith_workflows', { surfaceKind: 'view', workflow: 'faith_workflows' });
+  const demoModeEnabled = useMemo(() => isFaithWorkflowDemoEnabled(), []);
 
   // ─── Canvas view variant ─────────────────────────────────────────────────
   const [variant, setVariant] = useState(() => {
@@ -179,10 +199,8 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
 
   // ─── Build client rank entries from basic list + cached enriched data ──────
   const rankEntries = useMemo(() => {
-    // Start with mock clients + real clients from prop
     const allClients = [
-      // Include mock clients in dev/demo mode
-      ...MOCK_CLIENTS.map((m) => m.client),
+      ...(demoModeEnabled ? MOCK_CLIENTS.map((m) => m.client) : []),
       ...clients.filter((c) => !c.id.startsWith('mock-')),
     ];
 
@@ -197,7 +215,7 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
         return buildLightweightRankEntry(c);
       })
       .sort((a, b) => b.urgencyScore - a.urgencyScore);
-  }, [clients, dataCache, persistedStates, selectedClientId]);
+  }, [clients, dataCache, demoModeEnabled, persistedStates, selectedClientId]);
 
   const urgencyCounts = useMemo(() => {
     const counts = { critical: 0, moderate: 0, routine: 0 };
@@ -223,7 +241,7 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
     setLoadError(null);
 
     Promise.all([
-      fetchClientWorkflowData(selectedClientId),
+      fetchClientWorkflowData(selectedClientId, demoModeEnabled),
       fetchPersistedStates(selectedClientId),
     ])
       .then(([data, states]) => {
@@ -236,10 +254,11 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
       .finally(() => {
         setLoadingSet((prev) => { const next = new Set(prev); next.delete(selectedClientId); return next; });
       });
-  }, [selectedClientId, dataCache, loadingSet]);
+  }, [selectedClientId, dataCache, demoModeEnabled, loadingSet]);
 
   // Pre-load mock clients on mount
   useEffect(() => {
+    if (!demoModeEnabled) return;
     MOCK_CLIENTS.forEach((m) => {
       const id = m.client.id;
       if (!dataCache[id]) {
@@ -247,7 +266,7 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [demoModeEnabled]);
 
   // ─── Derived recommendations for selected client ──────────────────────────
   const recommendations = useMemo(() => {

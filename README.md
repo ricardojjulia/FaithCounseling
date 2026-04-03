@@ -100,6 +100,14 @@ pnpm start
 
 Avoid starting the app with `node start-servers.js` for normal development, because it does not apply the full startup preflight.
 
+## Faithful Workflows Demo Mode
+
+Faithful Workflows now defaults to real client data only. Demo/mock workflow clients are disabled unless you explicitly turn them on.
+
+- enable at build/start time with `VITE_ENABLE_FAITH_WORKFLOWS_DEMO=true`
+- or enable in the browser with `localStorage.setItem('faith_workflows.demo_mode', 'true')` and refresh
+- disable again with `localStorage.setItem('faith_workflows.demo_mode', 'false')` or by removing the key and leaving the env var unset
+
 ## Prerequisites
 
 - Node.js >= 20
