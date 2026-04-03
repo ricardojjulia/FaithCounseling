@@ -10,6 +10,7 @@ coverage/
 .claude/settings.local.json
 test-results/*
 !test-results/.last-run.json
+backups/
 
 # Python
 __pycache__/
