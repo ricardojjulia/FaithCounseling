@@ -2,6 +2,17 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 2, 2026
+
+### fix: remove held session constraint from intake preview eligibility
+
+Removed the `heldSessions.length === 0` gate from `buildIntakePreview` so that clients with any prior held or started session can now receive an intake preview once their intake paperwork is on file. Also removed the now-unused `isHeldSession()` helper function and its orphaned `heldSessionCount` reference from the return object, which was causing a `ReferenceError` at runtime.
+
+- `apps/api/src/lib/intake-preview.js` — removed `heldSessions` variable, `isHeldSession()` function, eligibility compound condition, held-session reason message, and the stale `heldSessionCount` field in the sessions return object
+- `AGENTS.md` — added commit documentation requirements: every commit must update `README.md` and `docs/change-log.md`; bug fixes use `### fix:` entries; major revisions require `### release:` entries and a release summary file in `docs/`
+
+---
+
 ## Maintenance — April 2, 2026 — Login Copy and Dashboard Bug Fixes
 
 ### fix(auth): faith-centered login welcome messaging restored

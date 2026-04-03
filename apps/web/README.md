@@ -29,7 +29,7 @@ Default URL: `http://localhost:3000`
 - dedicated counselor home surface for counselor and intern roles
 - dedicated counselor tasks surface for counselor note follow-up, assigned document/form review, and scheduling handoff
 - counselor home and task queues now hand off directly into scheduling composers and session-note charting flows for assigned clients
-- client detail now includes a counselor-only Intake Preview tab for pre-session clients with completed intake materials
+- client detail now includes a counselor-only Intake Preview tab for clients with completed intake materials
 - global search across today's schedule
 - redesigned `Practice Operations Center` header with an animated counseling mark and stronger operational hierarchy
 - sidebar heading now uses an animated counseling icon with a simplified `Options` label
