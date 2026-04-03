@@ -126,7 +126,14 @@ function FieldRenderer({ field, value, onChange }) {
           label={commonProps.label}
           placeholder={field.placeholder || 'MM/DD/YYYY'}
           value={value ? new Date(value) : null}
-          onChange={(d) => onChange(d ? d.toISOString().split('T')[0] : '')}
+          onChange={(d) => {
+            if (!d) {
+              onChange('');
+              return;
+            }
+            const date = d instanceof Date ? d : new Date(d);
+            onChange(Number.isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0]);
+          }}
           valueFormat="MM/DD/YYYY"
           clearable
         />

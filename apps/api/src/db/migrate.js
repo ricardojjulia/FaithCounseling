@@ -198,7 +198,22 @@ async function applyColumnMigrations(conn) {
 
   await addColumnIfMissing('clients', 'primary_counselor_id', 'VARCHAR(64) NULL');
   await addColumnIfMissing('clients', 'high_touchpoint', 'TINYINT(1) NOT NULL DEFAULT 0');
+  await addColumnIfMissing('clients', 'middle_name_enc', 'TEXT NULL AFTER first_name_enc');
+  await addColumnIfMissing('clients', 'preferred_name_enc', 'TEXT NULL');
+  await addColumnIfMissing('clients', 'gender_identity', 'VARCHAR(128) NULL');
+  await addColumnIfMissing('clients', 'pronouns', 'VARCHAR(64) NULL');
+  await addColumnIfMissing('clients', 'date_of_birth_enc', 'TEXT NULL');
+  await addColumnIfMissing('clients', 'ssn_last4_enc', 'TEXT NULL');
+  await addColumnIfMissing('clients', 'biological_sex', 'VARCHAR(32) NULL');
+  await addColumnIfMissing('clients', 'race_ethnicity', 'VARCHAR(128) NULL');
+  await addColumnIfMissing('clients', 'marital_status', 'VARCHAR(64) NULL');
+  await addColumnIfMissing('clients', 'language_preference', "VARCHAR(64) NULL DEFAULT 'en'");
+  await addColumnIfMissing('clients', 'employment_status', 'VARCHAR(64) NULL');
+  await addColumnIfMissing('clients', 'employer_name_enc', 'TEXT NULL');
+  await addColumnIfMissing('clients', 'email_enc', 'TEXT NULL');
   await addIndexIfMissing('clients', 'idx_clients_counselor', '(primary_counselor_id)');
+
+  await addColumnIfMissing('portal_client_profiles', 'preferred_name_enc', 'TEXT NULL');
 
   await addColumnIfMissing('portal_registration_requests', 'request_type', "VARCHAR(64) NOT NULL DEFAULT 'care_request' AFTER tenant_id");
   await addColumnIfMissing('portal_registration_requests', 'preferred_contact_method', 'VARCHAR(64) NULL AFTER phone_enc');

@@ -5,7 +5,11 @@ import { DateInput } from '@mantine/dates';
 import { createClientInsurance, updateClientInsurance, createReferringProvider, updateReferringProvider } from '../../../lib/clientApi.js';
 
 function strToDate(s) { if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
-function dateToStr(d) { return d ? d.toISOString().slice(0, 10) : null; }
+function dateToStr(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
 
 function InsuranceCard({ title, initialData, clientId, coverageOrder }) {
   const [selfPay,   setSelfPay]   = useState(initialData?.self_pay ?? false);

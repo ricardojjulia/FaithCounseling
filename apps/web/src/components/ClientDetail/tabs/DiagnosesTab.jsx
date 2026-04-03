@@ -15,7 +15,11 @@ import { frontendTelemetry } from '../../../lib/frontendTelemetry.js';
 import { useI18n } from '../../../lib/i18nContext.jsx';
 
 function strToDate(s) { if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
-function dateToStr(d) { return d ? d.toISOString().slice(0, 10) : null; }
+function dateToStr(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
 
 const DIAGNOSIS_SYSTEM_OPTIONS = [
   { value: 'DSM-5-TR', label: 'DSM-5-TR' },

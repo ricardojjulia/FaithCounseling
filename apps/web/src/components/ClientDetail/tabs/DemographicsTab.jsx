@@ -20,7 +20,11 @@ const ADDR_TYPE_OPTIONS  = ['primary', 'mailing', 'other'].map((t) => ({ value: 
 const EMPLOYED = ['employed_full_time', 'employed_part_time', 'self_employed'];
 
 function strToDate(s) { if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
-function dateToStr(d) { return d ? d.toISOString().slice(0, 10) : null; }
+function dateToStr(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
 
 function calcAge(dob) {
   if (!dob) return null;
