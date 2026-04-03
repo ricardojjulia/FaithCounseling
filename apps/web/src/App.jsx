@@ -149,6 +149,7 @@ export default function App() {
   const [selectedClientRequest, setSelectedClientRequest] = useState(null);
   const [selectedCounselorId, setSelectedCounselorId] = useState(null);
   const [currentView, setCurrentView] = useState('dashboard');
+  const [portalState, setPortalState] = useState({ initialClientId: null, initialTab: 'dashboard' });
   const [workspaceStudioInitialTab, setWorkspaceStudioInitialTab] = useState('portal');
   const [clinicalChartState, setClinicalChartState] = useState(createDefaultClinicalChartState);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
@@ -331,6 +332,7 @@ export default function App() {
       setSchedulingState({ composerOpen: false, initialClientId: null, initialView: null, initialPortalRequest: null });
     }
     if (view !== 'clinical') setClinicalChartState(createDefaultClinicalChartState());
+    if (view !== 'portal') setPortalState({ initialClientId: null, initialTab: 'dashboard' });
     closeNav();
   };
 
@@ -378,6 +380,11 @@ export default function App() {
   };
   const handleOpenDocuments = () => {
     setCurrentView('documents');
+    closeNav();
+  };
+  const handleOpenPortal = ({ initialClientId = null, initialTab = 'dashboard' } = {}) => {
+    setPortalState({ initialClientId, initialTab });
+    setCurrentView('portal');
     closeNav();
   };
   const handleOpenWorkspaceStudio = (initialTab = 'portal') => {
@@ -521,6 +528,7 @@ export default function App() {
               clientId={selectedClientId}
               initialTab={selectedClientRequest?.initialTab ?? null}
               onBack={handleClientBack}
+              onOpenClientDocuments={(clientId) => handleOpenPortal({ initialClientId: clientId, initialTab: 'documents' })}
               onScheduleClient={() => handleOpenScheduling({
                 composerOpen: true,
                 initialClientId: selectedClientId,
@@ -607,7 +615,13 @@ export default function App() {
               })}
             />
           ) : showPortal ? (
-            <ClientPortalPage currentUser={currentUser} clients={clientsData.items} onSignOut={handleSignOut} />
+            <ClientPortalPage
+              currentUser={currentUser}
+              clients={clientsData.items}
+              initialClientId={portalState.initialClientId}
+              initialTab={portalState.initialTab}
+              onSignOut={handleSignOut}
+            />
           ) : showOfferings ? (
             <OfferingsPage clients={clientsData.items} />
           ) : showFaith ? (

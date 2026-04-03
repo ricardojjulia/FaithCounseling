@@ -20,7 +20,7 @@ function formatDate(ds) {
   return isNaN(d.getTime()) ? ds : d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
-export default function ClientDetailHeader({ client, onBack, onScheduleClient }) {
+export default function ClientDetailHeader({ client, onBack, onScheduleClient, onOpenClientDocuments }) {
   const { t } = useI18n();
   const displayName = client.preferredName
     ? `${client.preferredName} (${client.firstName} ${client.lastName})`
@@ -34,6 +34,7 @@ export default function ClientDetailHeader({ client, onBack, onScheduleClient })
       <Group gap="md" wrap="wrap">
         <Button variant="default" size="sm" onClick={onBack}>← {t('nav.clients')}</Button>
         <Button size="sm" onClick={onScheduleClient}>{t('clientDetail.scheduleAppointment')}</Button>
+        <Button variant="light" size="sm" onClick={onOpenClientDocuments}>View / Assign Documents</Button>
         <Box style={{ flex: 1, minWidth: 0 }}>
           <Group gap="sm" wrap="wrap" align="center">
             <Title order={1} fz="xl" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

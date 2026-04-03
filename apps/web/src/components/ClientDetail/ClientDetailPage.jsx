@@ -4,7 +4,7 @@ import ClientDetailHeader from './ClientDetailHeader.jsx';
 import ClientDetailTabs from './ClientDetailTabs.jsx';
 import { useI18n } from '../../lib/i18nContext.jsx';
 
-export default function ClientDetailPage({ clientId, initialTab = null, onBack, onScheduleClient }) {
+export default function ClientDetailPage({ clientId, initialTab = null, onBack, onScheduleClient, onOpenClientDocuments }) {
   const { t } = useI18n();
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -86,7 +86,12 @@ export default function ClientDetailPage({ clientId, initialTab = null, onBack, 
         overflow: 'hidden',
       }}
     >
-      <ClientDetailHeader client={client} onBack={onBack} onScheduleClient={onScheduleClient} />
+      <ClientDetailHeader
+        client={client}
+        onBack={onBack}
+        onScheduleClient={onScheduleClient}
+        onOpenClientDocuments={() => onOpenClientDocuments?.(client.id)}
+      />
       <ClientDetailTabs client={client} clientId={clientId} initialTab={initialTab} />
     </div>
   );
