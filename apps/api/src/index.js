@@ -13731,6 +13731,8 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/portal/resources') return '/v1/portal/resources';
   if (pathname === '/v1/portal/data-rights') return '/v1/portal/data-rights';
   if (pathname === '/v1/portal/data-rights/review') return '/v1/portal/data-rights/review';
+  if (pathname === '/v1/portal/public-requests') return '/v1/portal/public-requests';
+  if (pathname === '/v1/portal/public-requests/convert') return '/v1/portal/public-requests/convert';
   if (pathname.startsWith('/v1/offerings/')) return '/v1/offerings/:id';
   if (pathname === '/v1/workflows/recommendations/state') return '/v1/workflows/recommendations/state';
   if (pathname.startsWith('/v1/workflows/recommendations/state/')) return '/v1/workflows/recommendations/state/:id';

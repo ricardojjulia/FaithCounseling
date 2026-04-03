@@ -97,6 +97,7 @@ pnpm start
 - waits for MySQL readiness
 - runs API migration when DB is configured
 - starts API and web services
+- restarts existing repo-managed API and web processes on ports `3001` and `3002` so local changes are not served from stale long-running processes
 
 Avoid starting the app with `node start-servers.js` for normal development, because it does not apply the full startup preflight.
 

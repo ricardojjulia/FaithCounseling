@@ -89,6 +89,56 @@ function dockerExec(cmd) {
   try { execSync(cmd, { stdio: 'pipe' }); return true; } catch { return false; }
 }
 
+function getListeningProcess(port) {
+  try {
+    const output = execSync(`lsof -nP -iTCP:${port} -sTCP:LISTEN -Fp`, { stdio: 'pipe', encoding: 'utf8' });
+    const pidLine = output
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line.startsWith('p'));
+    if (!pidLine) return null;
+    const pid = Number(pidLine.slice(1));
+    if (!Number.isInteger(pid) || pid <= 0) return null;
+    const command = execSync(`ps -p ${pid} -o command=`, { stdio: 'pipe', encoding: 'utf8' }).trim();
+    return { pid, command };
+  } catch {
+    return null;
+  }
+}
+
+function isRepoManagedProcess(processInfo, scriptFragment) {
+  return Boolean(processInfo?.command?.includes(scriptFragment));
+}
+
+async function waitForPortToClose(port, timeoutMs = 5_000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (!getListeningProcess(port)) return true;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  return !getListeningProcess(port);
+}
+
+async function restartRepoManagedProcessIfNeeded(name, port, scriptFragment) {
+  const processInfo = getListeningProcess(port);
+  if (!isRepoManagedProcess(processInfo, scriptFragment)) return false;
+
+  console.log(`[start-all] Restarting existing ${name} on port ${port} to pick up current source...`);
+  try {
+    process.kill(processInfo.pid, 'SIGTERM');
+  } catch {}
+
+  const stoppedCleanly = await waitForPortToClose(port);
+  if (!stoppedCleanly) {
+    try {
+      process.kill(processInfo.pid, 'SIGKILL');
+    } catch {}
+    await waitForPortToClose(port, 2_000);
+  }
+
+  return true;
+}
+
 async function ensureDatabase() {
   if (!process.env.DB_NAME) {
     console.log('[start-all] No DB_NAME configured — skipping database preflight.');
@@ -140,6 +190,7 @@ async function main() {
   await runStep('web build', node, ['apps/web/build.js']);
 
   const apiHealthUrl = `http://127.0.0.1:${apiPort}/health`;
+  await restartRepoManagedProcessIfNeeded('API', apiPort, 'apps/api/src/index.js');
   const apiAlreadyRunning = await isHttpOk(apiHealthUrl);
 
   if (apiAlreadyRunning) {
@@ -154,6 +205,7 @@ async function main() {
   }
 
   const webIndexUrl = `http://127.0.0.1:${webPort}/index.html`;
+  await restartRepoManagedProcessIfNeeded('web', webPort, 'apps/web/server.js');
   const webAlreadyRunning = await isHttpOk(webIndexUrl);
 
   if (webAlreadyRunning) {

@@ -4,6 +4,22 @@
 
 ## v5.6.0 — April 3, 2026 — Portal Client Conversion and Plan Hygiene
 
+### fix: restart stale local services and normalize portal conversion routes
+
+Fixes a local startup failure mode where `pnpm start` could keep reusing an older repo-managed API or web process and continue serving stale behavior after code changes. This showed up in Workspace Studio Portal as approved care requests displaying **"Create Client"** while the click hit an older API process and returned a generic `Not found`.
+
+**What changed:**
+
+- `ops/start-all.mjs`
+  - now detects repo-managed listeners already running on ports `3001` and `3002`
+  - terminates those repo-owned API/web processes before starting fresh ones
+  - preserves the old reuse behavior only for non-repo external listeners
+- `apps/api/src/index.js`
+  - added normalized route templates for `/v1/portal/public-requests` and `/v1/portal/public-requests/convert`
+  - keeps route telemetry, RBAC handling, and request classification aligned with the actual mounted portal handlers
+- `README.md`
+  - documents that `pnpm start` now refreshes repo-managed local services instead of silently reusing stale ones
+
 ### fix: approved care requests can create client records from Workspace Studio
 
 Closes the remaining approval dead-end for non-signup portal requests. Approved `care_request` items in Workspace Studio Portal now expose a direct `Create Client` action instead of stopping at an approved status with no conversion path.
