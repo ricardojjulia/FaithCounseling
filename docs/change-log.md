@@ -4,6 +4,19 @@
 
 ## April 2, 2026
 
+### fix: intake preview form key mismatch causing "Preview not currently active" for all real clients
+
+The `INTAKE_FORM_KEYS` constant in `buildIntakePreview` used PascalCase JS export names (`'LongIntakeForm'`, `'ShortIntakeForm'`) instead of the snake_case `form_key` values actually stored in the `form_submissions` table (`'long_intake'`, `'short_intake'`). This caused `hasIntakeFormSubmission` to always evaluate to `false` for any client who submitted forms through the live UI, blocking the preview for every real client. The `submittedAt` fallback in the return object had the same wrong keys. The `packetStatus` field returned `null` (displayed as "Not on file") for clients without a formal intake packet row even when they had completed form submissions.
+
+**Changes:**
+- `INTAKE_FORM_KEYS` now includes all four variants (`'long_intake'`, `'short_intake'`, `'LongIntakeForm'`, `'ShortIntakeForm'`) to cover both real UI submissions and legacy seed data
+- `submittedAt` fallback chain now tries snake_case keys first, then PascalCase, so the submission timestamp is returned correctly for all clients
+- `packetStatus` now synthesizes `'submitted'` from form submissions when no formal `intake_packets` row exists, so clients who completed forms directly see the correct status
+
+Affected files: `apps/api/src/lib/intake-preview.js`
+
+---
+
 ### fix: remove held session constraint from intake preview eligibility
 
 Removed the `heldSessions.length === 0` gate from `buildIntakePreview` so that clients with any prior held or started session can now receive an intake preview once their intake paperwork is on file. Also removed the now-unused `isHeldSession()` helper function and its orphaned `heldSessionCount` reference from the return object, which was causing a `ReferenceError` at runtime.

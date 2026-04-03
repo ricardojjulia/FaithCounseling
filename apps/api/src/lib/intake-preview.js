@@ -1,4 +1,4 @@
-const INTAKE_FORM_KEYS = ['LongIntakeForm', 'ShortIntakeForm'];
+const INTAKE_FORM_KEYS = ['long_intake', 'short_intake', 'LongIntakeForm', 'ShortIntakeForm'];
 
 const PREVIEW_DISCLAIMER =
   'AI-assisted and supportive only. Final clinical judgment belongs to the counselor. Crisis situations require immediate human intervention.';
@@ -475,8 +475,8 @@ export function buildIntakePreview({
     disclaimer: PREVIEW_DISCLAIMER,
     intake: {
       completed: hasCompletedPacket || hasIntakeFormSubmission,
-      packetStatus: intakePacket?.status ?? null,
-      submittedAt: intakePacket?.submittedAt ?? latestForms.get('LongIntakeForm')?.submittedAt ?? latestForms.get('ShortIntakeForm')?.submittedAt ?? null,
+      packetStatus: intakePacket?.status ?? (hasIntakeFormSubmission ? 'submitted' : null),
+      submittedAt: intakePacket?.submittedAt ?? latestForms.get('long_intake')?.submittedAt ?? latestForms.get('short_intake')?.submittedAt ?? latestForms.get('LongIntakeForm')?.submittedAt ?? latestForms.get('ShortIntakeForm')?.submittedAt ?? null,
       sourceForms: [...latestForms.values()]
         .filter((item) => INTAKE_FORM_KEYS.includes(item.formKey))
         .map((item) => ({
