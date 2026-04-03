@@ -232,6 +232,7 @@ export default function ClientPortalPage({
   initialClientId = null,
   initialTab = 'dashboard',
   onSignOut = async () => {},
+  onBackToClient = null,
 }) {
   const { t } = useI18n();
   const userRole = currentUser?.role ?? null;
@@ -735,7 +736,14 @@ export default function ClientPortalPage({
     <Stack p="md" gap="md">
       <Group justify="space-between" align="flex-start">
         <Box>
-          <Title order={2}>Client Portal</Title>
+          <Group gap="sm" align="center">
+            {onBackToClient && initialClientId && (
+              <Button variant="subtle" size="xs" onClick={() => onBackToClient(initialClientId)}>
+                ← Back to Client
+              </Button>
+            )}
+            <Title order={2}>Client Portal</Title>
+          </Group>
           <Text c="dimmed" size="sm">
             {overview?.settings?.practiceName || 'FaithCounseling'} portal overview, profile preferences, secure uploads, and data-rights self-service.
           </Text>

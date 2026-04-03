@@ -622,6 +622,10 @@ export default function App() {
               initialClientId={portalState.initialClientId}
               initialTab={portalState.initialTab}
               onSignOut={handleSignOut}
+              onBackToClient={(clientId) => {
+                setSelectedClientRequest({ clientId });
+                setCurrentView('clients');
+              }}
             />
           ) : showOfferings ? (
             <OfferingsPage clients={clientsData.items} />
