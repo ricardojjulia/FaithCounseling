@@ -12837,7 +12837,8 @@ async function buildOperationsSummary(request, timezone, session, { counselorSco
         requestedAt: item.createdAt,
       };
     }),
-  ].sort((left, right) => String(right.requestedAt ?? '').localeCompare(String(left.requestedAt ?? '')));
+  ].filter((item) => item.status === 'requested' || item.status === 'reviewing')
+    .sort((left, right) => String(right.requestedAt ?? '').localeCompare(String(left.requestedAt ?? '')));
 
   // Load dismissed workflow recommendation states so the dashboard tile reflects
   // open/unaddressed items only, not raw rule firings.
@@ -13039,7 +13040,7 @@ async function buildOperationsSummary(request, timezone, session, { counselorSco
         items: intakePreviewItems,
       },
       portalRequests: {
-        total: (data.portalRegistrationRequests?.length ?? 0) + (data.portalAppointmentRequests?.length ?? 0),
+        total: portalRequestItems.length,
         publicRegistrationStatuses,
         appointmentRequestStatuses,
         items: portalRequestItems,
@@ -13068,10 +13069,7 @@ async function buildOperationsSummary(request, timezone, session, { counselorSco
     priorityItems,
     complianceItems,
     counselorCount: (data.staff ?? []).filter((item) => OPERATIONS_COUNSELOR_ROLES.has(item.role)).length,
-    pendingPortalRequests: [
-      ...(data.portalRegistrationRequests ?? []),
-      ...(data.portalAppointmentRequests ?? []),
-    ].filter((r) => r.status === 'pending').length,
+    pendingPortalRequests: portalRequestItems.length,
     faithfulWorkflowCounts: {
       critical: criticalFaithClientIds.size,
       moderate: moderateFaithClientIds.size,
