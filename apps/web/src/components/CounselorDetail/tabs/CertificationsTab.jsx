@@ -11,8 +11,7 @@ import {
   updateStaffCertification, deleteStaffCertification,
 } from '../../../lib/clientApi.js';
 
-function dateToStr(d) { return d ? d.toISOString().slice(0, 10) : null; }
-function strToDate(s) { if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
+function dateToStr(d) { return d ? (typeof d === 'string' ? d.slice(0, 10) : d.toISOString().slice(0, 10)) : null; }
 
 function CertCard({ cert, isAdmin, onEdit, onDelete }) {
   return (
@@ -75,8 +74,8 @@ export default function CertificationsTab({ staffId, currentUser }) {
     form.setValues({
       certName:    cert.certName    ?? '',
       issuingBody: cert.issuingBody ?? '',
-      issueDate:   strToDate(cert.issueDate),
-      expiryDate:  strToDate(cert.expiryDate),
+      issueDate:   cert.issueDate   || null,
+      expiryDate:  cert.expiryDate  || null,
       certNumber:  cert.certNumber  ?? '',
       isCeu:       Boolean(cert.isCeu),
       ceuHours:    cert.ceuHours    ?? null,
@@ -181,8 +180,8 @@ export default function CertificationsTab({ staffId, currentUser }) {
             <SimpleGrid cols={2} spacing="sm">
               <TextInput label="Issuing Body / Provider" {...form.getInputProps('issuingBody')} />
               {!isCeu && <TextInput label="Certification Number" {...form.getInputProps('certNumber')} />}
-              <DateInput label="Issue Date"  valueFormat="YYYY-MM-DD" {...form.getInputProps('issueDate')} />
-              {!isCeu && <DateInput label="Expiry Date" valueFormat="YYYY-MM-DD" {...form.getInputProps('expiryDate')} />}
+              <DateInput label="Issue Date"  valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" {...form.getInputProps('issueDate')} />
+              {!isCeu && <DateInput label="Expiry Date" valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" {...form.getInputProps('expiryDate')} />}
             </SimpleGrid>
             <Textarea label="Notes" rows={2} {...form.getInputProps('notes')} />
             <Group justify="flex-end" mt="xs">

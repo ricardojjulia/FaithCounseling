@@ -125,8 +125,8 @@ function FieldRenderer({ field, value, onChange }) {
         <DateInput
           label={commonProps.label}
           placeholder={field.placeholder || 'MM/DD/YYYY'}
-          value={value ? new Date(value) : null}
-          onChange={(d) => onChange(d ? d.toISOString().split('T')[0] : '')}
+          value={value || null}
+          onChange={(d) => onChange(d ?? '')}
           valueFormat="MM/DD/YYYY"
           clearable
         />

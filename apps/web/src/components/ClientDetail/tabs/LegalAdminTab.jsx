@@ -4,8 +4,7 @@ import { Stack, Title, SimpleGrid, TextInput, Select, Textarea, Checkbox, Button
 import { DateInput } from '@mantine/dates';
 import { upsertClientLegal, upsertClinicalHistory, patchClient } from '../../../lib/clientApi.js';
 
-function strToDate(s) { if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
-function dateToStr(d) { return d ? d.toISOString().slice(0, 10) : null; }
+function dateToStr(d) { return d ? (typeof d === 'string' ? d.slice(0, 10) : d.toISOString().slice(0, 10)) : null; }
 
 export default function LegalAdminTab({ client, clientId }) {
   const legal = client.legal ?? {};
@@ -28,7 +27,7 @@ export default function LegalAdminTab({ client, clientId }) {
 
   // Court
   const [courtCaseNumber,  setCourtCaseNumber]  = useState(legal.court_case_number     ?? '');
-  const [courtOrderExpires,setCourtOrderExpires]= useState(strToDate(legal.court_order_expires));
+  const [courtOrderExpires,setCourtOrderExpires]= useState(legal.court_order_expires || null);
   const [courtContactName, setCourtContactName] = useState(legal.court_contact?.name   ?? '');
   const [courtContactPhone,setCourtContactPhone]= useState(legal.court_contact?.phone  ?? '');
   const [courtAttorneyName,setCourtAttorneyName]= useState(legal.court_contact?.attorney ?? '');
@@ -104,7 +103,7 @@ export default function LegalAdminTab({ client, clientId }) {
           <>
             <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
               <TextInput  label="Case Number"              value={courtCaseNumber}  onChange={(e) => setCourtCaseNumber(e.target.value)} />
-              <DateInput  label="Court Order Expires" valueFormat="YYYY-MM-DD" value={courtOrderExpires} onChange={setCourtOrderExpires} />
+              <DateInput  label="Court Order Expires" valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" value={courtOrderExpires} onChange={setCourtOrderExpires} />
               <TextInput  label="Court Officer / Contact Name" value={courtContactName}  onChange={(e) => setCourtContactName(e.target.value)} />
               <TextInput  label="Court Contact Phone" type="tel" value={courtContactPhone} onChange={(e) => setCourtContactPhone(e.target.value)} />
               <TextInput  label="Attorney Name"        value={courtAttorneyName}  onChange={(e) => setCourtAttorneyName(e.target.value)} />

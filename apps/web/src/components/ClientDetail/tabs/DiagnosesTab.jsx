@@ -14,8 +14,7 @@ import {
 import { frontendTelemetry } from '../../../lib/frontendTelemetry.js';
 import { useI18n } from '../../../lib/i18nContext.jsx';
 
-function strToDate(s) { if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
-function dateToStr(d) { return d ? d.toISOString().slice(0, 10) : null; }
+function dateToStr(d) { return d ? (typeof d === 'string' ? d.slice(0, 10) : d.toISOString().slice(0, 10)) : null; }
 
 const DIAGNOSIS_SYSTEM_OPTIONS = [
   { value: 'DSM-5-TR', label: 'DSM-5-TR' },
@@ -190,7 +189,7 @@ function DiagnosisRow({ row, onChange, onDelete, t }) {
         <Select label="System" data={DIAGNOSIS_SYSTEM_OPTIONS} value={row.codeSystem} onChange={(value) => onChange('codeSystem', value ?? 'DSM-5-TR')} />
         <TextInput label="Code" value={row.code} placeholder="F41.1" onChange={(e) => onChange('code', e.target.value)} />
         <TextInput label="Description" value={row.description} onChange={(e) => onChange('description', e.target.value)} />
-        <DateInput label="Onset Date" value={strToDate(row.onsetDate)} valueFormat="YYYY-MM-DD" onChange={(value) => onChange('onsetDate', dateToStr(value))} />
+        <DateInput label="Onset Date" value={row.onsetDate || null} valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" onChange={(value) => onChange('onsetDate', value)} />
         <Select label="Status" data={DIAGNOSIS_STATUS_OPTIONS} value={row.status} onChange={(value) => onChange('status', value ?? 'active')} />
       </SimpleGrid>
       <TextInput label="Notes" mt="xs" value={row.notes} onChange={(e) => onChange('notes', e.target.value)} />
@@ -313,8 +312,8 @@ function MedicationRow({ row, onChange, onDelete }) {
         <TextInput label="Frequency"       value={row.frequency} placeholder="once daily" onChange={(e) => onChange('frequency', e.target.value)} />
         <Select label="Route" data={[{ value: 'oral', label: 'Oral' }, { value: 'IM', label: 'IM' }, { value: 'topical', label: 'Topical' }, { value: 'other', label: 'Other' }]} value={row.route} onChange={(v) => onChange('route', v ?? 'oral')} />
         <TextInput label="Prescriber"    value={row.prescriber} onChange={(e) => onChange('prescriber', e.target.value)} />
-        <DateInput label="Start Date" valueFormat="YYYY-MM-DD" value={strToDate(row.start_date)} onChange={(v) => onChange('start_date', dateToStr(v))} />
-        <DateInput label="End Date"   valueFormat="YYYY-MM-DD" value={strToDate(row.end_date)}   onChange={(v) => onChange('end_date',   dateToStr(v))} />
+        <DateInput label="Start Date" valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" value={row.start_date || null} onChange={(v) => onChange('start_date', v)} />
+        <DateInput label="End Date"   valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" value={row.end_date   || null} onChange={(v) => onChange('end_date',   v)} />
         <TextInput label="Reason / Indication" value={row.reason} onChange={(e) => onChange('reason', e.target.value)} />
       </SimpleGrid>
       <TextInput label="Notes" mt="xs" value={row.notes} onChange={(e) => onChange('notes', e.target.value)} />
@@ -389,7 +388,7 @@ function AllergyRow({ row, onChange, onDelete }) {
         <TextInput label="Reaction"  value={row.reaction}  onChange={(e) => onChange('reaction',  e.target.value)} />
         <Select label="Severity" data={[{ value: 'mild', label: 'Mild' }, { value: 'moderate', label: 'Moderate' }, { value: 'severe', label: 'Severe' }, { value: 'life_threatening', label: 'Life-Threatening' }, { value: 'unknown', label: 'Unknown' }]} value={row.severity} onChange={(v) => onChange('severity', v ?? 'unknown')} />
         <Select label="Type" data={[{ value: 'drug', label: 'Drug' }, { value: 'food', label: 'Food' }, { value: 'environmental', label: 'Environmental' }, { value: 'other', label: 'Other' }]} value={row.allergy_type} onChange={(v) => onChange('allergy_type', v ?? 'drug')} />
-        <DateInput label="Onset Date" valueFormat="YYYY-MM-DD" value={strToDate(row.onset_date)} onChange={(v) => onChange('onset_date', dateToStr(v))} />
+        <DateInput label="Onset Date" valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" value={row.onset_date || null} onChange={(v) => onChange('onset_date', v)} />
       </SimpleGrid>
       <Group justify="space-between" mt="xs">
         <Checkbox label="Active" checked={!!row.is_active} onChange={(e) => onChange('is_active', e.currentTarget.checked)} />

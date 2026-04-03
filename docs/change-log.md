@@ -2,6 +2,19 @@
 
 <!-- markdownlint-disable MD024 -->
 
+### fix: date pickers calendar close and manual entry across all forms
+
+**Date:** April 3, 2026
+**Affected area:** All forms with `DateInput` — FormRunner, DiagnosesTab, DemographicsTab, LegalAdminTab, InsuranceTab, EmploymentTab, CertificationsTab, LicensesTab
+
+Clicking a day in a date picker calendar did not close the popover and did not save the value on several forms. Manual entry of dates in any format other than strict ISO (`YYYY-MM-DD`) did not work on any form.
+
+**Root cause (calendar won't close):** Mantine v8 `DateInput` passes a `YYYY-MM-DD` string (not a `Date` object) to `onChange`. Multiple forms called `d.toISOString()` on that string, throwing `TypeError: d.toISOString is not a function`. This exception propagated before `setDropdownOpened(false)` could execute, so the calendar stayed open and the value was never stored.
+
+**Root cause (manual entry):** All `DateInput` components used `valueFormat="YYYY-MM-DD"`, requiring strict ISO input. Users could not type natural dates like `01/15/2000`.
+
+**Fix:** Updated all `dateToStr` helpers to safely handle both strings and Date objects. Removed all `strToDate()` wrappers from state initialization and `value=` props — Mantine v8 `DateInput` accepts `YYYY-MM-DD` strings natively. Removed `dateToStr()` wrappers from `onChange` handlers where Mantine already provides the string. Changed `valueFormat` to `"MM/DD/YYYY"` and added matching `placeholder="MM/DD/YYYY"` on all eight files: `FormRunner.jsx`, `DiagnosesTab.jsx`, `DemographicsTab.jsx`, `LegalAdminTab.jsx`, `InsuranceTab.jsx`, `EmploymentTab.jsx`, `CertificationsTab.jsx`, `LicensesTab.jsx`.
+
 ## v5.6.0 — April 3, 2026 — Portal Client Conversion and Plan Hygiene
 
 ### fix: counselor high-touchpoint toggle returning 403

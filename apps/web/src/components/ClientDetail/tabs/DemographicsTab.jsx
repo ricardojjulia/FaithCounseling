@@ -19,8 +19,7 @@ const PHONE_TYPE_OPTIONS = ['cell', 'home', 'work', 'fax'].map((t) => ({ value: 
 const ADDR_TYPE_OPTIONS  = ['primary', 'mailing', 'other'].map((t) => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }));
 const EMPLOYED = ['employed_full_time', 'employed_part_time', 'self_employed'];
 
-function strToDate(s) { if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
-function dateToStr(d) { return d ? d.toISOString().slice(0, 10) : null; }
+function dateToStr(d) { return d ? (typeof d === 'string' ? d.slice(0, 10) : d.toISOString().slice(0, 10)) : null; }
 
 function calcAge(dob) {
   if (!dob) return null;
@@ -40,7 +39,7 @@ export default function DemographicsTab({ client, clientId }) {
   const [lastName,     setLastName]     = useState(client.lastName     ?? '');
   const [preferredName,setPreferredName]= useState(client.preferredName ?? '');
   const [pronouns,     setPronouns]     = useState(client.pronouns     ?? '');
-  const [dateOfBirth,  setDateOfBirth]  = useState(strToDate(client.dateOfBirth));
+  const [dateOfBirth,  setDateOfBirth]  = useState(client.dateOfBirth || null);
   const [ssnLast4,     setSsnLast4]     = useState(client.ssnLast4     ?? '');
   const [status,       setStatus]       = useState(client.status       ?? 'active');
   const [idSaving,     setIdSaving]     = useState(false);
@@ -216,7 +215,7 @@ export default function DemographicsTab({ client, clientId }) {
           <TextInput label="Legal Last Name"  required value={lastName}  onChange={(e) => setLastName(e.target.value)} />
           <TextInput label="Preferred Name / Goes By" value={preferredName} onChange={(e) => setPreferredName(e.target.value)} />
           <TextInput label="Pronouns" placeholder="e.g. she/her, they/them" value={pronouns} onChange={(e) => setPronouns(e.target.value)} />
-          <DateInput label={age !== null ? `Date of Birth (${age} yrs)` : 'Date of Birth'} valueFormat="YYYY-MM-DD" value={dateOfBirth} onChange={setDateOfBirth} />
+          <DateInput label={age !== null ? `Date of Birth (${age} yrs)` : 'Date of Birth'} valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" value={dateOfBirth} onChange={setDateOfBirth} />
           <PasswordInput label="SSN Last 4" maxLength={4} value={ssnLast4} onChange={(e) => setSsnLast4(e.target.value.replace(/\D/g, '').slice(0, 4))} />
           <Select label="Status" data={STATUS_OPTIONS} value={status} onChange={(v) => setStatus(v ?? 'active')} />
         </SimpleGrid>

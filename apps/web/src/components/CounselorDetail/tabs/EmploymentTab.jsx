@@ -21,8 +21,7 @@ const EMPLOYMENT_STATUS_OPTIONS = [
   { value: 'terminated', label: 'Terminated' },
 ];
 
-function dateToStr(d) { return d ? d.toISOString().slice(0, 10) : null; }
-function strToDate(s) { if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
+function dateToStr(d) { return d ? (typeof d === 'string' ? d.slice(0, 10) : d.toISOString().slice(0, 10)) : null; }
 
 const EMPTY = {
   employmentType: 'full_time', employmentStatus: 'active',
@@ -47,12 +46,12 @@ export default function EmploymentTab({ staffId, currentUser }) {
         setForm({
           employmentType:     p.employmentType     ?? 'full_time',
           employmentStatus:   p.employmentStatus   ?? 'active',
-          hireDate:           strToDate(p.hireDate),
-          terminationDate:    strToDate(p.terminationDate),
+          hireDate:           p.hireDate           || null,
+          terminationDate:    p.terminationDate    || null,
           npiNumber:          p.npiNumber          ?? '',
           malpracticeInsurer: p.malpracticeInsurer ?? '',
           malpracticePolicy:  p.malpracticePolicy  ?? '',
-          malpracticeExpiry:  strToDate(p.malpracticeExpiry),
+          malpracticeExpiry:  p.malpracticeExpiry  || null,
           directPhone:        p.directPhone        ?? '',
         });
         setLoading(false);
@@ -121,8 +120,8 @@ export default function EmploymentTab({ staffId, currentUser }) {
             <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
               <Select label="Employment Type"   data={EMPLOYMENT_TYPE_OPTIONS}   value={form.employmentType}   onChange={(v) => set('employmentType', v)} />
               <Select label="Employment Status" data={EMPLOYMENT_STATUS_OPTIONS} value={form.employmentStatus} onChange={(v) => set('employmentStatus', v)} />
-              <DateInput label="Hire Date"        valueFormat="YYYY-MM-DD" value={form.hireDate}       onChange={(v) => set('hireDate', v)} />
-              <DateInput label="Termination Date" valueFormat="YYYY-MM-DD" value={form.terminationDate} onChange={(v) => set('terminationDate', v)} />
+              <DateInput label="Hire Date"        valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" value={form.hireDate}       onChange={(v) => set('hireDate', v)} />
+              <DateInput label="Termination Date" valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" value={form.terminationDate} onChange={(v) => set('terminationDate', v)} />
             </SimpleGrid>
           </Stack>
 
@@ -145,7 +144,7 @@ export default function EmploymentTab({ staffId, currentUser }) {
             <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
               <TextInput label="Insurance Provider" value={form.malpracticeInsurer} onChange={(e) => set('malpracticeInsurer', e.target.value)} />
               <TextInput label="Policy Number"      value={form.malpracticePolicy}  onChange={(e) => set('malpracticePolicy',  e.target.value)} />
-              <DateInput label="Policy Expiry Date" valueFormat="YYYY-MM-DD" value={form.malpracticeExpiry} onChange={(v) => set('malpracticeExpiry', v)} />
+              <DateInput label="Policy Expiry Date" valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" value={form.malpracticeExpiry} onChange={(v) => set('malpracticeExpiry', v)} />
             </SimpleGrid>
           </Stack>
 

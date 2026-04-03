@@ -47,6 +47,10 @@ Canonical reference:
 
 This baseline supports HIPAA-oriented safeguards, GDPR-aligned privacy principles, SOC 2 control expectations, and PCI-conscious engineering practices.
 
+## Date Picker Behavior
+
+All `DateInput` components (Mantine v8) across the application accept dates in `MM/DD/YYYY` format for manual entry and display. The calendar popover closes automatically when a day is selected. Date values are stored internally as `YYYY-MM-DD` strings. Affected forms: intake/form runner, client demographics, legal/admin, insurance, diagnoses, employment, certifications, and licenses.
+
 ## Architecture At A Glance
 
 - `apps/web`: React + Mantine web UI, served by a lightweight Node server
