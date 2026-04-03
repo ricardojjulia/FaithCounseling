@@ -18,6 +18,19 @@ Counselors received a 403 "Access to this resource is not permitted" when attemp
 - `apps/api/src/index.js` — `enforceAssignedClientAccess` now allows counselor access when: (a) the client has no assigned primary counselor (unassigned clients are accessible to any counselor in the practice), or (b) the counselor is the assigned primary counselor for that client. Previously it only allowed case (b) and only when the scope ID resolved.
 - `apps/api/src/db/migrate.js` — seed INSERT for `c-001` (Sarah Kim) now includes `primary_counselor_id = 'staff-counselor-mercy'`. The `ensureDevPortalClient` idempotent path also sets `primary_counselor_id` via `COALESCE` so it only backfills when the column is null.
 
+### fix: high-touchpoint PATCH returning 415 Unsupported Media Type for browser requests
+
+**Date:** April 3, 2026
+**Affected area:** Web proxy body forwarding, high-touchpoint flag toggle
+
+Admin users and any user whose toggle attempt went through the browser received "Failed to update high-touchpoint flag. Please try again." The API logged HTTP 415 "Unsupported media type. Use application/json." for every browser-originated PATCH.
+
+**Root cause:** `readRequestBody` in `apps/web/server.js` accumulated the request body into a JavaScript `string`. When the proxy's `fetch` call forwarded that string to the upstream API with `body: <string>`, Node.js's native `fetch` (undici) set the internal `Content-Type` to `text/plain;charset=UTF-8` — overriding the explicitly forwarded `content-type: application/json` header. The API's `readJsonBody` detected the non-JSON content-type and rejected with 415.
+
+**What changed:**
+
+- `apps/web/server.js` — `readRequestBody` now collects raw `Buffer` chunks and returns `Buffer.concat(chunks)`. A `Buffer` / `Uint8Array` body passed to `fetch` carries no implicit Content-Type, so the explicitly forwarded `content-type: application/json` header is preserved end-to-end.
+
 
 
 ### fix: restart stale local services and normalize portal conversion routes
