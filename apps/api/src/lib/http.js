@@ -10,7 +10,10 @@ const MAX_JSON_BODY_BYTES = 1_000_000;
 
 function isJsonMediaType(contentType) {
   if (!contentType) return false;
-  const mediaType = String(contentType).split(';')[0].trim().toLowerCase();
+  // Use only the first value: browsers can join duplicate header values with a comma
+  // (e.g. "application/json, application/json") when the same header appears twice.
+  const firstValue = String(contentType).split(',')[0];
+  const mediaType = firstValue.split(';')[0].trim().toLowerCase();
   return mediaType === 'application/json' || mediaType.endsWith('+json');
 }
 

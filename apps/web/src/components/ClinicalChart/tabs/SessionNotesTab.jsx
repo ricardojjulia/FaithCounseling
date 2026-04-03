@@ -309,7 +309,7 @@ export default function SessionNotesTab({
     try {
       await apiFetch(`/api/v1/clients/${encodeURIComponent(clientId)}/progress-notes`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+        headers: csrfHeaders(),
         body: JSON.stringify({
           appointmentId: draft.appointmentId,
           noteType: draft.noteType,
@@ -334,7 +334,7 @@ export default function SessionNotesTab({
   const handleUpdate = async (noteId, fields) => {
     await apiFetch(`/api/v1/clients/${encodeURIComponent(clientId)}/progress-notes/${encodeURIComponent(noteId)}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+      headers: csrfHeaders(),
       body: JSON.stringify(fields),
     });
     await loadNotes();
@@ -343,7 +343,7 @@ export default function SessionNotesTab({
   const handleSign = async (noteId) => {
     await apiFetch(`/api/v1/clients/${encodeURIComponent(clientId)}/progress-notes/${encodeURIComponent(noteId)}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+      headers: csrfHeaders(),
       body: JSON.stringify({
         locked: true,
         signedBy: currentUser

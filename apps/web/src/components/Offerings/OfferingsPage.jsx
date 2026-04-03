@@ -77,7 +77,7 @@ export default function OfferingsPage({ clients = [] }) {
     try {
       await apiFetch('/api/v1/offerings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+        headers: csrfHeaders(),
         body: JSON.stringify({
           clientId: draft.clientId,
           amountCents: Math.round((draft.amountDollars ?? 0) * 100),

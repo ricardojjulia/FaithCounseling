@@ -143,7 +143,7 @@ export default function TreatmentPlanTab({ clientId }) {
     try {
       await apiFetch(`/api/v1/clients/${encodeURIComponent(clientId)}/treatment-plan`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+        headers: csrfHeaders(),
         body: JSON.stringify({
           status: form.status,
           goals,

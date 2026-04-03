@@ -116,7 +116,7 @@ export default function ClientsPage({
       const res = await fetch(`/api/v1/clients/${encodeURIComponent(clientId)}`, {
         method: 'PATCH',
         credentials: 'include',
-        headers: { ...csrfHeaders(), 'Content-Type': 'application/json' },
+        headers: csrfHeaders(),
         body: JSON.stringify({ highTouchpoint: newValue }),
       });
       if (!res.ok) throw new Error(await res.text());
