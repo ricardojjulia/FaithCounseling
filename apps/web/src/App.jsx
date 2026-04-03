@@ -587,6 +587,7 @@ export default function App() {
                 initialView: 'practice',
                 initialPortalRequest: portalRequest,
               })}
+              onViewClient={handleOpenClient}
             />
           ) : showDocuments ? (
             <DocumentsPage />

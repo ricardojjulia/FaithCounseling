@@ -85,6 +85,7 @@ function rowToPortalRegistrationRequest(row) {
     onboardingDetails: row.onboarding_details_enc ? (decryptJson(row.onboarding_details_enc) ?? {}) : {},
     notes: row.notes_enc ? decrypt(row.notes_enc) : null,
     status: row.status,
+    convertedClientId: row.converted_client_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -333,6 +334,7 @@ export async function updatePortalRegistrationRequest(id, tenantId, fields) {
   if (fields.requestType !== undefined) pairs.push(['request_type = ?', fields.requestType]);
   if (fields.preferredContactMethod !== undefined) pairs.push(['preferred_contact_method = ?', fields.preferredContactMethod]);
   if (fields.preferredContactWindow !== undefined) pairs.push(['preferred_contact_window = ?', fields.preferredContactWindow]);
+  if (fields.convertedClientId !== undefined) pairs.push(['converted_client_id = ?', fields.convertedClientId]);
   if (!pairs.length) return;
   const setSql = pairs.map(([sql]) => sql).join(', ');
   const values = pairs.map(([, value]) => value);
