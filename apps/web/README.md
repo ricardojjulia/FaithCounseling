@@ -52,7 +52,7 @@ Default URL: `http://localhost:3000`
 - branded Operations Studio page at `/operations.html` aligned to the same indigo/light workspace palette as the main app
 - OTEL status UI that reflects shared OTLP, traces-only, or metrics-only endpoint configuration
 - interactive API docs served through the same-origin proxy at `/api/docs`
-- branded static About page at `/about` with a stronger counselor-first product narrative, bolder visual system, and operational linkouts
+- branded static About page at `/about` with a stronger counselor-first product narrative, shared light-indigo app palette, and operational linkouts
 
 ## Monitoring Notes
 
