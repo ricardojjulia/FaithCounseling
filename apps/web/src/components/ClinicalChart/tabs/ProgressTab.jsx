@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Stack, Paper, Group, Title, Text, Badge, Loader, Alert, Divider, Table,
+  Stack, Paper, Group, Title, Text, Badge, Loader, Alert, Divider, Table, SimpleGrid,
 } from '@mantine/core';
 import { useI18n } from '../../../lib/i18nContext.jsx';
 import { frontendTelemetry } from '../../../lib/frontendTelemetry.js';
@@ -92,6 +92,54 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function buildSparklinePoints(values, width = 140, height = 42) {
+  if (values.length <= 1) {
+    return `0,${height / 2} ${width},${height / 2}`;
+  }
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(1, max - min);
+  return values
+    .map((value, index) => {
+      const x = (index / (values.length - 1)) * width;
+      const y = height - (((value - min) / span) * (height - 8) + 4);
+      return `${x},${y}`;
+    })
+    .join(' ');
+}
+
+function Sparkline({ values }) {
+  const points = buildSparklinePoints(values);
+  return (
+    <svg width="140" height="42" viewBox="0 0 140 42" aria-hidden="true">
+      <polyline
+        fill="none"
+        stroke="var(--mantine-color-indigo-6)"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points}
+      />
+    </svg>
+  );
+}
+
+function ScoreDeltaBadge({ latest, previous }) {
+  if (latest == null || previous == null) {
+    return <Badge color="gray" variant="light">Baseline</Badge>;
+  }
+
+  const delta = Number(latest) - Number(previous);
+  if (delta === 0) {
+    return <Badge color="gray" variant="light">No change</Badge>;
+  }
+  return (
+    <Badge color={delta > 0 ? 'red' : 'teal'} variant="light">
+      {delta > 0 ? `+${delta}` : `${delta}`} vs prior
+    </Badge>
+  );
+}
+
 export default function ProgressTab({ clientId }) {
   const { t } = useI18n();
   const [submissions, setSubmissions] = useState([]);
@@ -138,6 +186,8 @@ export default function ProgressTab({ clientId }) {
   Object.values(byForm).forEach((arr) => arr.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)));
 
   const sortedFormKeys = Object.keys(byForm).sort();
+  const latestScored = [...scored].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+  const recentScored = latestScored.slice(0, 3);
 
   return (
     <Stack gap="md">
@@ -147,21 +197,89 @@ export default function ProgressTab({ clientId }) {
         <Text c="dimmed" size="sm">{t('chart.progress.noScores')}</Text>
       )}
 
+      {recentScored.length > 0 && (
+        <SimpleGrid cols={{ base: 1, md: Math.min(3, recentScored.length) }} spacing="md">
+          {recentScored.map((submission) => {
+            const formTitle = submission.formTitle ?? submission.formKey ?? 'Assessment';
+            const entries = byForm[formTitle] ?? [];
+            const trendValues = [...entries]
+              .sort((a, b) => new Date(a.submittedAt) - new Date(b.submittedAt))
+              .map((entry) => Number(entry.scoreValue))
+              .filter((value) => Number.isFinite(value))
+              .slice(-6);
+            return (
+              <Paper
+                key={submission.id ?? `${formTitle}-${submission.submittedAt}`}
+                withBorder
+                radius="xl"
+                p="md"
+                style={{
+                  background: 'linear-gradient(180deg, rgba(255,255,255,0.96), rgba(244,247,255,0.92))',
+                  boxShadow: '0 16px 34px rgba(34, 51, 93, 0.08)',
+                }}
+              >
+                <Stack gap="sm">
+                  <Group justify="space-between" align="flex-start">
+                    <div>
+                      <Text size="xs" tt="uppercase" fw={700} c="indigo" style={{ letterSpacing: '0.08em' }}>
+                        Current signal
+                      </Text>
+                      <Text fw={700}>{formTitle}</Text>
+                    </div>
+                    {getSeverityBadge(submission.scoreLabel, submission.scoreValue)}
+                  </Group>
+                  <Group justify="space-between" align="flex-end" wrap="nowrap">
+                    <div>
+                      <Text fw={800} fz="2rem" style={{ lineHeight: 1 }}>
+                        {submission.scoreValue ?? '—'}
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        {submission.interpretationLabel ?? submission.scoreLabel ?? 'Scored assessment'}
+                      </Text>
+                    </div>
+                    {trendValues.length > 0 ? <Sparkline values={trendValues} /> : null}
+                  </Group>
+                </Stack>
+              </Paper>
+            );
+          })}
+        </SimpleGrid>
+      )}
+
       {sortedFormKeys.map((formTitle) => {
         const entries = byForm[formTitle];
         const latest = entries[0];
+        const previous = entries[1];
+        const trendValues = [...entries]
+          .sort((a, b) => new Date(a.submittedAt) - new Date(b.submittedAt))
+          .map((entry) => Number(entry.scoreValue))
+          .filter((value) => Number.isFinite(value))
+          .slice(-6);
         return (
           <Paper key={formTitle} withBorder radius="md" p="md">
             <Group justify="space-between" align="flex-start" mb="xs">
-              <Text fw={600} size="sm">{formTitle}</Text>
-              {latest.scoreLabel && (
-                <Group gap="xs">
+              <div>
+                <Text fw={600} size="sm">{formTitle}</Text>
+                <Text size="xs" c="dimmed" mt={4}>
+                  Latest completed {formatDate(latest.submittedAt)}
+                </Text>
+              </div>
+              <Group gap="xs" align="center">
+                <ScoreDeltaBadge latest={latest.scoreValue} previous={previous?.scoreValue} />
+                {latest.scoreLabel && (
                   <Badge color="blue" variant="filled" size="sm">
                     {latest.scoreLabel}: {latest.scoreValue}
                   </Badge>
-                  {getSeverityBadge(latest.scoreLabel, latest.scoreValue)}
-                </Group>
-              )}
+                )}
+              </Group>
+            </Group>
+
+            <Group justify="space-between" align="center" mb="sm">
+              <Group gap="xs">
+                {getSeverityBadge(latest.scoreLabel, latest.scoreValue)}
+                <Badge color="gray" variant="light">{entries.length} entries</Badge>
+              </Group>
+              {trendValues.length > 1 ? <Sparkline values={trendValues} /> : null}
             </Group>
 
             {entries.length === 1 ? (

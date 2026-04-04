@@ -2,6 +2,27 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 4, 2026 — Clinical Chart Experience Refresh
+
+### feat(chart): add summary visuals and functional graphics to Clinical Chart
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/src/components/ClinicalChart/*`
+
+The Clinical Chart surface was structurally complete but visually flat. It opened as a title, client picker, and raw tab stack, which made the page feel colder and less informative than the rest of the application.
+
+The chart now opens with a richer summary layer and functional visual cues:
+
+- new chart summary header with session rhythm, note readiness, treatment-plan health, and latest assessment signal
+- session-status timeline in Session Notes so counselors can see draft, signed, due, cancelled, and upcoming sessions at a glance
+- mini trend graphics and delta indicators in Progress for scored assessments
+- treatment-plan overview cards for plan status, goal coverage, and review rhythm
+- stronger tab-shell treatment so the page feels like a distinct clinical workspace rather than a plain form stack
+
+The change keeps the existing chart surfaces and telemetry IDs intact, so no surface-registry update was required. Documentation was updated in `README.md` and `apps/web/README.md`.
+
+---
+
 ## April 4, 2026 — About Page Refresh
 
 ### feat(about): reposition the About page with stronger product impact
