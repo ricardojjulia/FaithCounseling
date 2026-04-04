@@ -2,6 +2,19 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 4, 2026 — Encrypted Buffer Read Fix
+
+### fix(api): accept Buffer-backed ciphertext during decrypt
+
+**Date:** April 4, 2026
+**Affected area:** `apps/api/src/lib/encrypt.js`
+
+Recurring series creation could appear to fail even after the insert succeeded. The actual crash happened on the refresh read immediately afterward: older `appointment_series` rows were returning encrypted name fields from MySQL as `Buffer` objects, but the shared `decrypt()` helper only handled strings and crashed on `stored.split(...)`.
+
+The shared decrypt helper now normalizes `Buffer` values to UTF-8 strings before parsing the encrypted payload format. This fixes recurring-series refresh reads and hardens any other API read path that encounters buffer-backed encrypted columns.
+
+---
+
 ## April 4, 2026 — Dashboard Faithful Workflows Navigation
 
 ### fix(dashboard): make the Faithful Workflows metric card open the workflow workspace

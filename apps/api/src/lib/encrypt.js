@@ -67,6 +67,12 @@ export function encrypt(plaintext) {
  */
 export function decrypt(stored) {
   if (stored == null) return null;
+  if (Buffer.isBuffer(stored)) {
+    stored = stored.toString('utf8');
+  }
+  if (typeof stored !== 'string') {
+    throw new Error('Invalid encrypted field format');
+  }
   const parts = stored.split(':');
   if (parts.length !== 3) throw new Error('Invalid encrypted field format');
   const [ivB64, tagB64, ctB64] = parts;
