@@ -25,6 +25,7 @@ Default URL: `http://localhost:3000`
 ## Current UI Scope
 
 - sidebar navigation shell
+- top-level workspace labels now use simpler counselor-friendly names: `Dashboard`, `Client Scheduling`, `Documents`, and `Client Portal`
 - role-aware navigation that gives counselors a smaller primary workspace and keeps monitoring/admin tools in admin-capable paths
 - dedicated counselor home surface for counselor and intern roles
 - dedicated counselor tasks surface for counselor note follow-up, assigned document/form review, and scheduling handoff

@@ -22,7 +22,7 @@ It is built specifically for Christian counseling practices and supports daily e
 
 - **Faithful Workflows:** counselor-facing recommendation workspace powered by 27 deterministic clinical rules across 8 care categories, with explainable rationale, trend analysis, three interchangeable canvas views (Classic List, Radial Hub, Priority Matrix), and shared operational urgency cues that keep banner counts and visible client severity aligned
 - **Clinical Chart:** session notes, internal notes, treatment plans, progress tracking, and homework, now with a chart summary header, session-status timeline, and visual assessment/progress cues
-- **Operations Dashboard:** live daily operations summary with counselor workload, note-gap compliance watch, portal request tracking, configurable operational alerts, and 7-day trend context
+- **Dashboard:** live daily operations summary with counselor workload, note-gap compliance watch, portal request tracking, configurable operational alerts, and 7-day trend context
 - **Workspace Studio:** full-featured practice administration hub with tabs for Practice profile, Locations CRUD, Staff roster, Lifecycle caseload board, Appointments (service codes), Documents, Offerings, and Portal workflows
 - **Scheduling and operations workflows:** appointments, waitlists, reminders, and utilization visibility
 - **Client portal workflows:** onboarding, forms, documents, and client self-service surfaces

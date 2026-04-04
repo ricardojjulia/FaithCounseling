@@ -2,6 +2,26 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 4, 2026 — Navigation Label Cleanup
+
+### fix(nav): simplify top-level workspace labels
+
+**Date:** April 4, 2026
+**Affected area:** `packages/i18n/src/index.js`
+
+Staff-facing workspace names were still carrying heavier operational wording than necessary in the main navigation and top bar. The underlying surfaces were correct, but labels like `Operations Dashboard`, `Scheduling Workspace`, and `Documents Workspace` made the shell feel more technical than it needed to.
+
+The shared label catalog now uses:
+
+- `Dashboard` instead of `Operations Dashboard`
+- `Client Scheduling` instead of `Scheduling Workspace`
+- `Documents` instead of `Documents Workspace`
+- `Client Portal` in the side navigation instead of `Portal`
+
+This change only updates user-facing copy. Surface IDs, routes, telemetry, and monitoring mappings remain unchanged.
+
+---
+
 ## April 4, 2026 — Clinical Chart Experience Refresh
 
 ### feat(chart): add summary visuals and functional graphics to Clinical Chart
