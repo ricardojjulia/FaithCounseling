@@ -25,11 +25,13 @@ Default URL: `http://localhost:3000`
 ## Current UI Scope
 
 - sidebar navigation shell
+- top-level workspace labels now use simpler counselor-friendly names: `Dashboard`, `Client Scheduling`, `Documents`, and `Client Portal`
 - role-aware navigation that gives counselors a smaller primary workspace and keeps monitoring/admin tools in admin-capable paths
 - dedicated counselor home surface for counselor and intern roles
 - dedicated counselor tasks surface for counselor note follow-up, assigned document/form review, and scheduling handoff
 - counselor home and task queues now hand off directly into scheduling composers and session-note charting flows for assigned clients
 - client detail now includes a counselor-only Intake Preview tab for clients with completed intake materials
+- Clinical Chart now opens with a summary header, functional overview cards, session-status timeline, and stronger assessment/treatment-plan visual cues
 - global search across today's schedule
 - redesigned `Practice Operations Center` header with an animated counseling mark and stronger operational hierarchy
 - sidebar heading now uses an animated counseling icon with a simplified `Options` label
@@ -67,6 +69,7 @@ Default URL: `http://localhost:3000`
 - Counselor client detail and chart-related API routes now enforce assigned-client access on the server for counselor and intern sessions
 - Counselor-only intake preview reads now follow the same assigned-client authorization model as client detail routes and remain explicitly provisional rather than diagnostic
 - Dashboard operational alerts now use the shared operations summary to surface intake-preview-ready clients and can open the client record directly on the Intake Preview tab
+- Faithful Workflows banner counts and left-panel urgency badges now use the same shared operations-summary risk signals as the dashboard so both surfaces report the same critical, moderate, and routine picture and visibly surface the same critical clients
 - Workspace Studio Portal now uses an explicit admin-only conversion endpoint for approved `care_request` items so portal approvals can create a real client record without relying on `account_signup` activation paths
 - Counselor scheduling, form workflow, assignment, offerings, and faith referral API actions now reuse the same assigned-client access checks for counselor and intern sessions when those routes traverse client context
 - Counselor broad workflow collections now default to assigned-client scope on the server, including reminders, waitlist, document/form/inventory assignment collections, offerings, and faith referral coordination reads

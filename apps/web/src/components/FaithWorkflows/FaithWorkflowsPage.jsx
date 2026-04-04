@@ -34,6 +34,8 @@ const VARIANT_LABELS = {
 };
 
 const FAITH_WORKFLOW_DEMO_STORAGE_KEY = 'faith_workflows.demo_mode';
+const URGENCY_RANK = { routine: 0, moderate: 1, high: 2, critical: 3 };
+const OPERATIONAL_URGENCY_SCORE_FLOOR = { moderate: 45, critical: 85 };
 
 function readOptionalBoolean(value) {
   if (value === true || value === 'true') return true;
@@ -50,6 +52,34 @@ function isFaithWorkflowDemoEnabled() {
   }
 
   return readOptionalBoolean(import.meta.env?.VITE_ENABLE_FAITH_WORKFLOWS_DEMO) ?? false;
+}
+
+function mergeOperationalSignal(current, nextLevel, reasonChip) {
+  if (!nextLevel || !reasonChip) return current ?? null;
+  const existing = current ?? { urgencyLevel: nextLevel, reasonChips: [] };
+  const urgencyLevel = (URGENCY_RANK[nextLevel] ?? 0) > (URGENCY_RANK[existing.urgencyLevel] ?? 0)
+    ? nextLevel
+    : existing.urgencyLevel;
+  const reasonChips = existing.reasonChips.includes(reasonChip)
+    ? existing.reasonChips
+    : [...existing.reasonChips, reasonChip];
+  return { urgencyLevel, reasonChips };
+}
+
+function applyOperationalUrgency(entry, operationalSignal) {
+  if (!operationalSignal?.urgencyLevel) return entry;
+  if ((URGENCY_RANK[operationalSignal.urgencyLevel] ?? 0) <= (URGENCY_RANK[entry.urgencyLevel] ?? 0)) {
+    if (!operationalSignal.reasonChips?.length) return entry;
+    const mergedReasonChips = [...new Set([...(operationalSignal.reasonChips ?? []), ...(entry.topReasonChips ?? [])])].slice(0, 3);
+    return { ...entry, topReasonChips: mergedReasonChips };
+  }
+
+  return {
+    ...entry,
+    urgencyLevel: operationalSignal.urgencyLevel,
+    urgencyScore: Math.max(entry.urgencyScore ?? 0, OPERATIONAL_URGENCY_SCORE_FLOOR[operationalSignal.urgencyLevel] ?? entry.urgencyScore ?? 0),
+    topReasonChips: [...new Set([...(operationalSignal.reasonChips ?? []), ...(entry.topReasonChips ?? [])])].slice(0, 3),
+  };
 }
 
 /**
@@ -162,10 +192,11 @@ async function persistStateChange(clientId, ruleId, status, deferredUntil = null
  * Faithful Workflows — main three-panel page.
  *
  * Props:
- *   clients     — basic client list from App.jsx (already loaded)
- *   currentUser — session user
+ *   clients                — basic client list from App.jsx (already loaded)
+ *   currentUser            — session user
+ *   sharedOperationsSummary — canonical operations-summary payload for counts and urgency overlays
  */
-export default function FaithWorkflowsPage({ clients = [], currentUser }) {
+export default function FaithWorkflowsPage({ clients = [], currentUser, sharedOperationsSummary = null }) {
   const { t } = useI18n();
   useSurfaceTelemetry('faith_workflows', { surfaceKind: 'view', workflow: 'faith_workflows' });
   const demoModeEnabled = useMemo(() => isFaithWorkflowDemoEnabled(), []);
@@ -197,6 +228,39 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
   const [loadingSet, setLoadingSet] = useState(new Set());
   const [loadError, setLoadError] = useState(null);
 
+  const operationalSignalsByClient = useMemo(() => {
+    const signals = new Map();
+    const register = (clientId, urgencyLevel, reasonChip) => {
+      if (!clientId) return;
+      signals.set(clientId, mergeOperationalSignal(signals.get(clientId), urgencyLevel, reasonChip));
+    };
+
+    const noteGapItems = Array.isArray(sharedOperationsSummary?.complianceWatch?.noteGapItems)
+      ? sharedOperationsSummary.complianceWatch.noteGapItems
+      : [];
+    for (const item of noteGapItems) {
+      const days = Number(item?.daysWithoutNote ?? 0);
+      if (days >= 7) register(item.clientId, 'critical', 'Note gap 7+d');
+      else if (days >= 3) register(item.clientId, 'moderate', 'Note gap 3+d');
+    }
+
+    const unscheduledClientItems = Array.isArray(sharedOperationsSummary?.clientsBox?.unscheduledClientItems)
+      ? sharedOperationsSummary.clientsBox.unscheduledClientItems
+      : [];
+    for (const item of unscheduledClientItems) {
+      if (item?.highTouchpoint) register(item.clientId, 'critical', 'High touchpoint unscheduled');
+    }
+
+    const outstandingAssignmentItems = Array.isArray(sharedOperationsSummary?.complianceWatch?.outstandingAssignments?.items)
+      ? sharedOperationsSummary.complianceWatch.outstandingAssignments.items
+      : [];
+    for (const item of outstandingAssignmentItems) {
+      register(item?.clientId, 'moderate', 'Assigned work pending');
+    }
+
+    return signals;
+  }, [sharedOperationsSummary]);
+
   // ─── Build client rank entries from basic list + cached enriched data ──────
   const rankEntries = useMemo(() => {
     const allClients = [
@@ -210,14 +274,15 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
         if (cached) {
           const entry = buildClientRankEntry(cached);
           const recs = applyPersistedStates(entry.recommendations, persistedStates, c.id === selectedClientId);
-          return { ...entry, recommendations: recs, recommendationCount: recs.filter((r) => r.status === 'pending').length };
+          const enrichedEntry = { ...entry, recommendations: recs, recommendationCount: recs.filter((r) => r.status === 'pending').length };
+          return applyOperationalUrgency(enrichedEntry, operationalSignalsByClient.get(c.id));
         }
-        return buildLightweightRankEntry(c);
+        return applyOperationalUrgency(buildLightweightRankEntry(c), operationalSignalsByClient.get(c.id));
       })
       .sort((a, b) => b.urgencyScore - a.urgencyScore);
-  }, [clients, dataCache, demoModeEnabled, persistedStates, selectedClientId]);
+  }, [clients, dataCache, demoModeEnabled, operationalSignalsByClient, persistedStates, selectedClientId]);
 
-  const urgencyCounts = useMemo(() => {
+  const localUrgencyCounts = useMemo(() => {
     const counts = { critical: 0, moderate: 0, routine: 0 };
     for (const e of rankEntries) {
       if (e.urgencyLevel === 'critical') counts.critical++;
@@ -226,6 +291,16 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
     }
     return counts;
   }, [rankEntries]);
+
+  const urgencyCounts = useMemo(() => {
+    const sharedUrgencyCounts = sharedOperationsSummary?.faithfulWorkflowCounts;
+    if (!sharedUrgencyCounts) return localUrgencyCounts;
+    return {
+      critical: Number(sharedUrgencyCounts.critical ?? 0),
+      moderate: Number(sharedUrgencyCounts.moderate ?? 0),
+      routine: Number(sharedUrgencyCounts.routine ?? 0),
+    };
+  }, [localUrgencyCounts, sharedOperationsSummary]);
 
   // ─── Selected client data ─────────────────────────────────────────────────
   const selectedEntry = rankEntries.find((e) => e.clientId === selectedClientId) ?? null;
