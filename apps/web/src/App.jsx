@@ -151,6 +151,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [portalState, setPortalState] = useState({ initialClientId: null, initialTab: 'dashboard' });
   const [workspaceStudioInitialTab, setWorkspaceStudioInitialTab] = useState('portal');
+  const [workspaceStudioDocumentsClientId, setWorkspaceStudioDocumentsClientId] = useState('');
   const [clinicalChartState, setClinicalChartState] = useState(createDefaultClinicalChartState);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [schedulingState, setSchedulingState] = useState({
@@ -394,6 +395,13 @@ export default function App() {
     closeNav();
   };
 
+  const handleOpenAssignForms = (clientId) => {
+    setWorkspaceStudioInitialTab('documentsStudio');
+    setWorkspaceStudioDocumentsClientId(clientId || '');
+    setCurrentView('workspace-studio');
+    closeNav();
+  };
+
   const handleViewTodaySessions = () => {
     setSchedulingState({ composerOpen: false, initialClientId: null, initialView: null, initialPortalRequest: null });
     setCurrentView('scheduling');
@@ -590,6 +598,7 @@ export default function App() {
           ) : showWorkspaceStudio ? (
             <WorkspaceStudioPage
               initialTab={workspaceStudioInitialTab}
+              initialDocumentsClientId={workspaceStudioDocumentsClientId}
               onSchedulePortalRequest={(clientId, portalRequest) => handleOpenScheduling({
                 composerOpen: true,
                 initialClientId: clientId,
@@ -597,6 +606,7 @@ export default function App() {
                 initialPortalRequest: portalRequest,
               })}
               onViewClient={handleOpenClient}
+              onOpenCounselorMaintenance={() => setCurrentView('counselors')}
             />
           ) : showDocuments ? (
             <DocumentsPage />
@@ -626,6 +636,7 @@ export default function App() {
                 setSelectedClientRequest({ clientId });
                 setCurrentView('clients');
               }}
+              onAssignForms={handleOpenAssignForms}
             />
           ) : showOfferings ? (
             <OfferingsPage clients={clientsData.items} />

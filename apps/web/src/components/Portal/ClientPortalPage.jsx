@@ -233,6 +233,7 @@ export default function ClientPortalPage({
   initialTab = 'dashboard',
   onSignOut = async () => {},
   onBackToClient = null,
+  onAssignForms = null,
 }) {
   const { t } = useI18n();
   const userRole = currentUser?.role ?? null;
@@ -1155,7 +1156,18 @@ export default function ClientPortalPage({
 
               <SimpleGrid cols={{ base: 1, lg: 2 }}>
                 <Paper withBorder radius="md" p="md">
-                  <Title order={4}>{t('portal.documents.assignedFormsTitle')}</Title>
+                  <Group justify="space-between" align="center">
+                    <Title order={4}>{t('portal.documents.assignedFormsTitle')}</Title>
+                    {onAssignForms && (
+                      <Button
+                        size="xs"
+                        variant="light"
+                        onClick={() => onAssignForms(effectiveClientId)}
+                      >
+                        + Assign Forms
+                      </Button>
+                    )}
+                  </Group>
                   <Stack gap="sm" mt="md">
                     {overview?.assignedForms?.length ? overview.assignedForms.map((item) => (
                       <Paper key={item.id} withBorder radius="sm" p="sm">

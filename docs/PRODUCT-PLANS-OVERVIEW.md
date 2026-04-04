@@ -204,7 +204,7 @@ Explicitly deferred: MFA enrollment, MFA challenge, WebAuthn, TOTP, step-up auth
 ### Workspace Studio Forms + Portal Workflow
 
 **File:** [PLANS/WORKSPACE-STUDIO-FORMS-PORTAL-WORKFLOW.md](../PLANS/WORKSPACE-STUDIO-FORMS-PORTAL-WORKFLOW.md)
-**Status:** Implemented — initial delivery
+**Status:** Implemented — fully delivered as of v5.7.0
 **Prepared:** March 28, 2026
 
 Defines the end-to-end workflow for counselors assigning forms to clients and clients completing them through the portal. This plan is the foundation that `CLIENT-PORTAL-EXPANSION.md` extends.
@@ -215,9 +215,16 @@ Canonical data model delivered:
 - `form_submissions` — append-only per completion with encrypted answers payload and score summary
 - `portal_registration_requests` — public possible-client metadata
 
-Workspace Studio integration:
-- Documents & Inventories tab: select client, assign forms, view completion history
-- Portal tab: account management, standard onboarding forms via `defaultSignupFormKeys`, portal request review queue
+Workspace Studio integration — all tabs now functional as of v5.7.0:
+
+- **Practice tab** — edit practice profile (name, type, timezone, faith tradition, contact)
+- **Locations tab** — full CRUD for scheduling locations with capacity and telehealth flag
+- **Staff tab** — read-only roster with counselor cards and admin list; links to Staff Management
+- **Lifecycle tab** — caseload board with status filters, referral sources, and discharge modal
+- **Appointments tab** — service code configuration (CPT codes, categories, default durations)
+- **Documents tab** — assign forms to clients; pre-selects client when launched from client record
+- **Offerings tab** — client service offering and financial tracking
+- **Portal tab** — portal settings, request review queue, care-request-to-client conversion, portal account management
 
 ---
 

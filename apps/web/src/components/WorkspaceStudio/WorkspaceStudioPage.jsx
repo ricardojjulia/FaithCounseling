@@ -3,6 +3,11 @@ import { Tabs, Text, Stack, Title, Paper } from '@mantine/core';
 import PortalTab from './tabs/PortalTab.jsx';
 import DocumentsStudioTab from './tabs/DocumentsStudioTab.jsx';
 import OfferingsTab from './tabs/OfferingsTab.jsx';
+import PracticeTab from './tabs/PracticeTab.jsx';
+import LocationsTab from './tabs/LocationsTab.jsx';
+import StaffTab from './tabs/StaffTab.jsx';
+import LifecycleTab from './tabs/LifecycleTab.jsx';
+import AppointmentsTab from './tabs/AppointmentsTab.jsx';
 import { useSurfaceTelemetry } from '../../lib/useSurfaceTelemetry.js';
 import { useI18n } from '../../lib/i18nContext.jsx';
 
@@ -19,7 +24,7 @@ const STUDIO_TABS = [
   { id: 'portal', labelKey: 'studio.tab.portal' },
 ];
 
-export default function WorkspaceStudioPage({ initialTab = 'portal', onSchedulePortalRequest, onViewClient }) {
+export default function WorkspaceStudioPage({ initialTab = 'portal', onSchedulePortalRequest, onViewClient, onOpenCounselorMaintenance, initialDocumentsClientId = '' }) {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState(initialTab || 'portal');
   const activeSurfaceId = `studio.${activeTab === 'documentsStudio' ? 'documents' : activeTab}`;
@@ -51,9 +56,19 @@ export default function WorkspaceStudioPage({ initialTab = 'portal', onScheduleP
               {tab.id === 'portal' ? (
                 <PortalTab onSchedulePortalRequest={onSchedulePortalRequest} onViewClient={onViewClient} />
               ) : tab.id === 'documentsStudio' ? (
-                <DocumentsStudioTab />
+                <DocumentsStudioTab initialClientId={initialDocumentsClientId} />
               ) : tab.id === 'offerings' ? (
                 <OfferingsTab />
+              ) : tab.id === 'practice' ? (
+                <PracticeTab />
+              ) : tab.id === 'locations' ? (
+                <LocationsTab />
+              ) : tab.id === 'staff' ? (
+                <StaffTab onOpenCounselorMaintenance={onOpenCounselorMaintenance} />
+              ) : tab.id === 'lifecycle' ? (
+                <LifecycleTab onOpenClient={onViewClient} />
+              ) : tab.id === 'appointments' ? (
+                <AppointmentsTab />
               ) : (
                 <Text c="dimmed" fz="sm">{t('studio.placeholderForTab', { tab: t(tab.labelKey) })}</Text>
               )}

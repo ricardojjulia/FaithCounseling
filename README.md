@@ -23,6 +23,7 @@ It is built specifically for Christian counseling practices and supports daily e
 - **Faithful Workflows:** counselor-facing recommendation workspace powered by 27 deterministic clinical rules across 8 care categories, with explainable rationale, trend analysis, and three interchangeable canvas views (Classic List, Radial Hub, Priority Matrix)
 - **Clinical Chart:** session notes, internal notes, treatment plans, progress tracking, and homework
 - **Operations Dashboard:** live daily operations summary with counselor workload, note-gap compliance watch, portal request tracking, configurable operational alerts, and 7-day trend context
+- **Workspace Studio:** full-featured practice administration hub with tabs for Practice profile, Locations CRUD, Staff roster, Lifecycle caseload board, Appointments (service codes), Documents, Offerings, and Portal workflows
 - **Scheduling and operations workflows:** appointments, waitlists, reminders, and utilization visibility
 - **Client portal workflows:** onboarding, forms, documents, and client self-service surfaces
 - **Monitoring and telemetry:** local monitoring + optional OpenTelemetry export
@@ -50,6 +51,19 @@ This baseline supports HIPAA-oriented safeguards, GDPR-aligned privacy principle
 ## Date Picker Behavior
 
 All `DateInput` components (Mantine v8) across the application accept dates in `MM/DD/YYYY` format for manual entry and display. The calendar popover closes automatically when a day is selected. Date values are stored internally as `YYYY-MM-DD` strings. Affected forms: intake/form runner, client demographics, legal/admin, insurance, diagnoses, employment, certifications, and licenses.
+
+## Workspace Studio
+
+Workspace Studio is the practice administration hub, accessible from the main navigation. It provides a tabbed interface covering all practice management surfaces:
+
+- **Practice** — edit the practice profile: name, type (solo/group/multi-location), timezone, faith tradition, and contact information.
+- **Locations** — add, edit, and delete scheduling locations. Each location tracks name, address, capacity, and telehealth/remote-enabled flag.
+- **Staff** — read-only staff roster showing counselor cards (role, license type/number, supervision status, bio) and admin accounts. Links to the full Staff Management page for account creation and password resets.
+- **Lifecycle** — caseload management board. Clickable status summary cards (Active, Waitlist, Inactive, Discharged) filter the client list. Referral source breakdown. Per-client status transitions with a discharge modal capturing reason and notes.
+- **Appointments** — service code configuration (CPT/billing codes). Manage codes with category, default session duration, and active/inactive status.
+- **Documents** — assign forms to clients and review submission history. Supports direct navigation from a client record with the client pre-selected.
+- **Offerings** — track client service offerings and financial arrangements.
+- **Portal** — manage portal settings, review public registration requests, approve/convert care requests into client records, and manage authenticated portal accounts.
 
 ## Client Detail Documents Shortcut
 

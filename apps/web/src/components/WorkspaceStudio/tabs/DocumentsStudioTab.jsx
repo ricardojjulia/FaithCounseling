@@ -200,9 +200,9 @@ function AssignmentComposer({ clientId, onCreated }) {
   );
 }
 
-export default function DocumentsStudioTab() {
+export default function DocumentsStudioTab({ initialClientId = '' }) {
   const [clients, setClients] = useState([]);
-  const [clientId, setClientId] = useState('');
+  const [clientId, setClientId] = useState(initialClientId || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [overview, setOverview] = useState({ assignments: [], history: [], submissions: [] });
@@ -233,6 +233,10 @@ export default function DocumentsStudioTab() {
       history: deriveHistoryFromSubmissions(submissions),
     });
   }, []);
+
+  useEffect(() => {
+    if (initialClientId) setClientId(initialClientId);
+  }, [initialClientId]);
 
   useEffect(() => {
     apiFetch('/api/v1/clients?limit=200')

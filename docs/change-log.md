@@ -2,6 +2,44 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v5.7.0 — April 4, 2026 — Workspace Studio Full-Tab Activation
+
+### feat: activate all Workspace Studio placeholder tabs
+
+**Date:** April 4, 2026
+**Affected area:** Workspace Studio — Practice, Locations, Staff, Lifecycle, Appointments tabs; `App.jsx`; `ClientPortalPage.jsx`
+
+All five previously-placeholder Workspace Studio tabs are now fully functional:
+
+- **Practice tab** — edit the practice profile (name, type, timezone, faith tradition, contact email/phone) with live dirty-state tracking and PATCH save via `/api/v1/practices/:id`.
+- **Locations tab** — full CRUD for scheduling locations: add via modal, inline edit, delete via icon action. Fields: name (required), address, capacity, telehealth/remote-enabled flag (rendered as Telehealth badge). Uses `/api/v1/locations`.
+- **Staff tab** — read-only staff roster loaded from `/api/v1/staff`. Counselors shown in 2-column card grid with avatar, role badge, license type/number, supervision status, and bio. Admins shown in flat list with last-login timestamp and account-locked flag. "Manage Staff Accounts →" button navigates to the Staff Management page.
+- **Lifecycle tab** — caseload management board. Status summary cards (Active, Waitlist, Inactive, Discharged) are clickable filters with count and progress bar. Referral sources bar chart (top 8). Per-client rows allow status transitions via dropdown; discharge triggers a modal capturing reason (6 options) and free-text notes. Uses `PATCH /api/v1/clients/:id/lifecycle`.
+- **Appointments tab** — service code configuration (CPT/billing codes). List with active/inactive filter pills. Add via modal, inline edit, activate/deactivate toggle. Fields: code, name, category (6 types), default duration (15–240 min). Uses `/api/v1/billing/service-codes`.
+
+Additional wiring in the same commit:
+
+- **Assign Forms button** — ClientPortalPage "Assigned Forms and Intake Packets" section now has an "+ Assign Forms" button that navigates directly to Workspace Studio Documents tab with the client pre-selected.
+- **View Client on approved requests** — approved portal requests with a linked client now show a "View Client" button in the Workspace Studio Portal tab.
+- `onOpenCounselorMaintenance` prop threaded from `App.jsx` through `WorkspaceStudioPage` to `StaffTab`.
+
+**Files added:**
+
+- `apps/web/src/components/WorkspaceStudio/tabs/PracticeTab.jsx`
+- `apps/web/src/components/WorkspaceStudio/tabs/LocationsTab.jsx`
+- `apps/web/src/components/WorkspaceStudio/tabs/StaffTab.jsx`
+- `apps/web/src/components/WorkspaceStudio/tabs/LifecycleTab.jsx`
+- `apps/web/src/components/WorkspaceStudio/tabs/AppointmentsTab.jsx`
+
+**Files modified:**
+
+- `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx` — imports and wires all 5 new tabs; adds `onOpenCounselorMaintenance` prop
+- `apps/web/src/components/Portal/ClientPortalPage.jsx` — adds `onAssignForms` prop and "+ Assign Forms" button
+- `apps/web/src/components/WorkspaceStudio/tabs/DocumentsStudioTab.jsx` — accepts `initialClientId` prop with effect-based handoff
+- `apps/web/src/App.jsx` — `handleOpenAssignForms` callback, `workspaceStudioDocumentsClientId` state, `onOpenCounselorMaintenance` wired
+
+---
+
 ### feat: auto-assign default signup forms when creating client from portal request
 
 **Date:** April 4, 2026
