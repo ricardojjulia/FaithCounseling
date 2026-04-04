@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Stack, Paper, Group, Title, Text, Button, Textarea, Select, Badge,
-  ActionIcon, Loader, Alert, TextInput, Divider,
+  ActionIcon, Loader, Alert, TextInput, Divider, SimpleGrid, Progress,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useI18n } from '../../../lib/i18nContext.jsx';
@@ -193,6 +193,60 @@ export default function TreatmentPlanTab({ clientId }) {
       {!plan && (
         <Text c="dimmed" size="sm">{t('chart.plan.noPlan')}</Text>
       )}
+
+      <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md">
+        <Paper withBorder radius="xl" p="md" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.96), rgba(244,247,255,0.92))' }}>
+          <Text size="xs" tt="uppercase" fw={700} c="indigo" style={{ letterSpacing: '0.08em' }}>
+            Plan status
+          </Text>
+          <Group justify="space-between" align="center" mt="sm">
+            <Text fw={700} size="lg">{t(`chart.plan.status.${form.status}`) || form.status}</Text>
+            <Badge color={STATUS_COLORS[form.status] ?? 'gray'} variant="light">
+              {form.status}
+            </Badge>
+          </Group>
+          <Progress
+            value={form.status === 'completed' ? 100 : form.status === 'active' ? 72 : form.status === 'on_hold' ? 44 : 24}
+            color={STATUS_COLORS[form.status] ?? 'gray'}
+            radius="xl"
+            mt="md"
+          />
+        </Paper>
+
+        <Paper withBorder radius="xl" p="md" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.96), rgba(244,247,255,0.92))' }}>
+          <Text size="xs" tt="uppercase" fw={700} c="indigo" style={{ letterSpacing: '0.08em' }}>
+            Goal coverage
+          </Text>
+          <Text fw={800} fz="2rem" mt="sm">
+            {form.goals.map((goal) => goal.trim()).filter(Boolean).length}
+          </Text>
+          <Text size="sm" c="dimmed">Active goals currently written into the plan.</Text>
+          <Progress
+            value={Math.min(100, form.goals.map((goal) => goal.trim()).filter(Boolean).length * 20)}
+            color="indigo"
+            radius="xl"
+            mt="md"
+          />
+        </Paper>
+
+        <Paper withBorder radius="xl" p="md" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.96), rgba(244,247,255,0.92))' }}>
+          <Text size="xs" tt="uppercase" fw={700} c="indigo" style={{ letterSpacing: '0.08em' }}>
+            Review rhythm
+          </Text>
+          <Text fw={700} size="lg" mt="sm">
+            {form.reviewCadence ? form.reviewCadence : 'Set cadence'}
+          </Text>
+          <Text size="sm" c="dimmed">
+            {form.reviewedAt ? `Last reviewed ${formatDate(form.reviewedAt)}` : 'No review date recorded yet.'}
+          </Text>
+          <Progress
+            value={form.reviewCadence ? 76 : 18}
+            color={form.reviewCadence ? 'teal' : 'gray'}
+            radius="xl"
+            mt="md"
+          />
+        </Paper>
+      </SimpleGrid>
 
       <Paper withBorder radius="md" p="md">
         <Stack gap="md">

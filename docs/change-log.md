@@ -2,6 +2,62 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 4, 2026 — Navigation Label Cleanup
+
+### fix(nav): simplify top-level workspace labels
+
+**Date:** April 4, 2026
+**Affected area:** `packages/i18n/src/index.js`
+
+Staff-facing workspace names were still carrying heavier operational wording than necessary in the main navigation and top bar. The underlying surfaces were correct, but labels like `Operations Dashboard`, `Scheduling Workspace`, and `Documents Workspace` made the shell feel more technical than it needed to.
+
+The shared label catalog now uses:
+
+- `Dashboard` instead of `Operations Dashboard`
+- `Client Scheduling` instead of `Scheduling Workspace`
+- `Documents` instead of `Documents Workspace`
+- `Client Portal` in the side navigation instead of `Portal`
+
+This change only updates user-facing copy. Surface IDs, routes, telemetry, and monitoring mappings remain unchanged.
+
+---
+
+## April 4, 2026 — Clinical Chart Experience Refresh
+
+### feat(chart): add summary visuals and functional graphics to Clinical Chart
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/src/components/ClinicalChart/*`
+
+The Clinical Chart surface was structurally complete but visually flat. It opened as a title, client picker, and raw tab stack, which made the page feel colder and less informative than the rest of the application.
+
+The chart now opens with a richer summary layer and functional visual cues:
+
+- new chart summary header with session rhythm, note readiness, treatment-plan health, and latest assessment signal
+- session-status timeline in Session Notes so counselors can see draft, signed, due, cancelled, and upcoming sessions at a glance
+- mini trend graphics and delta indicators in Progress for scored assessments
+- treatment-plan overview cards for plan status, goal coverage, and review rhythm
+- stronger tab-shell treatment so the page feels like a distinct clinical workspace rather than a plain form stack
+
+The change keeps the existing chart surfaces and telemetry IDs intact, so no surface-registry update was required. Documentation was updated in `README.md` and `apps/web/README.md`.
+
+## April 4, 2026 — Faithful Workflow Count Sync
+
+### fix(workflows): keep Faithful Workflows banner counts aligned with dashboard metrics
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/src/App.jsx`, `apps/web/src/components/FaithWorkflows/FaithWorkflowsPage.jsx`
+
+The dashboard and Faithful Workflows page had drifted apart again. The dashboard was rendering the canonical `faithfulWorkflowCounts` values from the operations summary, while the Faithful Workflows banner was recomputing its own counts from local rank entries. That could produce conflicting totals for the same counselor session.
+
+Faithful Workflows now consumes the same shared operations-summary count object that the dashboard uses. The page keeps its local urgency rollup only as a fallback when the shared summary is unavailable, so both surfaces now report the same critical, moderate, and routine totals under normal operation.
+
+The left-panel client roster now also applies the same operational urgency signals used by the shared summary. Clients with critical note gaps or high-touchpoint-without-follow-up conditions are visibly elevated in the list, so a banner showing a critical client now corresponds to an actual critical row in the page.
+
+Documentation was updated in `README.md` and `apps/web/README.md` to record the shared-count and shared-urgency behavior.
+
+---
+
 ## April 4, 2026 — About Page Refresh
 
 ### feat(about): reposition the About page with stronger product impact
