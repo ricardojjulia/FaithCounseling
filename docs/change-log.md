@@ -15,6 +15,17 @@ When a start time is selected, the end time is automatically suggested as 55 min
 
 ---
 
+## April 5, 2026 — Month Picker Bug Fix
+
+### fix(scheduling): correct off-by-one month selection in calendar month picker
+
+**Date:** April 5, 2026
+**Affected area:** `apps/web/src/components/SchedulingPage.jsx` — month picker
+
+Fixed a bug where selecting a month in the calendar month picker would select the wrong month (e.g., clicking May would select June and vice versa). The handler now uses the Date object directly to ensure the correct month is set, matching the user's selection.
+
+---
+
 ## April 4, 2026 — Faithful Workflow Count Prop Sync
 
 ### fix(workflows): keep the Faithful Workflows banner on the same canonical counts as the dashboard
@@ -1116,7 +1127,7 @@ Replaces the billing model with a faith-based voluntary offering system througho
 
 ### Changed
 
-- `apps/api/data/i18n/en.json` — renamed `nav.billing` → `nav.offerings`, `studio.tab.billing` → `studio.tab.offerings`, `portal.tab.financials` → `portal.tab.giving`; replaced `portal.financials.*` block with `portal.giving.*`; removed `client.tab.insurance`; added `offerings.*` and `topbar.offerings.*` key blocks
+- `apps/api/data/i18n/en.json` — renamed `nav.billing` → `nav.offerings`, `studio.tab.billing` → `studio.tab.offerings`, `portal.tab.financials` → `portal.tab.giving`; replaced `portal finanicals.*` block with `portal.giving.*`; removed `client.tab.insurance`; added `offerings.*` and `topbar.offerings.*` key blocks
 - `packages/telemetry/src/surfaces.js` — `billing` → `offerings`, `portal.financials` → `portal.giving`, removed `client.insurance`, `studio.billing` → `studio.offerings`
 - `apps/web/src/components/Sidebar.jsx` — `billing` → `offerings`
 - `apps/web/src/components/TopBar.jsx` — `billing` → `offerings` in viewKeyMap

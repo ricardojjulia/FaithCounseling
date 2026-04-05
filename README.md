@@ -272,6 +272,12 @@ Faithful Workflows visual upgrade: adds two new parallel canvas views (Radial Hu
 
 - Full summary: `docs/v5.5.2-RELEASE-SUMMARY.md`
 
+### Month Picker Bug Fix (April 5, 2026)
+
+- Fixed a bug in the Scheduling calendar where selecting a month in the month picker could select the wrong month (e.g., clicking May would select June and vice versa).
+- The month picker now correctly sets the selected month, matching the user's choice.
+- See `docs/change-log.md` for details.
+
 ## Change Log
 
 For the full release and maintenance history, see `docs/change-log.md`.

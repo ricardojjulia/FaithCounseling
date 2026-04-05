@@ -2005,7 +2005,10 @@ export default function SchedulingPage({
                     label="Month"
                     value={toMonthPickerValue(selectedMonth)}
                     onChange={(value) => {
-                      const nextMonth = toMonthKey(value);
+                      // Final fix: always use Date object directly to avoid off-by-one errors
+                      const nextMonth = value instanceof Date
+                        ? `${value.getFullYear()}-${padDatePart(value.getMonth() + 1)}`
+                        : toMonthKey(value);
                       if (!nextMonth) return;
                       setSelectedMonth(nextMonth);
                       setScheduleScope('month');
