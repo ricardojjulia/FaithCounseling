@@ -2,6 +2,19 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 5, 2026
+
+### feat: appointment composer — DateTimePicker with 55-minute auto-fill
+
+**Date:** April 5, 2026
+**Affected area:** `apps/web/src/components/SchedulingPage.jsx` — appointment composer modal
+
+The Start and End fields in the New/Edit Appointment modal now use Mantine `DateTimePicker` instead of a raw `datetime-local` text input. Picking a date opens a calendar popover; the time is set via a spinner. Format displayed: `MM/DD/YYYY hh:mm A`.
+
+When a start time is selected, the end time is automatically suggested as 55 minutes later. The auto-fill only overrides end if the user has not manually set it. Once the user edits the end time directly, subsequent start changes no longer override it.
+
+---
+
 ## April 4, 2026 — Faithful Workflow Count Prop Sync
 
 ### fix(workflows): keep the Faithful Workflows banner on the same canonical counts as the dashboard
