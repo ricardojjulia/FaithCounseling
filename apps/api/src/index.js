@@ -5335,6 +5335,7 @@ async function handleAppointmentsCollection(request, response, session) {
       const client = await resolveOptionalAuthorizedClient(request, response, filterClientId, session, 'appointment.list.read');
       if (!client) return;
     }
+    const filterSeriesId = sanitizeStr(requestUrl.searchParams.get('seriesId') ?? '', 64) || null;
     const counselorScopeId = await resolveEffectiveCounselorFilterId(request, response, requestUrl, session, 'appointment.list.read');
     if (counselorScopeId === false) return;
     let items;
@@ -5342,12 +5343,14 @@ async function handleAppointmentsCollection(request, response, session) {
       items = await listAppointments(callerTenant(request, session), {
         clientId: filterClientId,
         counselorId: counselorScopeId,
+        seriesId: filterSeriesId,
       });
     } else {
-      const all = [...appointments].sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+      const all = [...appointments].sort((left, right) => (left.startsAt || '').localeCompare(right.startsAt || ''));
       items = all
         .filter((appointment) => !filterClientId || appointment.clientId === filterClientId)
-        .filter((appointment) => !counselorScopeId || appointment.counselorId === counselorScopeId);
+        .filter((appointment) => !counselorScopeId || appointment.counselorId === counselorScopeId)
+        .filter((appointment) => !filterSeriesId || appointment.seriesId === filterSeriesId);
     }
     await emitAudit(request, 'appointment.list.read', 'appointment', 'collection', session);
     writeJson(response, 200, { items });
@@ -5963,6 +5966,93 @@ async function handleWaitlist(request, response, session) {
 const AVAILABILITY_OVERRIDE_WRITE_ROLES = new Set(['platform_admin', 'practice_owner', 'practice_admin', 'scheduler_biller']);
 const SERIES_WRITE_ROLES = new Set(['platform_admin', 'practice_owner', 'practice_admin', 'scheduler_biller', 'counselor']);
 
+const DAY_NAMES_MAP = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+
+function expandRecurrenceRule(rruleStr, startDateStr, endDateStr, maxOccurrences = 200) {
+  const parts = {};
+  for (const seg of (rruleStr || '').split(';')) {
+    const [k, v] = seg.split('=');
+    if (k && v !== undefined) parts[k.trim().toUpperCase()] = v.trim().toUpperCase();
+  }
+
+  let freq = parts.FREQ || 'WEEKLY';
+  if (freq === 'BIWEEKLY') { freq = 'WEEKLY'; if (!parts.INTERVAL) parts.INTERVAL = '2'; }
+
+  const interval = Math.max(1, parseInt(parts.INTERVAL || '1', 10) || 1);
+  const byDayStrs = parts.BYDAY ? parts.BYDAY.split(',').map((s) => s.trim()) : [];
+  const byMonthDay = parts.BYMONTHDAY ? parseInt(parts.BYMONTHDAY, 10) : null;
+  const count = parts.COUNT ? Math.min(parseInt(parts.COUNT, 10), maxOccurrences) : maxOccurrences;
+
+  const start = new Date(`${startDateStr}T00:00:00Z`);
+  const end = endDateStr ? new Date(`${endDateStr}T23:59:59Z`) : null;
+  const dates = [];
+
+  if (freq === 'DAILY') {
+    let cur = new Date(start);
+    while (dates.length < count) {
+      if (end && cur > end) break;
+      dates.push(cur.toISOString().slice(0, 10));
+      cur = new Date(cur.getTime() + interval * 86_400_000);
+    }
+  } else if (freq === 'WEEKLY') {
+    const targetDows = byDayStrs.length > 0
+      ? byDayStrs.map((d) => DAY_NAMES_MAP[d.replace(/^-?\d+/, '')]).filter((d) => d !== undefined)
+      : [start.getUTCDay()];
+
+    let weekSunday = new Date(start);
+    weekSunday.setUTCDate(weekSunday.getUTCDate() - weekSunday.getUTCDay());
+
+    outer: while (true) {
+      for (let d = 0; d < 7; d++) {
+        const candidate = new Date(weekSunday.getTime() + d * 86_400_000);
+        if (candidate < start) continue;
+        if (end && candidate > end) break outer;
+        if (targetDows.includes(candidate.getUTCDay())) {
+          dates.push(candidate.toISOString().slice(0, 10));
+          if (dates.length >= count) break outer;
+        }
+      }
+      weekSunday = new Date(weekSunday.getTime() + interval * 7 * 86_400_000);
+      if (end && weekSunday > new Date(end.getTime() + 7 * 86_400_000)) break;
+    }
+  } else if (freq === 'MONTHLY') {
+    let year = start.getUTCFullYear();
+    let month = start.getUTCMonth();
+
+    while (dates.length < count) {
+      let candidate;
+      if (byMonthDay) {
+        candidate = new Date(Date.UTC(year, month, byMonthDay));
+      } else if (byDayStrs.length > 0) {
+        const dayStr = byDayStrs[0];
+        const pos = parseInt(dayStr, 10) || 1;
+        const dayName = dayStr.replace(/^-?\d+/, '');
+        const targetDow = DAY_NAMES_MAP[dayName];
+        if (targetDow !== undefined) {
+          const firstDow = new Date(Date.UTC(year, month, 1)).getUTCDay();
+          const daysUntil = (targetDow - firstDow + 7) % 7;
+          candidate = new Date(Date.UTC(year, month, 1 + daysUntil + (pos - 1) * 7));
+        } else {
+          candidate = new Date(Date.UTC(year, month, start.getUTCDate()));
+        }
+      } else {
+        candidate = new Date(Date.UTC(year, month, start.getUTCDate()));
+      }
+
+      if (candidate >= start) {
+        if (end && candidate > end) break;
+        dates.push(candidate.toISOString().slice(0, 10));
+      }
+
+      month += interval;
+      if (month >= 12) { year += Math.floor(month / 12); month = month % 12; }
+      if (dates.length === 0 && month > 24) break; // guard against infinite loops
+    }
+  }
+
+  return dates;
+}
+
 async function handleAvailabilityOverrides(request, response, requestUrl, session) {
   const tenantId = callerTenant(request, session);
   const role = callerRole(request, session);
@@ -6101,24 +6191,64 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
     const client = await resolveAuthorizedClient(request, response, payload.clientId, session, 'series.create');
     if (!client) return;
     if (process.env.DB_NAME) {
+      const startDate       = sanitizeStr(payload.startDate, 12);
+      const endDate         = sanitizeStr(payload.endDate ?? '', 12) || null;
+      const startTime       = sanitizeStr(payload.startTime ?? '09:00', 8) || '09:00';
+      const durationMinutes = Number.isFinite(Number(payload.durationMinutes)) ? Number(payload.durationMinutes) : 50;
+      const recurrenceRule  = sanitizeStr(payload.recurrenceRule, 200);
+      const clientName      = sanitizeStr(payload.clientName ?? '', 160) || null;
+      const counselorName   = sanitizeStr(payload.counselorName ?? '', 160) || null;
+      const appointmentType = sanitizeStr(payload.appointmentType ?? '', 60) || null;
+      const remoteSession   = !!payload.remoteSession;
+
       const item = await createSeries({
         id: crypto.randomUUID(),
         tenantId,
-        counselorId:     sanitizeStr(payload.counselorId, 50),
-        clientId:        client.id,
-        clientName:      sanitizeStr(payload.clientName ?? '', 160)    || null,
-        counselorName:   sanitizeStr(payload.counselorName ?? '', 160) || null,
-        appointmentType: sanitizeStr(payload.appointmentType ?? '', 60) || null,
-        recurrenceRule:  sanitizeStr(payload.recurrenceRule, 200),
-        startDate:       sanitizeStr(payload.startDate, 12),
-        endDate:         sanitizeStr(payload.endDate ?? '', 12) || null,
-        durationMinutes: Number.isFinite(Number(payload.durationMinutes)) ? Number(payload.durationMinutes) : 50,
-        locationId:      sanitizeStr(payload.locationId ?? '', 50) || null,
-        remoteSession:   !!payload.remoteSession,
+        counselorId:  sanitizeStr(payload.counselorId, 50),
+        clientId:     client.id,
+        clientName, counselorName, appointmentType, recurrenceRule,
+        startDate, endDate, startTime, durationMinutes,
+        locationId:   sanitizeStr(payload.locationId ?? '', 50) || null,
+        remoteSession,
       });
+
+      // Expand the recurrence rule and create individual appointment records
+      const dates = expandRecurrenceRule(recurrenceRule, startDate, endDate);
+      const [h, m] = startTime.split(':').map(Number);
+      let generatedCount = 0;
+      let generationError = null;
+      for (const dateStr of dates) {
+        try {
+          const startsAt = new Date(`${dateStr}T00:00:00Z`);
+          startsAt.setUTCHours(h || 9, m || 0, 0, 0);
+          const endsAt = new Date(startsAt.getTime() + durationMinutes * 60_000);
+          await createAppointment({
+            id: crypto.randomUUID(),
+            tenantId,
+            clientId: client.id,
+            counselorId: sanitizeStr(payload.counselorId, 50),
+            clientName: clientName || '',
+            counselorName: counselorName || '',
+            startsAt: startsAt.toISOString(),
+            endsAt: endsAt.toISOString(),
+            status: 'scheduled',
+            appointmentType: appointmentType || 'individual_therapy',
+            locationName: remoteSession ? 'Remote Session' : 'Main Office',
+            remoteSession,
+            timezone: 'UTC',
+            seriesId: item.id,
+          });
+          generatedCount++;
+        } catch (apptErr) {
+          console.error(`[series] failed to create appointment for ${dateStr}:`, apptErr.message);
+          generationError = apptErr.message;
+          break;
+        }
+      }
+
       telemetry.recordMutation('series.create');
       emitAudit(request, 'series.create', 'appointment_series', item.id, session);
-      writeJson(response, 201, { item });
+      writeJson(response, 201, { item, generatedCount, generationError: generationError ?? undefined });
       return;
     }
     const counselorId = sanitizeStr(payload.counselorId, 50);
@@ -6127,6 +6257,11 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
       writeJson(response, 400, { error: 'Valid counselorId is required' });
       return;
     }
+    const mockStartDate       = sanitizeStr(payload.startDate, 12);
+    const mockEndDate         = sanitizeStr(payload.endDate ?? '', 12) || null;
+    const mockStartTime       = sanitizeStr(payload.startTime ?? '09:00', 8) || '09:00';
+    const mockDurationMinutes = Number.isFinite(Number(payload.durationMinutes)) ? Number(payload.durationMinutes) : 50;
+    const mockRecurrenceRule  = sanitizeStr(payload.recurrenceRule, 200);
     const item = {
       id: createId('ser', appointmentSeriesRecords),
       tenantId,
@@ -6135,10 +6270,11 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
       clientName: sanitizeStr(payload.clientName ?? '', 160) || `${client.firstName} ${client.lastName}`.trim(),
       counselorName: sanitizeStr(payload.counselorName ?? '', 160) || `${counselor.firstName} ${counselor.lastName}`.trim(),
       appointmentType: sanitizeStr(payload.appointmentType ?? '', 60) || 'individual_therapy',
-      recurrenceRule: sanitizeStr(payload.recurrenceRule, 200),
-      startDate: sanitizeStr(payload.startDate, 12),
-      endDate: sanitizeStr(payload.endDate ?? '', 12) || null,
-      durationMinutes: Number.isFinite(Number(payload.durationMinutes)) ? Number(payload.durationMinutes) : 50,
+      recurrenceRule: mockRecurrenceRule,
+      startDate: mockStartDate,
+      endDate: mockEndDate,
+      startTime: mockStartTime,
+      durationMinutes: mockDurationMinutes,
       locationId: sanitizeStr(payload.locationId ?? '', 50) || null,
       remoteSession: !!payload.remoteSession,
       status: 'active',
@@ -6146,6 +6282,32 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
       updatedAt: new Date().toISOString(),
     };
     appointmentSeriesRecords.push(item);
+
+    // Generate individual appointment records in memory
+    const mockDates = expandRecurrenceRule(mockRecurrenceRule, mockStartDate, mockEndDate);
+    const [mockH, mockM] = mockStartTime.split(':').map(Number);
+    for (const dateStr of mockDates) {
+      const startsAt = new Date(`${dateStr}T00:00:00Z`);
+      startsAt.setUTCHours(mockH || 9, mockM || 0, 0, 0);
+      const endsAt = new Date(startsAt.getTime() + mockDurationMinutes * 60_000);
+      appointments.push({
+        id: createId('appt', appointments),
+        tenantId,
+        clientId: client.id,
+        counselorId: counselor.id,
+        clientName: item.clientName,
+        counselorName: item.counselorName,
+        appointmentType: item.appointmentType,
+        status: 'scheduled',
+        startsAt: startsAt.toISOString(),
+        endsAt: endsAt.toISOString(),
+        durationMinutes: mockDurationMinutes,
+        remoteSession: item.remoteSession,
+        seriesId: item.id,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
     telemetry.recordMutation('series.create');
     emitAudit(request, 'series.create', 'appointment_series', item.id);
     writeJson(response, 201, { item });

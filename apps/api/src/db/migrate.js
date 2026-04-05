@@ -215,8 +215,11 @@ async function applyColumnMigrations(conn) {
   await addColumnIfMissing('appointments', 'ends_at',       'TIMESTAMP NULL AFTER starts_at');
   await addColumnIfMissing('appointments', 'location_name', 'VARCHAR(200) NULL AFTER ends_at');
   await addColumnIfMissing('appointments', 'timezone',      'VARCHAR(64) NULL AFTER location_name');
+  await addColumnIfMissing('appointments', 'series_id',     'VARCHAR(64) NULL');
   await addIndexIfMissing('appointments', 'idx_appointments_counselor', '(tenant_id, counselor_id)');
   await addIndexIfMissing('appointments', 'idx_appointments_starts_at', '(tenant_id, starts_at)');
+  await addIndexIfMissing('appointments', 'idx_appointments_series',    '(tenant_id, series_id)');
+  await addColumnIfMissing('appointment_series', 'start_time', "VARCHAR(8) NOT NULL DEFAULT '09:00'");
 
   const [portalAccountRows] = await conn.query(
     'SELECT id, tenant_id, client_id, email_enc, email_lookup_hash, password_hash FROM portal_accounts',
