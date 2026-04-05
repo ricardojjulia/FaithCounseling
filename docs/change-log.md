@@ -15,14 +15,14 @@ When a start time is selected, the end time is automatically suggested as 55 min
 
 ---
 
-## April 5, 2026 — Month Picker Bug Fix
+## April 5, 2026 — Month Picker Bug Fix (root cause)
 
-### fix(scheduling): correct off-by-one month selection in calendar month picker
+### fix(scheduling): month picker off-by-one due to Mantine v8 string format + UTC parsing
 
 **Date:** April 5, 2026
 **Affected area:** `apps/web/src/components/SchedulingPage.jsx` — month picker
 
-Fixed a bug where selecting a month in the calendar month picker would select the wrong month (e.g., clicking May would select June and vice versa). The handler now uses the Date object directly to ensure the correct month is set, matching the user's selection.
+Fixed the root cause of the month picker off-by-one error. Mantine v8 `MonthPickerInput` passes `onChange` a `"YYYY-MM-DD"` string (not a `Date` object). The previous handler fell through to `toMonthKey()`, which called `new Date("YYYY-MM-DD")` — a date-only ISO string that JavaScript parses as UTC midnight. In negative-offset timezones (US Eastern, etc.) this shifts the local date to the previous month, causing picking May to store April. Fixed by slicing the string directly (`value.slice(0, 7)`) to extract `"YYYY-MM"` without any Date construction.
 
 ---
 
