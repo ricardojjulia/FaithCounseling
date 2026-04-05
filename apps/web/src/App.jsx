@@ -644,6 +644,7 @@ export default function App() {
             <FaithWorkflowsPage
               clients={clientsData.items}
               currentUser={currentUser}
+              canonicalUrgencyCounts={metricsData.faithfulCounts}
               sharedOperationsSummary={operationsSummaryData.summary ?? null}
             />
           ) : showClinical ? (

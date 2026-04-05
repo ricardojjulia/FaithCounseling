@@ -31,7 +31,7 @@ It is built specifically for Christian counseling practices and supports daily e
 
 The checked-in English runtime locale catalog also mirrors the current counselor-facing workspace labels so API-backed i18n does not drift back to older names like `Operations Dashboard` or `Portal`.
 
-The dashboard Faithful Workflows metric card also acts as a direct workspace handoff into the full Faithful Workflows page, matching the drill-down behavior already used by the other dashboard metric cards.
+The dashboard Faithful Workflows metric card also acts as a direct workspace handoff into the full Faithful Workflows page, matching the drill-down behavior already used by the other dashboard metric cards. The Faithful Workflows banner now also receives the same canonical count payload the dashboard renders, so both surfaces stay aligned even if the workflow page falls back to lighter local ranking data while loading.
 
 Encrypted DB reads now normalize Buffer-backed ciphertext values returned by MySQL before decrypting. That keeps authenticated workflow reads, including recurring scheduling series, stable even when legacy rows are hydrated as `Buffer` objects instead of plain strings.
 

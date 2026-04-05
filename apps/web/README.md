@@ -70,7 +70,7 @@ Default URL: `http://localhost:3000`
 - Counselor client detail and chart-related API routes now enforce assigned-client access on the server for counselor and intern sessions
 - Counselor-only intake preview reads now follow the same assigned-client authorization model as client detail routes and remain explicitly provisional rather than diagnostic
 - Dashboard operational alerts now use the shared operations summary to surface intake-preview-ready clients and can open the client record directly on the Intake Preview tab
-- Faithful Workflows banner counts and left-panel urgency badges now use the same shared operations-summary risk signals as the dashboard so both surfaces report the same critical, moderate, and routine picture and visibly surface the same critical clients
+- Faithful Workflows now receives the dashboard's canonical workflow counts directly from the app shell and still applies the shared operations-summary urgency signals to the left roster, so the banner and dashboard stay aligned even during workflow-page fallback/loading states
 - Workspace Studio Portal now uses an explicit admin-only conversion endpoint for approved `care_request` items so portal approvals can create a real client record without relying on `account_signup` activation paths
 - Counselor scheduling, form workflow, assignment, offerings, and faith referral API actions now reuse the same assigned-client access checks for counselor and intern sessions when those routes traverse client context
 - Counselor broad workflow collections now default to assigned-client scope on the server, including reminders, waitlist, document/form/inventory assignment collections, offerings, and faith referral coordination reads

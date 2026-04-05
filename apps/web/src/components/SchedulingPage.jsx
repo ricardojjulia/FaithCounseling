@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from '@mantine/form';
-import { DatePickerInput, MonthPickerInput } from '@mantine/dates';
+import { DatePickerInput, DateTimePicker, MonthPickerInput } from '@mantine/dates';
 import {
   Alert,
   Badge,
@@ -231,13 +231,15 @@ function AppointmentComposer({
     label: item.label,
   }));
 
+  const endsAtAutoFilled = useRef(false);
+
   const form = useForm({
     initialValues: {
       clientId: initialClientId || '',
       appointmentType: 'individual_therapy',
       counselorId: resolveCounselorId(counselors, currentUser),
-      startsAt: '',
-      endsAt: '',
+      startsAt: null,
+      endsAt: null,
       locationName: 'Main Office',
       remoteSession: false,
       timezone: timezone || detectTimezone(),
@@ -251,21 +253,33 @@ function AppointmentComposer({
     },
   });
 
+  function handleStartsAtChange(date) {
+    form.setFieldValue('startsAt', date);
+    if (date && (form.values.endsAt === null || endsAtAutoFilled.current)) {
+      const suggested = new Date(date.getTime() + 55 * 60 * 1000);
+      form.setFieldValue('endsAt', suggested);
+      endsAtAutoFilled.current = true;
+    }
+  }
+
+  function handleEndsAtChange(date) {
+    form.setFieldValue('endsAt', date);
+    endsAtAutoFilled.current = false;
+  }
+
   useEffect(() => {
     if (!opened) return;
-    const startsAtValue = editingAppointment
-      ? toLocalDateTimeInputValue(editingAppointment.startsAt)
-      : toLocalDateTimeInputValue(initialPortalRequest?.preferredStartAt);
-    const endsAtValue = editingAppointment
-      ? toLocalDateTimeInputValue(editingAppointment.endsAt)
-      : toLocalDateTimeInputValue(initialPortalRequest?.preferredEndAt);
+    const isoToDate = (iso) => { if (!iso) return null; const d = new Date(iso); return Number.isNaN(d.getTime()) ? null : d; };
+    const startsAtValue = isoToDate(editingAppointment?.startsAt ?? initialPortalRequest?.preferredStartAt);
+    const endsAtValue = isoToDate(editingAppointment?.endsAt ?? initialPortalRequest?.preferredEndAt);
     const isRemoteFromRequest = initialPortalRequest?.mode === 'remote';
+    endsAtAutoFilled.current = false;
     form.setValues({
       clientId: editingAppointment?.clientId || initialClientId || '',
       appointmentType: editingAppointment?.appointmentType || 'individual_therapy',
       counselorId: resolveCounselorId(counselors, editingAppointment || currentUser),
-      startsAt: startsAtValue || '',
-      endsAt: endsAtValue || '',
+      startsAt: startsAtValue,
+      endsAt: endsAtValue,
       locationName: editingAppointment?.locationName || (isRemoteFromRequest ? 'Remote Session' : 'Main Office'),
       remoteSession: editingAppointment?.remoteSession ?? isRemoteFromRequest,
       timezone: timezone || detectTimezone(),
@@ -280,8 +294,8 @@ function AppointmentComposer({
     setConflictMessage('');
     setConflicts([]);
     try {
-      const startsAt = toIsoFromLocalDateTime(values.startsAt);
-      const endsAt = toIsoFromLocalDateTime(values.endsAt);
+      const startsAt = values.startsAt instanceof Date ? values.startsAt.toISOString() : null;
+      const endsAt = values.endsAt instanceof Date ? values.endsAt.toISOString() : null;
       const counselorName = resolveCounselorDisplayName(counselors, values.counselorId, editingAppointment?.counselorName || currentUser?.name || '');
 
       if (!startsAt || !endsAt) {
@@ -402,15 +416,23 @@ function AppointmentComposer({
           </SimpleGrid>
 
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
-            <TextInput
+            <DateTimePicker
               label="Start"
-              type="datetime-local"
-              {...form.getInputProps('startsAt')}
+              placeholder="Pick date and time"
+              valueFormat="MM/DD/YYYY hh:mm A"
+              value={form.values.startsAt}
+              onChange={handleStartsAtChange}
+              error={form.errors.startsAt}
+              clearable
             />
-            <TextInput
+            <DateTimePicker
               label="End"
-              type="datetime-local"
-              {...form.getInputProps('endsAt')}
+              placeholder="Auto-filled 55 min after start"
+              valueFormat="MM/DD/YYYY hh:mm A"
+              value={form.values.endsAt}
+              onChange={handleEndsAtChange}
+              error={form.errors.endsAt}
+              clearable
             />
           </SimpleGrid>
 

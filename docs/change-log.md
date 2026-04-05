@@ -2,6 +2,32 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 5, 2026
+
+### feat: appointment composer — DateTimePicker with 55-minute auto-fill
+
+**Date:** April 5, 2026
+**Affected area:** `apps/web/src/components/SchedulingPage.jsx` — appointment composer modal
+
+The Start and End fields in the New/Edit Appointment modal now use Mantine `DateTimePicker` instead of a raw `datetime-local` text input. Picking a date opens a calendar popover; the time is set via a spinner. Format displayed: `MM/DD/YYYY hh:mm A`.
+
+When a start time is selected, the end time is automatically suggested as 55 minutes later. The auto-fill only overrides end if the user has not manually set it. Once the user edits the end time directly, subsequent start changes no longer override it.
+
+---
+
+## April 4, 2026 — Faithful Workflow Count Prop Sync
+
+### fix(workflows): keep the Faithful Workflows banner on the same canonical counts as the dashboard
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/src/App.jsx`, `apps/web/src/components/FaithWorkflows/FaithWorkflowsPage.jsx`
+
+The dashboard and Faithful Workflows page were both intended to show the same critical, moderate, and routine totals, but the workflow page could still drift when it fell back to its own local count derivation while the dashboard was already rendering the canonical metrics payload held in the app shell.
+
+The app now passes the dashboard's `faithfulCounts` object directly into Faithful Workflows. The page banner prefers that canonical payload first, then only falls back to operations-summary or local derived counts when the canonical counts are unavailable. This keeps the visible dashboard panel and the Faithful Workflows summary banner aligned.
+
+---
+
 ## April 4, 2026 — Encrypted Buffer Read Fix
 
 ### fix(api): accept Buffer-backed ciphertext during decrypt
