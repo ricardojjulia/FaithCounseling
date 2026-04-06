@@ -329,6 +329,7 @@ The change log summarizes completed work across releases and documents the detai
 
 ## Documentation Index
 
+- **User Manual:** `docs/User Manual/README.md` — full end-user guide covering all roles and platform surfaces
 - Product and planning overview: `docs/PRODUCT-PLANS-OVERVIEW.md`
 - Domain model: `docs/domain-model.md`
 - Faithful Workflows visual upgrade (v5.5.2): `docs/v5.5.2-RELEASE-SUMMARY.md`

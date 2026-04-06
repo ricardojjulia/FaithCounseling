@@ -2,6 +2,15 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 5, 2026 — User Manual
+
+### feat: add docs/User Manual — full practice user manual
+
+**Date:** April 5, 2026
+**Affected area:** `docs/User Manual/`
+
+Created a comprehensive 13-section user manual under `docs/User Manual/` covering all platform surfaces and user roles. Sections include: Getting Started, Dashboard and Home, Client Management, Scheduling, Clinical Chart, Faithful Workflows, Workspace Studio, Client Portal, Forms and Documents, Offerings and Financials, Monitoring and Telemetry, Security and Compliance, and Troubleshooting and FAQ. The manual is role-organized with quick navigation by role and cross-links between sections.
+
 ## April 5, 2026 — README Latest Look Narrative
 
 ### feat: add a new LATEST LOOK section to the README
