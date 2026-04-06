@@ -11,7 +11,7 @@ This document summarises every planning file in the `PLANS/` directory — what 
 ## Quick Reference
 
 | Plan file | Category | Status | Area |
-|-----------|----------|--------|------|
+| --- | --- | --- | --- |
 | [CALENDAR.md](#calendar--scheduling-module) | Feature | In progress | Scheduling |
 | [CLIENT-PORTAL-EXPANSION.md](#client-portal-expansion) | Feature | In progress | Portal |
 | [DEMO-DATA-RESILIENCY.md](#demo-data-resiliency) | Infrastructure | Implemented | Demo testing |
@@ -39,6 +39,7 @@ This document summarises every planning file in the `PLANS/` directory — what 
 Defines the full implementation path for the counseling practice calendar. The API foundation (appointment CRUD, daily calendar, portal appointment requests, counselor availability templates) already ships. This plan specifies the product surface: dedicated Scheduling page, role-aware calendar views (general, per-counselor, practice-operations), appointment creation and rescheduling flows, client-aware scheduling with preselected-client support, and portal-request-to-appointment conversion.
 
 Key scope decisions:
+
 - general calendar for whole-practice visibility
 - per-counselor calendar scoped to own appointments
 - practice-manager operations view for cross-counselor scheduling
@@ -59,6 +60,7 @@ RBAC is fully defined: practice owners, admins, and schedulers get full access; 
 Expands the portal from a public intake page into a full tenant-configurable client self-service experience. This plan extends the foundation in [`WORKSPACE-STUDIO-FORMS-PORTAL-WORKFLOW.md`](#workspace-studio-forms--portal-workflow).
 
 Delivered as of v4.5.0 / v5.x:
+
 - tenant-configurable `portal_settings` with branding and messaging
 - public create-account, care-request, and scheduling-request entry points
 - configurable default signup form keys
@@ -67,6 +69,7 @@ Delivered as of v4.5.0 / v5.x:
 - encrypted `portal_client_profiles` storage
 
 Remaining scope:
+
 - client self-service scheduling from the portal
 - counselor directory with full profile visibility
 - published resource and mental health library content
@@ -112,6 +115,7 @@ Non-negotiable guardrails:
 Specifies the medical-practice-grade expansion of client records. The current `clients` table holds identity and status only. This plan adds comprehensive demographics, contacts, employment, insurance (legacy fields preserved in schema), diagnoses, faith background, legal/guardian, and emergency-contact tables — all following the existing thin-anchor-table pattern with AES-256-GCM encryption on every PHI field.
 
 Key additions:
+
 - extended `clients` core demographics (DOB, SSN last 4, gender identity, pronouns, preferred name, marital status, employment)
 - normalised `client_contacts` table replacing the JSON blob in `client_lifecycles`
 - `client_insurance` table (schema-level; UI deprecated in v5.2.0 in favour of the Offerings model)
@@ -151,6 +155,7 @@ Deferred: availability editing UI, supervision relationship management, credenti
 Specifies the rollout of 20 new form definitions that expand the Documents library from a screening-heavy catalog into a full counseling toolkit. All new forms use the existing `FormRunner` schema and remain visible in the shared Documents surface.
 
 New form categories delivered:
+
 - **Administrative & consent:** Informed Consent, Telehealth Consent, Release of Information
 - **Clinical assessment:** Biopsychosocial Assessment, Mental Status Exam, Mood Disorder Questionnaire, Eating Disorder Screening, Anger Assessment
 - **Safety:** Safety Plan Template
@@ -172,6 +177,7 @@ The library now ships with 39 total forms.
 Defines the operational layer on top of the core Calendar module. Where Calendar delivers the booking surface, ScheduleOps delivers the controls that make a counseling practice run at scale.
 
 Scope:
+
 - **Availability overrides** — block time or open one-off slots per counselor (PTO, holidays, closures, special openings)
 - **Recurring appointment series** — weekly / bi-weekly / monthly patterns with individual-exception support
 - **Reminder lifecycle management** — full state machine (pending → sent / cancelled) with retry logic and delivery timestamps
@@ -204,20 +210,28 @@ Explicitly deferred: MFA enrollment, MFA challenge, WebAuthn, TOTP, step-up auth
 ### Workspace Studio Forms + Portal Workflow
 
 **File:** [PLANS/WORKSPACE-STUDIO-FORMS-PORTAL-WORKFLOW.md](../PLANS/WORKSPACE-STUDIO-FORMS-PORTAL-WORKFLOW.md)
-**Status:** Implemented — initial delivery
+**Status:** Implemented — fully delivered as of v5.7.0
 **Prepared:** March 28, 2026
 
 Defines the end-to-end workflow for counselors assigning forms to clients and clients completing them through the portal. This plan is the foundation that `CLIENT-PORTAL-EXPANSION.md` extends.
 
 Canonical data model delivered:
+
 - `form_catalog` — one row per form template, including `is_standard_on_signup` flag
 - `form_assignments` — scheduling mode, due/session timestamp, recurrence rule, status, counselor metadata
 - `form_submissions` — append-only per completion with encrypted answers payload and score summary
 - `portal_registration_requests` — public possible-client metadata
 
-Workspace Studio integration:
-- Documents & Inventories tab: select client, assign forms, view completion history
-- Portal tab: account management, standard onboarding forms via `defaultSignupFormKeys`, portal request review queue
+Workspace Studio integration — all tabs now functional as of v5.7.0:
+
+- **Practice tab** — edit practice profile (name, type, timezone, faith tradition, contact)
+- **Locations tab** — full CRUD for scheduling locations with capacity and telehealth flag
+- **Staff tab** — read-only roster with counselor cards and admin list; links to Staff Management
+- **Lifecycle tab** — caseload board with status filters, referral sources, and discharge modal
+- **Appointments tab** — service code configuration (CPT codes, categories, default durations)
+- **Documents tab** — assign forms to clients; pre-selects client when launched from client record
+- **Offerings tab** — client service offering and financial tracking
+- **Portal tab** — portal settings, request review queue, care-request-to-client conversion, portal account management
 
 ---
 
@@ -237,6 +251,7 @@ Governance plans define the permanent engineering standards that all feature wor
 This is the canonical security and auditing implementation standard for FaithCounseling. All sessions touching security, auditing, PHI handling, RBAC, auth/session behavior, tenant isolation, exports, retention, impersonation, background jobs, or system automation must read this file first.
 
 Defines:
+
 - security controls and enforcement boundaries (OWASP Top 10 baseline, SQL injection prevention, CSRF, cookie security, Argon2id, AES-256-GCM)
 - audit event semantics and taxonomy (canonical result values: `success`, `failure`, `denied`, `error`)
 - audit ledger requirements (append-only, tamper-evident, tenant-scoped)
@@ -258,6 +273,7 @@ The audit ledger and telemetry are separate systems. Raw audit rows are never ex
 This is the canonical monitoring standard for FaithCounseling. All sessions touching UI, telemetry, monitoring, OTEL, health, screens, tabs, workflows, dashboards, or summaries must read this file first.
 
 Defines:
+
 - OTEL hybrid naming convention (`faith.ui.*` only for app-specific gaps not covered by OTEL semantic conventions)
 - shared surface registry — every visible surface must have an entry; new or modified surfaces must be added
 - monitoring signals required per surface: performance, usability, errors, and telemetry/export status
@@ -283,6 +299,7 @@ The full surface inventory lives in this file and in `packages/telemetry/src/sur
 Documents the migration from a hand-rolled CSS component system to Mantine v7/v8 — a production-grade React component library using native CSS. The plan records the component mapping, theme configuration, package selection, and migration approach.
 
 Key packages delivered:
+
 - `@mantine/core` — AppShell, Button, TextInput, PasswordInput, Select, Modal, Tabs, Table, Badge, Paper, Card, SimpleGrid, Group, Stack, NumberInput, ActionIcon
 - `@mantine/hooks` — `useDisclosure` for modal and sidebar state
 - `@mantine/form` — form state, validation, and field bindings
@@ -307,6 +324,7 @@ Specifies the upgrade of the staff Operations Dashboard from placeholder cards t
 - **Clients** — combined portal registration requests and authenticated portal appointment requests, split by status bucket
 
 Product decisions recorded in the plan:
+
 - first-class `high_touchpoint` flag on the `clients` table
 - note-gap compliance scoped to `completed` or `checked_in` appointments without a locked progress note
 - `Clients` card merges public registration and authenticated appointment-request counts
@@ -320,7 +338,7 @@ This plan extended the existing `dashboard` monitoring surface without introduci
 The following areas have no dedicated plan file as of v5.2.0 but are referenced in other plans or known to be upcoming:
 
 | Area | Context |
-|------|---------|
+| --- | --- |
 | MFA — enrollment, challenge, recovery | Deferred in USER and USER MAINTENANCE.md |
 | Automated waitlist promotion | Deferred in ScheduleOps.md and CALENDAR.md |
 | Client self-booking without staff confirmation | Deferred in CLIENT-PORTAL-EXPANSION.md |

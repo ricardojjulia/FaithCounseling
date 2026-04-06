@@ -147,7 +147,7 @@ export default function InternalNotesTab({ clientId, currentUser }) {
     try {
       await apiFetch(`/api/v1/clients/${encodeURIComponent(clientId)}/progress-notes`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+        headers: csrfHeaders(),
         body: JSON.stringify({
           noteType: 'internal_note',
           summary: draft.summary.trim(),
@@ -171,7 +171,7 @@ export default function InternalNotesTab({ clientId, currentUser }) {
   const handleUpdate = async (noteId, fields) => {
     await apiFetch(`/api/v1/clients/${encodeURIComponent(clientId)}/progress-notes/${encodeURIComponent(noteId)}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+      headers: csrfHeaders(),
       body: JSON.stringify(fields),
     });
     await load();

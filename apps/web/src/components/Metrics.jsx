@@ -21,7 +21,7 @@ function ClickablePaper({ onClick, children, ...props }) {
   );
 }
 
-export default function Metrics({ data, onTodaySessions, onFutureAppointments }) {
+export default function Metrics({ data, onTodaySessions, onFutureAppointments, onFaithWorkflows }) {
   const { t } = useI18n();
   const faithfulCounts = data.faithfulCounts || { critical: 0, moderate: 0, routine: 0 };
 
@@ -50,16 +50,15 @@ export default function Metrics({ data, onTodaySessions, onFutureAppointments })
       </Paper>
 
       {/* Faithful Workflows */}
-      <Paper p="md" radius="lg" withBorder shadow="xs" className="metric-card">
+      <ClickablePaper p="md" radius="lg" withBorder shadow="xs" className="metric-card" onClick={onFaithWorkflows}>
         <Text fz="xs" c="dimmed" fw={500} tt="uppercase" ls={0.5}>{t('metrics.faithfulWorkflows')}</Text>
         <Group gap="xs" my={4} wrap="wrap">
           <Badge color="red" variant="light">{faithfulCounts.critical} {t('metrics.faithfulCritical')}</Badge>
           <Badge color="yellow" variant="light">{faithfulCounts.moderate} {t('metrics.faithfulModerate')}</Badge>
           <Badge color="blue" variant="light">{faithfulCounts.routine} {t('metrics.faithfulRoutine')}</Badge>
         </Group>
-      </Paper>
+      </ClickablePaper>
 
     </SimpleGrid>
   );
 }
-

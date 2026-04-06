@@ -219,6 +219,7 @@ async function applyColumnMigrations(conn) {
   await addColumnIfMissing('portal_registration_requests', 'preferred_contact_method', 'VARCHAR(64) NULL AFTER phone_enc');
   await addColumnIfMissing('portal_registration_requests', 'preferred_contact_window', 'VARCHAR(128) NULL AFTER preferred_contact_method');
   await addColumnIfMissing('portal_registration_requests', 'onboarding_details_enc', 'MEDIUMTEXT NULL AFTER requested_services');
+  await addColumnIfMissing('portal_registration_requests', 'converted_client_id', 'VARCHAR(64) NULL AFTER status');
   await addColumnIfMissing('portal_settings', 'financial_mode', "VARCHAR(64) NOT NULL DEFAULT 'offerings' AFTER show_public_counselor_directory");
   await addColumnIfMissing('portal_settings', 'suggested_offering_cents', 'INT NOT NULL DEFAULT 0 AFTER financial_mode');
   await addColumnIfMissing('portal_settings', 'offering_ministry_note', 'TEXT NULL AFTER suggested_offering_cents');
@@ -229,8 +230,11 @@ async function applyColumnMigrations(conn) {
   await addColumnIfMissing('appointments', 'ends_at',       'TIMESTAMP NULL AFTER starts_at');
   await addColumnIfMissing('appointments', 'location_name', 'VARCHAR(200) NULL AFTER ends_at');
   await addColumnIfMissing('appointments', 'timezone',      'VARCHAR(64) NULL AFTER location_name');
+  await addColumnIfMissing('appointments', 'series_id',     'VARCHAR(64) NULL');
   await addIndexIfMissing('appointments', 'idx_appointments_counselor', '(tenant_id, counselor_id)');
   await addIndexIfMissing('appointments', 'idx_appointments_starts_at', '(tenant_id, starts_at)');
+  await addIndexIfMissing('appointments', 'idx_appointments_series',    '(tenant_id, series_id)');
+  await addColumnIfMissing('appointment_series', 'start_time', "VARCHAR(8) NOT NULL DEFAULT '09:00'");
 
   const [portalAccountRows] = await conn.query(
     'SELECT id, tenant_id, client_id, email_enc, email_lookup_hash, password_hash FROM portal_accounts',
@@ -387,8 +391,8 @@ async function seedDevData(conn) {
 
   await conn.query(
     `INSERT INTO clients
-       (id, tenant_id, first_name_enc, last_name_enc, status, faith_background, high_touchpoint)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (id, tenant_id, first_name_enc, last_name_enc, status, faith_background, high_touchpoint, primary_counselor_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       'c-001',
       'system',
@@ -397,6 +401,7 @@ async function seedDevData(conn) {
       'active',
       'Evangelical',
       1,
+      'staff-counselor-mercy',
     ],
   );
 
@@ -465,14 +470,14 @@ async function ensureDevPortalClient(conn) {
   if (!client) {
     await conn.query(
       `INSERT INTO clients
-         (id, tenant_id, first_name_enc, last_name_enc, status, faith_background, high_touchpoint)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ['c-001', 'system', encrypt('Sarah'), encrypt('Kim'), 'active', 'Evangelical', 1],
+         (id, tenant_id, first_name_enc, last_name_enc, status, faith_background, high_touchpoint, primary_counselor_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['c-001', 'system', encrypt('Sarah'), encrypt('Kim'), 'active', 'Evangelical', 1, 'staff-counselor-mercy'],
     );
   } else {
     await conn.query(
-      'UPDATE clients SET high_touchpoint = 1 WHERE id = ? AND tenant_id = ?',
-      ['c-001', 'system'],
+      'UPDATE clients SET high_touchpoint = 1, primary_counselor_id = COALESCE(primary_counselor_id, ?) WHERE id = ? AND tenant_id = ?',
+      ['staff-counselor-mercy', 'c-001', 'system'],
     );
   }
 

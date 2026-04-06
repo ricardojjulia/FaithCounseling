@@ -772,6 +772,10 @@ export function deleteAvailabilityOverride(id) {
   });
 }
 
+export function fetchSeriesAppointments(seriesId) {
+  return apiFetch(`/api/v1/appointments?seriesId=${encodeURIComponent(seriesId)}`);
+}
+
 export function fetchSeries(filters = {}) {
   const params = new URLSearchParams();
   if (filters.counselorId) params.set('counselorId', filters.counselorId);

@@ -13,6 +13,11 @@
 
 import { getLatestAssessment, getScoreHistory, isWorseningTrend, daysSince } from '../utils.js';
 
+// AUDIT hazardous-use threshold (AUDIT-C uses 3/4; full AUDIT uses 8+)
+const AUDIT_HAZARDOUS_THRESHOLD = 8;
+const AUDIT_HARMFUL_THRESHOLD = 16;
+const AUDIT_DEPENDENCE_THRESHOLD = 20;
+
 /**
  * Rule: PHQ-9 worsening trend (last 2–3 scores increasing)
  */
@@ -228,5 +233,125 @@ export function ruleDiagnosisWithoutGoal(data, clientId) {
     status: 'pending',
     orderedAfter: null,
     docNote: 'Add or update treatment goals to reflect each active diagnosis.',
+  };
+}
+
+/**
+ * Rule: PCL-5 worsening trend (last 2–3 scores increasing)
+ */
+export function rulePcl5Worsening(data, clientId) {
+  const history = getScoreHistory(data.assessments, 'PCL-5');
+  if (history.length < 2) return null;
+
+  const recent = history.slice(-3);
+  if (!isWorseningTrend(recent.map((h) => h.score))) return null;
+
+  const first = recent[0];
+  const last = recent[recent.length - 1];
+  const delta = (last.score ?? 0) - (first.score ?? 0);
+
+  return {
+    id: `rule_clinical_pcl5_worsening:${clientId}`,
+    ruleId: 'rule_clinical_pcl5_worsening',
+    category: 'clinical_caution',
+    title: 'PCL-5 Worsening Trend',
+    summary: `PCL-5 has increased by ${delta} points across ${recent.length} recent scores (${recent.map((h) => h.score).join('→')}). Review trauma-focused treatment approach.`,
+    rationale: `A consistent upward trend in PCL-5 scores suggests post-traumatic stress symptoms are worsening rather than resolving. This warrants a clinical review of the current treatment modality — including whether a structured trauma-focused approach (CPT, EMDR, Prolonged Exposure) should be considered or intensified. Faith integration can be a meaningful complement for trauma survivors when appropriate.`,
+    evidence: [
+      `PCL-5 trend: ${recent.map((h) => h.score).join(' → ')}`,
+      `Change: +${delta} points over ${recent.length} assessments`,
+      `Most recent: ${last.score} on ${last.scoredAt ? new Date(last.scoredAt).toLocaleDateString() : 'unknown'}`,
+    ],
+    priority: 8,
+    confidence: 0.85,
+    cautions: [
+      'Rule out recent stressor events (trauma anniversaries, news exposure) before concluding treatment failure.',
+      'PCL-5 elevations during trauma processing can be normal — context matters.',
+    ],
+    actions: ['generate_session_agenda', 'generate_note_prep', 'create_treatment_plan_update'],
+    faithNote: null,
+    status: 'pending',
+    orderedAfter: null,
+    docNote: 'Document treatment review rationale and any adjustments to trauma-focused interventions.',
+  };
+}
+
+/**
+ * Rule: GAD-7 worsening trend (last 2–3 scores increasing)
+ */
+export function ruleGad7Worsening(data, clientId) {
+  const history = getScoreHistory(data.assessments, 'GAD-7');
+  if (history.length < 2) return null;
+
+  const recent = history.slice(-3);
+  if (!isWorseningTrend(recent.map((h) => h.score))) return null;
+
+  const first = recent[0];
+  const last = recent[recent.length - 1];
+  const delta = (last.score ?? 0) - (first.score ?? 0);
+
+  return {
+    id: `rule_clinical_gad7_worsening:${clientId}`,
+    ruleId: 'rule_clinical_gad7_worsening',
+    category: 'clinical_caution',
+    title: 'GAD-7 Worsening Trend',
+    summary: `GAD-7 has increased by ${delta} points across ${recent.length} recent scores (${recent.map((h) => h.score).join('→')}). Review anxiety treatment approach.`,
+    rationale: `A consistent upward trend in GAD-7 scores indicates worsening anxiety symptoms. This may indicate that current interventions are not adequately addressing the anxiety presentation, or that external stressors are escalating. A treatment review is warranted — consider whether modality adjustments, increased frequency, or adjunctive supports are appropriate.`,
+    evidence: [
+      `GAD-7 trend: ${recent.map((h) => h.score).join(' → ')}`,
+      `Change: +${delta} points over ${recent.length} assessments`,
+      `Most recent: ${last.score} on ${last.scoredAt ? new Date(last.scoredAt).toLocaleDateString() : 'unknown'}`,
+    ],
+    priority: 7,
+    confidence: 0.85,
+    cautions: [
+      'Rule out acute stressors or life events before adjusting treatment.',
+    ],
+    actions: ['generate_session_agenda', 'generate_note_prep', 'create_treatment_plan_update'],
+    faithNote: null,
+    status: 'pending',
+    orderedAfter: null,
+    docNote: 'Document treatment review rationale and any adjustments to anxiety-focused interventions.',
+  };
+}
+
+/**
+ * Rule: AUDIT score elevated — hazardous or harmful alcohol use
+ */
+export function ruleAuditHigh(data, clientId) {
+  const latest = getLatestAssessment(data.assessments, 'AUDIT');
+  if (!latest || latest.score == null || latest.score < AUDIT_HAZARDOUS_THRESHOLD) return null;
+
+  const level =
+    latest.score >= AUDIT_DEPENDENCE_THRESHOLD ? 'probable dependence'
+    : latest.score >= AUDIT_HARMFUL_THRESHOLD ? 'harmful use'
+    : 'hazardous use';
+
+  const priorityValue = latest.score >= AUDIT_HARMFUL_THRESHOLD ? 7 : 6;
+
+  return {
+    id: `rule_clinical_audit_high:${clientId}`,
+    ruleId: 'rule_clinical_audit_high',
+    category: 'clinical_caution',
+    title: `AUDIT Elevated — ${level.replace(/^\w/, (c) => c.toUpperCase())}`,
+    summary: `AUDIT score of ${latest.score} indicates ${level}. Coordinate with physician and address substance use in treatment plan.`,
+    rationale: `An AUDIT score of ${latest.score} falls in the ${level} range. Alcohol use at this level commonly co-occurs with depression and anxiety and may be undermining treatment progress. A counselor-led motivational interviewing approach is appropriate, and medical coordination may be warranted if physical dependence is suspected. Faith-integrated perspectives on sobriety and stewardship of the body can be a powerful complement to clinical intervention.`,
+    evidence: [
+      `AUDIT score: ${latest.score} (${level})`,
+      `Scored: ${latest.scoredAt ? new Date(latest.scoredAt).toLocaleDateString() : 'unknown'}`,
+      `Thresholds: hazardous ≥${AUDIT_HAZARDOUS_THRESHOLD}, harmful ≥${AUDIT_HARMFUL_THRESHOLD}, probable dependence ≥${AUDIT_DEPENDENCE_THRESHOLD}`,
+    ],
+    priority: priorityValue,
+    confidence: 0.90,
+    cautions: [
+      'Counselors do not manage medical withdrawal — refer to physician if physical dependence suspected.',
+      'Frame addiction discussion with compassion, not shame.',
+      'Substance use treatment requires specific training or referral.',
+    ],
+    actions: ['generate_session_agenda', 'generate_note_prep', 'add_reminder_task'],
+    faithNote: 'Sobriety and bodily stewardship (1 Cor 6:19–20) can be explored as a faith-integrated motivational framework if client is open to it.',
+    status: 'pending',
+    orderedAfter: null,
+    docNote: 'Document substance use discussion, any referrals made, and treatment plan updates to address substance use.',
   };
 }

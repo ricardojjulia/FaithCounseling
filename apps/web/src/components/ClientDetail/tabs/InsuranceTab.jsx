@@ -22,17 +22,17 @@ function InsuranceCard({ title, initialData, clientId, coverageOrder }) {
     member_id:            initialData?.member_id            ?? '',
     group_number:         initialData?.group_number         ?? '',
     subscriber_name:      initialData?.subscriber_name      ?? '',
-    subscriber_dob:       strToDate(initialData?.subscriber_dob),
+    subscriber_dob:       initialData?.subscriber_dob       || null,
     subscriber_rel:       initialData?.subscriber_rel       ?? 'self',
     auth_number:          initialData?.auth_number          ?? '',
     auth_visits_approved: initialData?.auth_visits_approved ?? null,
-    auth_expires_on:      strToDate(initialData?.auth_expires_on),
+    auth_expires_on:      initialData?.auth_expires_on      || null,
     referral_number:      initialData?.referral_number      ?? '',
     copay_dollars:        initialData?.copay_cents != null ? initialData.copay_cents / 100 : null,
-    effective_from:       strToDate(initialData?.effective_from),
-    effective_to:         strToDate(initialData?.effective_to),
+    effective_from:       initialData?.effective_from       || null,
+    effective_to:         initialData?.effective_to         || null,
     is_active:            initialData?.is_active ?? true,
-    verified_on:          strToDate(initialData?.verified_on),
+    verified_on:          initialData?.verified_on          || null,
     verified_by:          initialData?.verified_by          ?? '',
   });
 
@@ -96,7 +96,7 @@ function InsuranceCard({ title, initialData, clientId, coverageOrder }) {
               <Divider label="Subscriber" labelPosition="left" />
               <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
                 <TextInput label="Subscriber Name"    value={form.subscriber_name} onChange={(e) => set('subscriber_name', e.target.value)} />
-                <DateInput label="Subscriber DOB" valueFormat="YYYY-MM-DD" value={form.subscriber_dob} onChange={(v) => set('subscriber_dob', v)} />
+                <DateInput label="Subscriber DOB" valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" value={form.subscriber_dob} onChange={(v) => set('subscriber_dob', v)} />
                 <Select label="Relationship to Client" data={[{ value: 'self', label: 'Self' }, { value: 'spouse', label: 'Spouse' }, { value: 'child', label: 'Child' }, { value: 'other', label: 'Other' }]} value={form.subscriber_rel} onChange={(v) => set('subscriber_rel', v)} />
               </SimpleGrid>
 
@@ -104,16 +104,16 @@ function InsuranceCard({ title, initialData, clientId, coverageOrder }) {
               <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
                 <TextInput    label="Authorization #"   value={form.auth_number}     onChange={(e) => set('auth_number', e.target.value)} />
                 <NumberInput  label="Authorized Visits" value={form.auth_visits_approved ?? ''} onChange={(v) => set('auth_visits_approved', v === '' ? null : v)} min={0} />
-                <DateInput    label="Auth Expiration"   valueFormat="YYYY-MM-DD" value={form.auth_expires_on} onChange={(v) => set('auth_expires_on', v)} />
+                <DateInput    label="Auth Expiration"   valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" value={form.auth_expires_on} onChange={(v) => set('auth_expires_on', v)} />
                 <TextInput    label="Referral #"        value={form.referral_number} onChange={(e) => set('referral_number', e.target.value)} />
                 <NumberInput  label="Copay ($)"         value={form.copay_dollars ?? ''} onChange={(v) => set('copay_dollars', v === '' ? null : v)} min={0} step={0.01} decimalScale={2} />
               </SimpleGrid>
 
               <Divider label="Coverage Period" labelPosition="left" />
               <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-                <DateInput label="Effective From" valueFormat="YYYY-MM-DD" value={form.effective_from} onChange={(v) => set('effective_from', v)} />
-                <DateInput label="Effective To"   valueFormat="YYYY-MM-DD" value={form.effective_to}   onChange={(v) => set('effective_to',   v)} />
-                <DateInput label="Verified On"    valueFormat="YYYY-MM-DD" value={form.verified_on}    onChange={(v) => set('verified_on',    v)} />
+                <DateInput label="Effective From" valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" value={form.effective_from} onChange={(v) => set('effective_from', v)} />
+                <DateInput label="Effective To"   valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" value={form.effective_to}   onChange={(v) => set('effective_to',   v)} />
+                <DateInput label="Verified On"    valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" value={form.verified_on}    onChange={(v) => set('verified_on',    v)} />
                 <TextInput label="Verified By"    value={form.verified_by} onChange={(e) => set('verified_by', e.target.value)} />
               </SimpleGrid>
 
@@ -140,7 +140,7 @@ function ReferringProviderSection({ clientId, initialProvider }) {
     address_city:   initialProvider?.address?.city   ?? '',
     address_state:  initialProvider?.address?.state  ?? '',
     address_postal: initialProvider?.address?.postal ?? '',
-    referral_date:  strToDate(initialProvider?.referral_date),
+    referral_date:  initialProvider?.referral_date  || null,
     referral_notes: initialProvider?.referral_notes  ?? '',
   });
 
@@ -181,7 +181,7 @@ function ReferringProviderSection({ clientId, initialProvider }) {
         <TextInput label="NPI (10 digits)"          value={form.npi}            maxLength={10} onChange={(e) => set('npi', e.target.value)} placeholder="1234567890" />
         <TextInput label="Direct Phone" type="tel"  value={form.phone}          onChange={(e) => set('phone', e.target.value)} />
         <TextInput label="Fax"          type="tel"  value={form.fax}            onChange={(e) => set('fax',   e.target.value)} />
-        <DateInput label="Referral Date" valueFormat="YYYY-MM-DD" value={form.referral_date} onChange={(v) => set('referral_date', v)} />
+        <DateInput label="Referral Date" valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" value={form.referral_date} onChange={(v) => set('referral_date', v)} />
       </SimpleGrid>
       <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
         <TextInput label="Address Line 1" value={form.address_line1}  onChange={(e) => set('address_line1',  e.target.value)} />

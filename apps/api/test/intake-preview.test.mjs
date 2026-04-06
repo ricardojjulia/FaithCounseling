@@ -57,7 +57,8 @@ test('assigned counselor can read an eligible pre-session intake preview', async
 
   assert.equal(response.status, 200);
   assert.equal(response.body?.item?.eligible, true);
-  assert.equal(response.body?.item?.sessions?.heldSessionCount, 0);
+  assert.equal(response.body?.item?.intake?.completed, true);
+  assert.equal(response.body?.item?.sessions?.futureAppointmentCount, 0);
   assert.ok(
     (response.body?.item?.careRoutes ?? []).some((route) => route.id === 'anxiety_support'),
     'expected anxiety support route for eligible intake preview',
@@ -68,7 +69,7 @@ test('assigned counselor can read an eligible pre-session intake preview', async
   );
 });
 
-test('preview returns ineligible state once a client has held sessions', async () => {
+test('preview remains ineligible until intake paperwork is completed', async () => {
   const response = await requestJson('/v1/clients/c-003/intake-preview', {
     role: 'counselor',
     staffId: 's-002',
@@ -76,10 +77,11 @@ test('preview returns ineligible state once a client has held sessions', async (
 
   assert.equal(response.status, 200);
   assert.equal(response.body?.item?.eligible, false);
-  assert.equal(response.body?.item?.sessions?.heldSessionCount >= 1, true);
+  assert.equal(response.body?.item?.intake?.completed, false);
+  assert.equal(response.body?.item?.sessions?.futureAppointmentCount, 1);
   assert.ok(
-    (response.body?.item?.reasons ?? []).some((reason) => reason.includes('held or started session')),
-    'expected held-session ineligible reason',
+    (response.body?.item?.reasons ?? []).some((reason) => reason.includes('intake paperwork is completed')),
+    'expected incomplete-intake ineligible reason',
   );
 });
 
@@ -100,10 +102,10 @@ test('operations summary includes intake preview alert and list items for assign
   });
 
   assert.equal(response.status, 200);
-  assert.equal(response.body?.summary?.clientsBox?.intakePreviews?.total, 1);
+  assert.equal(response.body?.summary?.clientsBox?.intakePreviews?.total, 2);
   assert.deepEqual(
     (response.body?.summary?.clientsBox?.intakePreviews?.items ?? []).map((item) => item.clientId),
-    ['c-004'],
+    ['c-004', 'c-001'],
   );
   assert.ok(
     (response.body?.summary?.alerts?.items ?? []).some((item) => item.id === 'intake_previews_available'),

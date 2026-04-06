@@ -6,6 +6,7 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { csrfHeaders } from '../../../lib/csrf.js';
+import { frontendTelemetry } from '../../../lib/frontendTelemetry.js';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -571,8 +572,9 @@ function BalanceSection({ balances }) {
   );
 }
 
-function PublicRequestsSection({ items, loading, onRefresh }) {
+function PublicRequestsSection({ items, loading, onRefresh, onViewClient }) {
   const [updatingId, setUpdatingId] = useState(null);
+  const [creatingId, setCreatingId] = useState(null);
 
   const setStatus = async (requestId, status) => {
     setUpdatingId(requestId);
@@ -598,6 +600,37 @@ function PublicRequestsSection({ items, loading, onRefresh }) {
       notifications.show({ title: 'Error', message: err.message, color: 'red' });
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const createClientRecord = async (requestId) => {
+    setCreatingId(requestId);
+    try {
+      const response = await apiFetch('/api/v1/portal/public-requests/convert', {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify({ requestId }),
+      });
+      frontendTelemetry.trackAction('studio.portal', 'create_client_from_care_request', 'success', {
+        workflow: 'workspace_studio',
+      });
+      const wasCreated = response?.conversion?.status === 'created';
+      notifications.show({
+        title: wasCreated ? 'Client Created' : 'Client Linked',
+        message: wasCreated
+          ? 'Client record created from the approved care request. View Client is now available.'
+          : 'This approved care request is already linked to a client record.',
+        color: 'green',
+      });
+      onRefresh();
+    } catch (err) {
+      frontendTelemetry.trackAction('studio.portal', 'create_client_from_care_request', 'failure', {
+        workflow: 'workspace_studio',
+        statusClass: 'client',
+      });
+      notifications.show({ title: 'Error', message: err.message, color: 'red' });
+    } finally {
+      setCreatingId(null);
     }
   };
 
@@ -709,6 +742,27 @@ function PublicRequestsSection({ items, loading, onRefresh }) {
                     onClick={() => setStatus(item.id, 'approved')}
                   >
                     Approve
+                  </Button>
+                )}
+                {item.status === 'approved' && item.requestType === 'care_request' && !item.convertedClientId && (
+                  <Button
+                    size="xs"
+                    color="blue"
+                    variant="light"
+                    loading={creatingId === item.id}
+                    onClick={() => createClientRecord(item.id)}
+                  >
+                    Create Client
+                  </Button>
+                )}
+                {item.status === 'approved' && item.convertedClientId && (
+                  <Button
+                    size="xs"
+                    color="teal"
+                    variant="light"
+                    onClick={() => onViewClient?.({ clientId: item.convertedClientId })}
+                  >
+                    View Client
                   </Button>
                 )}
                 {item.status !== 'declined' && (
@@ -866,7 +920,7 @@ function AccordionLabel({ title, count, countColor }) {
 
 // ── main component ────────────────────────────────────────────────────────────
 
-export default function PortalTab({ onSchedulePortalRequest }) {
+export default function PortalTab({ onSchedulePortalRequest, onViewClient }) {
   const [clients,        setClients]        = useState([]);
   const [clientId,       setClientId]       = useState(null);
   const [overview,       setOverview]       = useState(null);
@@ -1027,6 +1081,7 @@ export default function PortalTab({ onSchedulePortalRequest }) {
         items={publicRequests}
         loading={publicRequestsLoading}
         onRefresh={loadPublicRequests}
+        onViewClient={onViewClient}
       />
 
       <DataRightsRequestsSection

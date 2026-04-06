@@ -149,7 +149,9 @@ export default function App() {
   const [selectedClientRequest, setSelectedClientRequest] = useState(null);
   const [selectedCounselorId, setSelectedCounselorId] = useState(null);
   const [currentView, setCurrentView] = useState('dashboard');
+  const [portalState, setPortalState] = useState({ initialClientId: null, initialTab: 'dashboard' });
   const [workspaceStudioInitialTab, setWorkspaceStudioInitialTab] = useState('portal');
+  const [workspaceStudioDocumentsClientId, setWorkspaceStudioDocumentsClientId] = useState('');
   const [clinicalChartState, setClinicalChartState] = useState(createDefaultClinicalChartState);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [schedulingState, setSchedulingState] = useState({
@@ -331,6 +333,7 @@ export default function App() {
       setSchedulingState({ composerOpen: false, initialClientId: null, initialView: null, initialPortalRequest: null });
     }
     if (view !== 'clinical') setClinicalChartState(createDefaultClinicalChartState());
+    if (view !== 'portal') setPortalState({ initialClientId: null, initialTab: 'dashboard' });
     closeNav();
   };
 
@@ -380,8 +383,21 @@ export default function App() {
     setCurrentView('documents');
     closeNav();
   };
+  const handleOpenPortal = ({ initialClientId = null, initialTab = 'dashboard' } = {}) => {
+    setPortalState({ initialClientId, initialTab });
+    setSelectedClientRequest(null);
+    setCurrentView('portal');
+    closeNav();
+  };
   const handleOpenWorkspaceStudio = (initialTab = 'portal') => {
     setWorkspaceStudioInitialTab(initialTab);
+    setCurrentView('workspace-studio');
+    closeNav();
+  };
+
+  const handleOpenAssignForms = (clientId) => {
+    setWorkspaceStudioInitialTab('documentsStudio');
+    setWorkspaceStudioDocumentsClientId(clientId || '');
     setCurrentView('workspace-studio');
     closeNav();
   };
@@ -521,6 +537,7 @@ export default function App() {
               clientId={selectedClientId}
               initialTab={selectedClientRequest?.initialTab ?? null}
               onBack={handleClientBack}
+              onOpenClientDocuments={(clientId) => handleOpenPortal({ initialClientId: clientId, initialTab: 'documents' })}
               onScheduleClient={() => handleOpenScheduling({
                 composerOpen: true,
                 initialClientId: selectedClientId,
@@ -581,12 +598,15 @@ export default function App() {
           ) : showWorkspaceStudio ? (
             <WorkspaceStudioPage
               initialTab={workspaceStudioInitialTab}
+              initialDocumentsClientId={workspaceStudioDocumentsClientId}
               onSchedulePortalRequest={(clientId, portalRequest) => handleOpenScheduling({
                 composerOpen: true,
                 initialClientId: clientId,
                 initialView: 'practice',
                 initialPortalRequest: portalRequest,
               })}
+              onViewClient={handleOpenClient}
+              onOpenCounselorMaintenance={() => setCurrentView('counselors')}
             />
           ) : showDocuments ? (
             <DocumentsPage />
@@ -606,11 +626,27 @@ export default function App() {
               })}
             />
           ) : showPortal ? (
-            <ClientPortalPage currentUser={currentUser} clients={clientsData.items} onSignOut={handleSignOut} />
+            <ClientPortalPage
+              currentUser={currentUser}
+              clients={clientsData.items}
+              initialClientId={portalState.initialClientId}
+              initialTab={portalState.initialTab}
+              onSignOut={handleSignOut}
+              onBackToClient={(clientId) => {
+                setSelectedClientRequest({ clientId });
+                setCurrentView('clients');
+              }}
+              onAssignForms={handleOpenAssignForms}
+            />
           ) : showOfferings ? (
             <OfferingsPage clients={clientsData.items} />
           ) : showFaith ? (
-            <FaithWorkflowsPage clients={clientsData.items} currentUser={currentUser} />
+            <FaithWorkflowsPage
+              clients={clientsData.items}
+              currentUser={currentUser}
+              canonicalUrgencyCounts={metricsData.faithfulCounts}
+              sharedOperationsSummary={operationsSummaryData.summary ?? null}
+            />
           ) : showClinical ? (
             <ClinicalChartPage
               clients={clientsData.items}
@@ -623,7 +659,15 @@ export default function App() {
             />
           ) : (
             <>
-              {showDashboard ? <Metrics data={metricsData} currentUser={currentUser} onTodaySessions={handleViewTodaySessions} onFutureAppointments={handleViewFutureAppointments} /> : null}
+              {showDashboard ? (
+                <Metrics
+                  data={metricsData}
+                  currentUser={currentUser}
+                  onTodaySessions={handleViewTodaySessions}
+                  onFutureAppointments={handleViewFutureAppointments}
+                  onFaithWorkflows={() => setCurrentView('faith')}
+                />
+              ) : null}
               {showFallbackWorkspace || showDashboard ? (
                 <WorkspaceGrid
                   clientsData={clientsData}

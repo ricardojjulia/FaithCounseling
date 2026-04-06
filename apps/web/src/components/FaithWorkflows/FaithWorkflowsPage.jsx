@@ -33,13 +33,62 @@ const VARIANT_LABELS = {
   priority: 'Priority Matrix — click for Classic List',
 };
 
+const FAITH_WORKFLOW_DEMO_STORAGE_KEY = 'faith_workflows.demo_mode';
+const URGENCY_RANK = { routine: 0, moderate: 1, high: 2, critical: 3 };
+const OPERATIONAL_URGENCY_SCORE_FLOOR = { moderate: 45, critical: 85 };
+
+function readOptionalBoolean(value) {
+  if (value === true || value === 'true') return true;
+  if (value === false || value === 'false') return false;
+  return null;
+}
+
+function isFaithWorkflowDemoEnabled() {
+  try {
+    const stored = readOptionalBoolean(window.localStorage.getItem(FAITH_WORKFLOW_DEMO_STORAGE_KEY));
+    if (stored !== null) return stored;
+  } catch {
+    // localStorage is optional for this feature flag
+  }
+
+  return readOptionalBoolean(import.meta.env?.VITE_ENABLE_FAITH_WORKFLOWS_DEMO) ?? false;
+}
+
+function mergeOperationalSignal(current, nextLevel, reasonChip) {
+  if (!nextLevel || !reasonChip) return current ?? null;
+  const existing = current ?? { urgencyLevel: nextLevel, reasonChips: [] };
+  const urgencyLevel = (URGENCY_RANK[nextLevel] ?? 0) > (URGENCY_RANK[existing.urgencyLevel] ?? 0)
+    ? nextLevel
+    : existing.urgencyLevel;
+  const reasonChips = existing.reasonChips.includes(reasonChip)
+    ? existing.reasonChips
+    : [...existing.reasonChips, reasonChip];
+  return { urgencyLevel, reasonChips };
+}
+
+function applyOperationalUrgency(entry, operationalSignal) {
+  if (!operationalSignal?.urgencyLevel) return entry;
+  if ((URGENCY_RANK[operationalSignal.urgencyLevel] ?? 0) <= (URGENCY_RANK[entry.urgencyLevel] ?? 0)) {
+    if (!operationalSignal.reasonChips?.length) return entry;
+    const mergedReasonChips = [...new Set([...(operationalSignal.reasonChips ?? []), ...(entry.topReasonChips ?? [])])].slice(0, 3);
+    return { ...entry, topReasonChips: mergedReasonChips };
+  }
+
+  return {
+    ...entry,
+    urgencyLevel: operationalSignal.urgencyLevel,
+    urgencyScore: Math.max(entry.urgencyScore ?? 0, OPERATIONAL_URGENCY_SCORE_FLOOR[operationalSignal.urgencyLevel] ?? entry.urgencyScore ?? 0),
+    topReasonChips: [...new Set([...(operationalSignal.reasonChips ?? []), ...(entry.topReasonChips ?? [])])].slice(0, 3),
+  };
+}
+
 /**
  * Fetches enriched client workflow data from the API.
  * Falls back to mock data if the client ID is a mock ID.
  */
-async function fetchClientWorkflowData(clientId) {
+async function fetchClientWorkflowData(clientId, demoModeEnabled) {
   // Use mock data for demo clients
-  const mockData = getMockClientData(clientId);
+  const mockData = demoModeEnabled ? getMockClientData(clientId) : null;
   if (mockData) return mockData;
 
   // Parallel fetch of all data sources
@@ -143,12 +192,20 @@ async function persistStateChange(clientId, ruleId, status, deferredUntil = null
  * Faithful Workflows — main three-panel page.
  *
  * Props:
- *   clients     — basic client list from App.jsx (already loaded)
- *   currentUser — session user
+ *   clients                — basic client list from App.jsx (already loaded)
+ *   currentUser            — session user
+ *   canonicalUrgencyCounts — canonical dashboard-visible counts from App.jsx metrics state
+ *   sharedOperationsSummary — canonical operations-summary payload for counts and urgency overlays
  */
-export default function FaithWorkflowsPage({ clients = [], currentUser }) {
+export default function FaithWorkflowsPage({
+  clients = [],
+  currentUser,
+  canonicalUrgencyCounts = null,
+  sharedOperationsSummary = null,
+}) {
   const { t } = useI18n();
   useSurfaceTelemetry('faith_workflows', { surfaceKind: 'view', workflow: 'faith_workflows' });
+  const demoModeEnabled = useMemo(() => isFaithWorkflowDemoEnabled(), []);
 
   // ─── Canvas view variant ─────────────────────────────────────────────────
   const [variant, setVariant] = useState(() => {
@@ -177,12 +234,43 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
   const [loadingSet, setLoadingSet] = useState(new Set());
   const [loadError, setLoadError] = useState(null);
 
+  const operationalSignalsByClient = useMemo(() => {
+    const signals = new Map();
+    const register = (clientId, urgencyLevel, reasonChip) => {
+      if (!clientId) return;
+      signals.set(clientId, mergeOperationalSignal(signals.get(clientId), urgencyLevel, reasonChip));
+    };
+
+    const noteGapItems = Array.isArray(sharedOperationsSummary?.complianceWatch?.noteGapItems)
+      ? sharedOperationsSummary.complianceWatch.noteGapItems
+      : [];
+    for (const item of noteGapItems) {
+      const days = Number(item?.daysWithoutNote ?? 0);
+      if (days >= 7) register(item.clientId, 'critical', 'Note gap 7+d');
+      else if (days >= 3) register(item.clientId, 'moderate', 'Note gap 3+d');
+    }
+
+    const unscheduledClientItems = Array.isArray(sharedOperationsSummary?.clientsBox?.unscheduledClientItems)
+      ? sharedOperationsSummary.clientsBox.unscheduledClientItems
+      : [];
+    for (const item of unscheduledClientItems) {
+      if (item?.highTouchpoint) register(item.clientId, 'critical', 'High touchpoint unscheduled');
+    }
+
+    const outstandingAssignmentItems = Array.isArray(sharedOperationsSummary?.complianceWatch?.outstandingAssignments?.items)
+      ? sharedOperationsSummary.complianceWatch.outstandingAssignments.items
+      : [];
+    for (const item of outstandingAssignmentItems) {
+      register(item?.clientId, 'moderate', 'Assigned work pending');
+    }
+
+    return signals;
+  }, [sharedOperationsSummary]);
+
   // ─── Build client rank entries from basic list + cached enriched data ──────
   const rankEntries = useMemo(() => {
-    // Start with mock clients + real clients from prop
     const allClients = [
-      // Include mock clients in dev/demo mode
-      ...MOCK_CLIENTS.map((m) => m.client),
+      ...(demoModeEnabled ? MOCK_CLIENTS.map((m) => m.client) : []),
       ...clients.filter((c) => !c.id.startsWith('mock-')),
     ];
 
@@ -192,14 +280,15 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
         if (cached) {
           const entry = buildClientRankEntry(cached);
           const recs = applyPersistedStates(entry.recommendations, persistedStates, c.id === selectedClientId);
-          return { ...entry, recommendations: recs, recommendationCount: recs.filter((r) => r.status === 'pending').length };
+          const enrichedEntry = { ...entry, recommendations: recs, recommendationCount: recs.filter((r) => r.status === 'pending').length };
+          return applyOperationalUrgency(enrichedEntry, operationalSignalsByClient.get(c.id));
         }
-        return buildLightweightRankEntry(c);
+        return applyOperationalUrgency(buildLightweightRankEntry(c), operationalSignalsByClient.get(c.id));
       })
       .sort((a, b) => b.urgencyScore - a.urgencyScore);
-  }, [clients, dataCache, persistedStates, selectedClientId]);
+  }, [clients, dataCache, demoModeEnabled, operationalSignalsByClient, persistedStates, selectedClientId]);
 
-  const urgencyCounts = useMemo(() => {
+  const localUrgencyCounts = useMemo(() => {
     const counts = { critical: 0, moderate: 0, routine: 0 };
     for (const e of rankEntries) {
       if (e.urgencyLevel === 'critical') counts.critical++;
@@ -208,6 +297,23 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
     }
     return counts;
   }, [rankEntries]);
+
+  const urgencyCounts = useMemo(() => {
+    if (canonicalUrgencyCounts) {
+      return {
+        critical: Number(canonicalUrgencyCounts.critical ?? 0),
+        moderate: Number(canonicalUrgencyCounts.moderate ?? 0),
+        routine: Number(canonicalUrgencyCounts.routine ?? 0),
+      };
+    }
+    const sharedUrgencyCounts = sharedOperationsSummary?.faithfulWorkflowCounts;
+    if (!sharedUrgencyCounts) return localUrgencyCounts;
+    return {
+      critical: Number(sharedUrgencyCounts.critical ?? 0),
+      moderate: Number(sharedUrgencyCounts.moderate ?? 0),
+      routine: Number(sharedUrgencyCounts.routine ?? 0),
+    };
+  }, [canonicalUrgencyCounts, localUrgencyCounts, sharedOperationsSummary]);
 
   // ─── Selected client data ─────────────────────────────────────────────────
   const selectedEntry = rankEntries.find((e) => e.clientId === selectedClientId) ?? null;
@@ -223,7 +329,7 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
     setLoadError(null);
 
     Promise.all([
-      fetchClientWorkflowData(selectedClientId),
+      fetchClientWorkflowData(selectedClientId, demoModeEnabled),
       fetchPersistedStates(selectedClientId),
     ])
       .then(([data, states]) => {
@@ -236,10 +342,11 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
       .finally(() => {
         setLoadingSet((prev) => { const next = new Set(prev); next.delete(selectedClientId); return next; });
       });
-  }, [selectedClientId, dataCache, loadingSet]);
+  }, [selectedClientId, dataCache, demoModeEnabled, loadingSet]);
 
   // Pre-load mock clients on mount
   useEffect(() => {
+    if (!demoModeEnabled) return;
     MOCK_CLIENTS.forEach((m) => {
       const id = m.client.id;
       if (!dataCache[id]) {
@@ -247,7 +354,7 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [demoModeEnabled]);
 
   // ─── Derived recommendations for selected client ──────────────────────────
   const recommendations = useMemo(() => {

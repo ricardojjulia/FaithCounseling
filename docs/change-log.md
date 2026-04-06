@@ -2,6 +2,454 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 5, 2026 — Faith Workflows Evaluation Dimension Expansion
+
+### feat(workflows): add 5 new evaluation dimensions; replace insurance rule with gift arrangement
+
+**Date:** April 5, 2026
+**Affected area:** `apps/web/src/components/FaithWorkflows/engine/rules/`
+
+Expanded the Faith Workflows evaluation engine with 5 new rule dimensions and removed the practice-incompatible insurance check:
+
+**Removed:**
+- `ruleNoInsurance` — removed because the practice operates by gift-giving only and has no insurance billing model.
+
+**Added:**
+- `ruleGiftArrangementNote` (coordination, priority 3) — fires when an active client has no documented gift or financial arrangement. Replaces the insurance rule with one aligned to the gift-giving practice model. Surfaces a reminder to document the stewardship arrangement.
+- `rulePcl5Worsening` (clinical_caution, priority 8) — fires when PCL-5 scores show a worsening trend across 2 or more assessments. Prompts session agenda prep and treatment plan review.
+- `ruleGad7Worsening` (clinical_caution, priority 7) — fires when GAD-7 scores show a worsening trend across 2 or more assessments.
+- `ruleAuditHigh` (clinical_caution, priority 6–7) — fires when AUDIT score ≥ 8 (hazardous), ≥ 16 (harmful), or ≥ 20 (probable dependence). Includes a faith note on stewardship and body as a temple.
+- `ruleLongTermEngagement` (monitoring, priority 4) — fires after 18 months of active engagement with no formal continuation-of-care review note. Celebrates long-term growth and prompts formal review.
+- `ruleSpiritualAssessmentOverdue` (spiritual, priority 2) — fires when a client has faith integration opted in and has not completed a Spiritual Wellness Inventory in 90+ days (or never). Optional; surfaces as a gentle reminder only.
+
+---
+
+## April 5, 2026
+
+### feat: appointment composer — DateTimePicker with 55-minute auto-fill
+
+**Date:** April 5, 2026
+**Affected area:** `apps/web/src/components/SchedulingPage.jsx` — appointment composer modal
+
+The Start and End fields in the New/Edit Appointment modal now use Mantine `DateTimePicker` instead of a raw `datetime-local` text input. Picking a date opens a calendar popover; the time is set via a spinner. Format displayed: `MM/DD/YYYY hh:mm A`.
+
+When a start time is selected, the end time is automatically suggested as 55 minutes later. The auto-fill only overrides end if the user has not manually set it. Once the user edits the end time directly, subsequent start changes no longer override it.
+
+---
+
+## April 5, 2026 — Month Picker Bug Fix (root cause)
+
+### fix(scheduling): month picker off-by-one due to Mantine v8 string format + UTC parsing
+
+**Date:** April 5, 2026
+**Affected area:** `apps/web/src/components/SchedulingPage.jsx` — month picker
+
+Fixed the root cause of the month picker off-by-one error. Mantine v8 `MonthPickerInput` passes `onChange` a `"YYYY-MM-DD"` string (not a `Date` object). The previous handler fell through to `toMonthKey()`, which called `new Date("YYYY-MM-DD")` — a date-only ISO string that JavaScript parses as UTC midnight. In negative-offset timezones (US Eastern, etc.) this shifts the local date to the previous month, causing picking May to store April. Fixed by slicing the string directly (`value.slice(0, 7)`) to extract `"YYYY-MM"` without any Date construction.
+
+---
+
+## April 4, 2026 — Faithful Workflow Count Prop Sync
+
+### fix(workflows): keep the Faithful Workflows banner on the same canonical counts as the dashboard
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/src/App.jsx`, `apps/web/src/components/FaithWorkflows/FaithWorkflowsPage.jsx`
+
+The dashboard and Faithful Workflows page were both intended to show the same critical, moderate, and routine totals, but the workflow page could still drift when it fell back to its own local count derivation while the dashboard was already rendering the canonical metrics payload held in the app shell.
+
+The app now passes the dashboard's `faithfulCounts` object directly into Faithful Workflows. The page banner prefers that canonical payload first, then only falls back to operations-summary or local derived counts when the canonical counts are unavailable. This keeps the visible dashboard panel and the Faithful Workflows summary banner aligned.
+
+---
+
+## April 4, 2026 — Encrypted Buffer Read Fix
+
+### fix(api): accept Buffer-backed ciphertext during decrypt
+
+**Date:** April 4, 2026
+**Affected area:** `apps/api/src/lib/encrypt.js`
+
+Recurring series creation could appear to fail even after the insert succeeded. The actual crash happened on the refresh read immediately afterward: older `appointment_series` rows were returning encrypted name fields from MySQL as `Buffer` objects, but the shared `decrypt()` helper only handled strings and crashed on `stored.split(...)`.
+
+The shared decrypt helper now normalizes `Buffer` values to UTF-8 strings before parsing the encrypted payload format. This fixes recurring-series refresh reads and hardens any other API read path that encounters buffer-backed encrypted columns.
+
+---
+
+## April 4, 2026 — Dashboard Faithful Workflows Navigation
+
+### fix(dashboard): make the Faithful Workflows metric card open the workflow workspace
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/src/components/Metrics.jsx`, `apps/web/src/App.jsx`
+
+The dashboard already let staff drill from the session and appointment metric cards into deeper workflow views, but the `Faithful Workflows` panel was still a static summary tile. That made the panel look interactive without actually helping the user move into the workflow.
+
+The Faithful Workflows metric card now uses the same clickable metric treatment as the other dashboard cards and routes directly into the Faithful Workflows page through the existing `faith` workspace view.
+
+---
+
+## April 4, 2026 — Runtime Label Catalog Sync
+
+### fix(i18n): align English runtime labels with current workspace names
+
+**Date:** April 4, 2026
+**Affected area:** `apps/api/data/i18n/en.json`
+
+The shared frontend label catalog had already been updated to use `Dashboard`, `Client Scheduling`, `Documents`, and `Client Portal`, but the API-backed English locale file was still overriding some of those values with older strings like `Operations Dashboard` and `Portal`.
+
+The English runtime catalog now matches the active workspace naming so the side menu and top bar render the same labels whether they come from base frontend messages or the API locale payload.
+
+---
+
+## April 4, 2026 — Navigation Label Cleanup
+
+### fix(nav): simplify top-level workspace labels
+
+**Date:** April 4, 2026
+**Affected area:** `packages/i18n/src/index.js`
+
+Staff-facing workspace names were still carrying heavier operational wording than necessary in the main navigation and top bar. The underlying surfaces were correct, but labels like `Operations Dashboard`, `Scheduling Workspace`, and `Documents Workspace` made the shell feel more technical than it needed to.
+
+The shared label catalog now uses:
+
+- `Dashboard` instead of `Operations Dashboard`
+- `Client Scheduling` instead of `Scheduling Workspace`
+- `Documents` instead of `Documents Workspace`
+- `Client Portal` in the side navigation instead of `Portal`
+
+This change only updates user-facing copy. Surface IDs, routes, telemetry, and monitoring mappings remain unchanged.
+
+---
+
+## April 4, 2026 — Clinical Chart Experience Refresh
+
+### feat(chart): add summary visuals and functional graphics to Clinical Chart
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/src/components/ClinicalChart/*`
+
+The Clinical Chart surface was structurally complete but visually flat. It opened as a title, client picker, and raw tab stack, which made the page feel colder and less informative than the rest of the application.
+
+The chart now opens with a richer summary layer and functional visual cues:
+
+- new chart summary header with session rhythm, note readiness, treatment-plan health, and latest assessment signal
+- session-status timeline in Session Notes so counselors can see draft, signed, due, cancelled, and upcoming sessions at a glance
+- mini trend graphics and delta indicators in Progress for scored assessments
+- treatment-plan overview cards for plan status, goal coverage, and review rhythm
+- stronger tab-shell treatment so the page feels like a distinct clinical workspace rather than a plain form stack
+
+The change keeps the existing chart surfaces and telemetry IDs intact, so no surface-registry update was required. Documentation was updated in `README.md` and `apps/web/README.md`.
+
+## April 4, 2026 — Faithful Workflow Count Sync
+
+### fix(workflows): keep Faithful Workflows banner counts aligned with dashboard metrics
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/src/App.jsx`, `apps/web/src/components/FaithWorkflows/FaithWorkflowsPage.jsx`
+
+The dashboard and Faithful Workflows page had drifted apart again. The dashboard was rendering the canonical `faithfulWorkflowCounts` values from the operations summary, while the Faithful Workflows banner was recomputing its own counts from local rank entries. That could produce conflicting totals for the same counselor session.
+
+Faithful Workflows now consumes the same shared operations-summary count object that the dashboard uses. The page keeps its local urgency rollup only as a fallback when the shared summary is unavailable, so both surfaces now report the same critical, moderate, and routine totals under normal operation.
+
+The left-panel client roster now also applies the same operational urgency signals used by the shared summary. Clients with critical note gaps or high-touchpoint-without-follow-up conditions are visibly elevated in the list, so a banner showing a critical client now corresponds to an actual critical row in the page.
+
+Documentation was updated in `README.md` and `apps/web/README.md` to record the shared-count and shared-urgency behavior.
+
+---
+
+## April 4, 2026 — About Page Refresh
+
+### feat(about): reposition the About page with stronger product impact
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/public/about.html`
+
+The standalone About page was visually polished but still read like an older operations-console brochure. It leaned on soft indigo styling, generic platform copy, and a product posture that undersold the counselor-first direction of the application.
+
+The page now uses a warmer, more deliberate visual system and reframes the product around the actual work of counseling:
+
+- stronger hero hierarchy with a clearer product point of view
+- counselor-first messaging instead of generic admin-console language
+- sharper articulation of the platform's purpose, workflow spine, and trust posture
+- platform-depth section that keeps monitoring and API documentation links visible without letting them dominate the page
+- preserved standalone telemetry coverage for the existing `about` surface
+
+Documentation was also updated in the root `README.md` and `apps/web/README.md` so the checked-in public surface is described consistently with the current product direction.
+
+### fix(about): align refreshed About page with shared app palette
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/public/about.html`
+
+The first refresh improved the page structure and message, but its warmer standalone palette drifted from the light indigo visual system used across the main workspace, monitoring, and operations pages.
+
+The About page now keeps the stronger content and hierarchy while realigning its background, accents, cards, CTAs, and highlight treatments to the shared app palette so it feels like the same product family rather than a separate microsite.
+
+---
+
+## April 4, 2026 — Telemetry Fix
+
+### fix(telemetry): correct emptyState signal for implemented Workspace Studio tabs
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx`
+
+`useSurfaceTelemetry` was reporting `emptyState: 'placeholder'` for all non-portal Workspace Studio tabs. Now that Practice, Locations, Staff, Lifecycle, Appointments, Documents, and Offerings are fully implemented, only the two remaining placeholder tabs (Chart, Clients) report `emptyState: 'placeholder'`. All implemented tabs report `emptyState: null`, correctly signalling active surfaces to the monitoring layer.
+
+The five new studio surface IDs (`studio.practice`, `studio.locations`, `studio.staff`, `studio.lifecycle`, `studio.appointments`) were already registered in `packages/telemetry/src/surfaces.js`; no registry change was needed.
+
+---
+
+## v5.7.0 — April 4, 2026 — Workspace Studio Full-Tab Activation
+
+### feat: activate all Workspace Studio placeholder tabs
+
+**Date:** April 4, 2026
+**Affected area:** Workspace Studio — Practice, Locations, Staff, Lifecycle, Appointments tabs; `App.jsx`; `ClientPortalPage.jsx`
+
+All five previously-placeholder Workspace Studio tabs are now fully functional:
+
+- **Practice tab** — edit the practice profile (name, type, timezone, faith tradition, contact email/phone) with live dirty-state tracking and PATCH save via `/api/v1/practices/:id`.
+- **Locations tab** — full CRUD for scheduling locations: add via modal, inline edit, delete via icon action. Fields: name (required), address, capacity, telehealth/remote-enabled flag (rendered as Telehealth badge). Uses `/api/v1/locations`.
+- **Staff tab** — read-only staff roster loaded from `/api/v1/staff`. Counselors shown in 2-column card grid with avatar, role badge, license type/number, supervision status, and bio. Admins shown in flat list with last-login timestamp and account-locked flag. "Manage Staff Accounts →" button navigates to the Staff Management page.
+- **Lifecycle tab** — caseload management board. Status summary cards (Active, Waitlist, Inactive, Discharged) are clickable filters with count and progress bar. Referral sources bar chart (top 8). Per-client rows allow status transitions via dropdown; discharge triggers a modal capturing reason (6 options) and free-text notes. Uses `PATCH /api/v1/clients/:id/lifecycle`.
+- **Appointments tab** — service code configuration (CPT/billing codes). List with active/inactive filter pills. Add via modal, inline edit, activate/deactivate toggle. Fields: code, name, category (6 types), default duration (15–240 min). Uses `/api/v1/billing/service-codes`.
+
+Additional wiring in the same commit:
+
+- **Assign Forms button** — ClientPortalPage "Assigned Forms and Intake Packets" section now has an "+ Assign Forms" button that navigates directly to Workspace Studio Documents tab with the client pre-selected.
+- **View Client on approved requests** — approved portal requests with a linked client now show a "View Client" button in the Workspace Studio Portal tab.
+- `onOpenCounselorMaintenance` prop threaded from `App.jsx` through `WorkspaceStudioPage` to `StaffTab`.
+
+**Files added:**
+
+- `apps/web/src/components/WorkspaceStudio/tabs/PracticeTab.jsx`
+- `apps/web/src/components/WorkspaceStudio/tabs/LocationsTab.jsx`
+- `apps/web/src/components/WorkspaceStudio/tabs/StaffTab.jsx`
+- `apps/web/src/components/WorkspaceStudio/tabs/LifecycleTab.jsx`
+- `apps/web/src/components/WorkspaceStudio/tabs/AppointmentsTab.jsx`
+
+**Files modified:**
+
+- `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx` — imports and wires all 5 new tabs; adds `onOpenCounselorMaintenance` prop
+- `apps/web/src/components/Portal/ClientPortalPage.jsx` — adds `onAssignForms` prop and "+ Assign Forms" button
+- `apps/web/src/components/WorkspaceStudio/tabs/DocumentsStudioTab.jsx` — accepts `initialClientId` prop with effect-based handoff
+- `apps/web/src/App.jsx` — `handleOpenAssignForms` callback, `workspaceStudioDocumentsClientId` state, `onOpenCounselorMaintenance` wired
+
+---
+
+### feat: auto-assign default signup forms when creating client from portal request
+
+**Date:** April 4, 2026
+**Affected area:** `apps/api/src/index.js` — `handlePortalPublicRequestConversion`
+
+When a practice admin presses "Create Client" on an approved portal care request, the platform now automatically assigns any forms configured in the practice's Default Signup Forms settings to the newly created client. Assignment uses `assignmentType: 'account_signup'` consistent with other portal signup flows. Already-converted requests (status `already_converted`) are skipped to avoid duplicate assignments.
+
+### fix: portal navigation not switching when client detail is open
+
+**Date:** April 3, 2026
+**Affected area:** `apps/web/src/App.jsx`, portal navigation
+
+Fixed: clicking "View / Assign Documents" from Client Detail had no visible effect. Root cause — `handleOpenPortal` set `currentView = 'portal'` but did not clear `selectedClientRequest`, so the render chain kept showing `ClientDetailPage` (which takes priority) instead of switching to the portal. Added `setSelectedClientRequest(null)` to `handleOpenPortal`. Rebuilt public bundle.
+
+### fix: refresh public web bundle so client detail documents action is visible
+
+**Date:** April 3, 2026
+**Affected area:** `apps/web/public/index.html`, `apps/web/public/assets/*`
+
+Rebuilt and refreshed checked-in public web artifacts so the Client Detail header action "View / Assign Documents" appears in environments serving the static public bundle.
+
+### chore: include full pending web public assets bundle
+
+**Date:** April 3, 2026
+**Affected area:** `apps/web/public/index.html`, `apps/web/public/assets/*`
+
+Included all currently pending generated web public bundle artifacts so checked-in deployable/public assets remain in sync with recently shipped UI workflow updates.
+
+### feat: client detail direct documents action
+
+**Date:** April 3, 2026
+**Affected area:** Client Detail navigation, Portal Documents workflow
+
+Added a new Client Detail header action: "View / Assign Documents". Selecting this action opens the Client Portal surface directly on the Documents tab and preselects the current client.
+
+**What changed:**
+
+- `apps/web/src/components/ClientDetail/ClientDetailHeader.jsx` — added the new header button.
+- `apps/web/src/components/ClientDetail/ClientDetailPage.jsx` — forwards a client-scoped documents action callback.
+- `apps/web/src/App.jsx` — introduced portal handoff state and `handleOpenPortal` to open a specific portal tab with a selected client.
+- `apps/web/src/components/Portal/ClientPortalPage.jsx` — added `initialClientId` and `initialTab` props with effect-based handoff handling.
+
+### fix: date pickers calendar close and manual entry across all forms
+
+**Date:** April 3, 2026
+**Affected area:** All forms with `DateInput` — FormRunner, DiagnosesTab, DemographicsTab, LegalAdminTab, InsuranceTab, EmploymentTab, CertificationsTab, LicensesTab
+
+Clicking a day in a date picker calendar did not close the popover and did not save the value on several forms. Manual entry of dates in any format other than strict ISO (`YYYY-MM-DD`) did not work on any form.
+
+**Root cause (calendar won't close):** Mantine v8 `DateInput` passes a `YYYY-MM-DD` string (not a `Date` object) to `onChange`. Multiple forms called `d.toISOString()` on that string, throwing `TypeError: d.toISOString is not a function`. This exception propagated before `setDropdownOpened(false)` could execute, so the calendar stayed open and the value was never stored.
+
+**Root cause (manual entry):** All `DateInput` components used `valueFormat="YYYY-MM-DD"`, requiring strict ISO input. Users could not type natural dates like `01/15/2000`.
+
+**Fix:** Updated all `dateToStr` helpers to safely handle both strings and Date objects. Removed all `strToDate()` wrappers from state initialization and `value=` props — Mantine v8 `DateInput` accepts `YYYY-MM-DD` strings natively. Removed `dateToStr()` wrappers from `onChange` handlers where Mantine already provides the string. Changed `valueFormat` to `"MM/DD/YYYY"` and added matching `placeholder="MM/DD/YYYY"` on all eight files: `FormRunner.jsx`, `DiagnosesTab.jsx`, `DemographicsTab.jsx`, `LegalAdminTab.jsx`, `InsuranceTab.jsx`, `EmploymentTab.jsx`, `CertificationsTab.jsx`, `LicensesTab.jsx`.
+
+## v5.6.0 — April 3, 2026 — Portal Client Conversion and Plan Hygiene
+
+### fix: counselor high-touchpoint toggle returning 403
+
+**Date:** April 3, 2026
+**Affected area:** Client access control, high-touchpoint flag toggle
+
+Counselors received a 403 "Access to this resource is not permitted" when attempting to toggle the high-touchpoint flag on any client, even clients assigned to them. The UI displayed "Failed to update high-touchpoint flag. Please try again."
+
+**Root cause:** `enforceAssignedClientAccess` blocked counselors whenever `client.primaryCounselorId` was `null`. All seed clients in the DB had `primary_counselor_id = NULL` because the migration INSERT did not include that column. As a result, every counselor was denied on every client.
+
+**What changed:**
+
+- `apps/api/src/index.js` — `enforceAssignedClientAccess` now allows counselor access when: (a) the client has no assigned primary counselor (unassigned clients are accessible to any counselor in the practice), or (b) the counselor is the assigned primary counselor for that client. Previously it only allowed case (b) and only when the scope ID resolved.
+- `apps/api/src/db/migrate.js` — seed INSERT for `c-001` (Sarah Kim) now includes `primary_counselor_id = 'staff-counselor-mercy'`. The `ensureDevPortalClient` idempotent path also sets `primary_counselor_id` via `COALESCE` so it only backfills when the column is null.
+
+### fix: high-touchpoint PATCH returning 415 Unsupported Media Type for browser requests
+
+**Date:** April 3, 2026
+**Affected area:** Web proxy body forwarding, high-touchpoint flag toggle
+
+Admin users and any user whose toggle attempt went through the browser received "Failed to update high-touchpoint flag. Please try again." The API logged HTTP 415 "Unsupported media type. Use application/json." for every browser-originated PATCH.
+
+**Root cause:** `readRequestBody` in `apps/web/server.js` accumulated the request body into a JavaScript `string`. When the proxy's `fetch` call forwarded that string to the upstream API with `body: <string>`, Node.js's native `fetch` (undici) set the internal `Content-Type` to `text/plain;charset=UTF-8` — overriding the explicitly forwarded `content-type: application/json` header. The API's `readJsonBody` detected the non-JSON content-type and rejected with 415.
+
+**What changed:**
+
+- `apps/web/server.js` — `readRequestBody` now collects raw `Buffer` chunks and returns `Buffer.concat(chunks)`. A `Buffer` / `Uint8Array` body passed to `fetch` carries no implicit Content-Type, so the explicitly forwarded `content-type: application/json` header is preserved end-to-end.
+
+### fix: duplicate Content-Type header causing 415 for all browser POST/PATCH mutations
+
+**Date:** April 3, 2026
+**Affected area:** Frontend headers, all browser-initiated POST/PATCH mutations
+
+Every browser-originated mutation (high-touchpoint toggle, session notes, internal notes, offerings) returned HTTP 415, while the same requests via curl succeeded. The UI showed "Failed to update high-touchpoint flag. Please try again." and similar errors on clinical chart saves.
+
+**Root cause:** `csrfHeaders()` (in `apps/web/src/lib/csrf.js`) already returns `'content-type': 'application/json'` (lowercase). Nine callsites across five components also added `'Content-Type': 'application/json'` (mixed case) to the same headers object. JavaScript object keys are case-sensitive, so both keys coexisted in the plain object. When passed to the browser's native `fetch`, the `Headers` constructor normalizes both to lowercase `content-type` and joins the values with a comma: `"application/json, application/json"`. The proxy forwarded this verbatim. The API's `isJsonMediaType` split only on `;`, leaving the full string `"application/json, application/json"` which is not equal to `"application/json"` → 415.
+
+**What changed:**
+
+- `apps/web/src/components/ClientsPage.jsx` — removed redundant `'Content-Type': 'application/json'` from `handleToggleHighTouchpoint`.
+- `apps/web/src/components/WorkspaceStudio/tabs/OfferingsTab.jsx` — same fix.
+- `apps/web/src/components/Offerings/OfferingsPage.jsx` — same fix.
+- `apps/web/src/components/ClinicalChart/tabs/TreatmentPlanTab.jsx` — same fix.
+- `apps/web/src/components/ClinicalChart/tabs/SessionNotesTab.jsx` — same fix (3 callsites).
+- `apps/web/src/components/ClinicalChart/tabs/InternalNotesTab.jsx` — same fix (2 callsites).
+- `apps/api/src/lib/http.js` — `isJsonMediaType` now splits the content-type on `,` before `;` to evaluate only the first value, making the API resilient to browser duplicate-header joining.
+
+### fix: restart stale local services and normalize portal conversion routes
+
+Fixes a local startup failure mode where `pnpm start` could keep reusing an older repo-managed API or web process and continue serving stale behavior after code changes. This showed up in Workspace Studio Portal as approved care requests displaying **"Create Client"** while the click hit an older API process and returned a generic `Not found`.
+
+**What changed:**
+
+- `ops/start-all.mjs`
+  - now detects repo-managed listeners already running on ports `3001` and `3002`
+  - terminates those repo-owned API/web processes before starting fresh ones
+  - preserves the old reuse behavior only for non-repo external listeners
+- `apps/api/src/index.js`
+  - added normalized route templates for `/v1/portal/public-requests` and `/v1/portal/public-requests/convert`
+  - keeps route telemetry, RBAC handling, and request classification aligned with the actual mounted portal handlers
+- `README.md`
+  - documents that `pnpm start` now refreshes repo-managed local services instead of silently reusing stale ones
+
+### fix: approved care requests can create client records from Workspace Studio
+
+Closes the remaining approval dead-end for non-signup portal requests. Approved `care_request` items in Workspace Studio Portal now expose a direct `Create Client` action instead of stopping at an approved status with no conversion path.
+
+**What changed:**
+
+- new admin-only `POST /v1/portal/public-requests/convert` action converts approved `care_request` items into client records
+- conversion creates the client record, writes `converted_client_id` back to the portal request, creates a lifecycle record for care intake tracking, and seeds the portal contact profile from submitted request details
+- Workspace Studio Portal now shows **"Create Client"** for approved care requests without a linked client and switches to **"View Client"** after conversion
+- `studio.portal` action telemetry now records success/failure for care-request client conversion without sending client-identifying data
+
+**Files changed:**
+
+| File | Change |
+| --- | --- |
+| `apps/api/src/index.js` | Added care-request conversion endpoint, shared portal-request client creation helper, lifecycle/profile linking, and audited mutation path |
+| `apps/api/test/portal-public-request-conversion.test.mjs` | Added route coverage for approve → convert flow, invalid-state rejection, and admin gating |
+| `apps/web/src/components/WorkspaceStudio/tabs/PortalTab.jsx` | Added `Create Client` action and `studio.portal` conversion telemetry |
+| `apps/web/README.md` | Documented approved care-request conversion behavior |
+| `README.md` | Updated recent release summary for the expanded portal conversion flow |
+
+### release: portal request → client conversion flow (v5.6.0)
+
+Closes the approval dead-end in the public portal request workflow. Previously, approving an `account_signup` request created a client and portal account but provided no way to navigate back to that client. The approved request was a dead end.
+
+**What changed:**
+
+- `portal_registration_requests` now stores `converted_client_id` (new column, added via zero-downtime column migration)
+- `activatePortalSignupRequest` writes the new client ID back to the registration request on activation
+- Public requests list now returns `convertedClientId` in every API response
+- **"View Client" button** appears on every approved `account_signup` request that has a linked client — navigates directly to the client record in the Clients workspace
+- Prop threading: `onViewClient` → `PortalTab` → `WorkspaceStudioPage` → `App.jsx`
+
+**Files changed:**
+
+| File | Change |
+| --- | --- |
+| `apps/api/src/db/migrate.js` | Column migration: `portal_registration_requests.converted_client_id VARCHAR(64) NULL` |
+| `apps/api/src/db/queries/formWorkflows.js` | `rowToPortalRegistrationRequest` maps new column; `updatePortalRegistrationRequest` accepts `convertedClientId` |
+| `apps/api/src/index.js` | `activatePortalSignupRequest` writes `convertedClientId` on activation |
+| `apps/web/src/components/WorkspaceStudio/tabs/PortalTab.jsx` | `PublicRequestsSection` + `PortalTab` accept `onViewClient`; "View Client" button wired |
+| `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx` | `onViewClient` prop threaded through to `PortalTab` |
+| `apps/web/src/App.jsx` | `onViewClient={handleOpenClient}` passed to `WorkspaceStudioPage` |
+
+### chore: plan evaluation pass and PLAN-TRACKER
+
+- Evaluated all 20 plans in `PLANS/` against shipped code
+- Marked 17 plans ✅ COMPLETE with verification evidence and dates
+- Added `PLANS/PLAN-TRACKER.md` as a single-view index of plan status
+- Executed remaining `PROJECT-CLEANUP` items: removed `__pycache__`, stale `.github/agents/translation_guardian/` copy, and `test-results/` artifacts
+
+### chore: database reset and backup tooling
+
+- Full DB backup workflow validated: `docker exec faith-mysql mysqldump` → `backups/`
+- Database wiped to clean state: all client, clinical, portal, financial, and session data removed; staff accounts and form catalog preserved
+
+### fix: disable Faithful Workflows demo fallback by default
+
+Faithful Workflows no longer injects hardcoded mock clients after a real database reset. The page now defaults to real client data only, while keeping an explicit opt-in demo switch for later use.
+
+- `apps/web/src/components/FaithWorkflows/FaithWorkflowsPage.jsx`
+  - demo/mock clients now load only when `VITE_ENABLE_FAITH_WORKFLOWS_DEMO=true` or `localStorage['faith_workflows.demo_mode']='true'`
+  - mock-client preload cache now runs only in explicit demo mode
+  - mock-client API fallback is disabled when demo mode is off
+- `README.md`, `apps/web/README.md`, `.env.example`
+  - documented the new default-off behavior and the supported re-enable options
+
+---
+
+## April 2, 2026
+
+### fix: intake preview form key mismatch causing "Preview not currently active" for all real clients
+
+The `INTAKE_FORM_KEYS` constant in `buildIntakePreview` used PascalCase JS export names (`'LongIntakeForm'`, `'ShortIntakeForm'`) instead of the snake_case `form_key` values actually stored in the `form_submissions` table (`'long_intake'`, `'short_intake'`). This caused `hasIntakeFormSubmission` to always evaluate to `false` for any client who submitted forms through the live UI, blocking the preview for every real client. The `submittedAt` fallback in the return object had the same wrong keys. The `packetStatus` field returned `null` (displayed as "Not on file") for clients without a formal intake packet row even when they had completed form submissions.
+
+**Changes:**
+
+- `INTAKE_FORM_KEYS` now includes all four variants (`'long_intake'`, `'short_intake'`, `'LongIntakeForm'`, `'ShortIntakeForm'`) to cover both real UI submissions and legacy seed data
+- `submittedAt` fallback chain now tries snake_case keys first, then PascalCase, so the submission timestamp is returned correctly for all clients
+- `packetStatus` now synthesizes `'submitted'` from form submissions when no formal `intake_packets` row exists, so clients who completed forms directly see the correct status
+
+Affected files: `apps/api/src/lib/intake-preview.js`
+
+---
+
+### fix: remove held session constraint from intake preview eligibility
+
+Removed the `heldSessions.length === 0` gate from `buildIntakePreview` so that clients with any prior held or started session can now receive an intake preview once their intake paperwork is on file. Also removed the now-unused `isHeldSession()` helper function and its orphaned `heldSessionCount` reference from the return object, which was causing a `ReferenceError` at runtime.
+
+- `apps/api/src/lib/intake-preview.js` — removed `heldSessions` variable, `isHeldSession()` function, eligibility compound condition, held-session reason message, and the stale `heldSessionCount` field in the sessions return object
+- `AGENTS.md` — added commit documentation requirements: every commit must update `README.md` and `docs/change-log.md`; bug fixes use `### fix:` entries; major revisions require `### release:` entries and a release summary file in `docs/`
+
+---
+
 ## Maintenance — April 2, 2026 — Login Copy and Dashboard Bug Fixes
 
 ### fix(auth): faith-centered login welcome messaging restored
@@ -101,7 +549,6 @@ Makes `pnpm start` the permanent and reliable local startup path by enforcing en
 - reduces startup failures where API booted without DB env loaded
 - prevents false "DB disconnected" states caused by starting with legacy commands
 - gives humans and AI agents one consistent startup contract
-
 
 ## v5.5.2 — Faithful Workflows: Phase 6 — Visual Impact Upgrade (3 Canvas Views)
 
@@ -702,7 +1149,7 @@ Replaces the billing model with a faith-based voluntary offering system througho
 
 ### Changed
 
-- `apps/api/data/i18n/en.json` — renamed `nav.billing` → `nav.offerings`, `studio.tab.billing` → `studio.tab.offerings`, `portal.tab.financials` → `portal.tab.giving`; replaced `portal.financials.*` block with `portal.giving.*`; removed `client.tab.insurance`; added `offerings.*` and `topbar.offerings.*` key blocks
+- `apps/api/data/i18n/en.json` — renamed `nav.billing` → `nav.offerings`, `studio.tab.billing` → `studio.tab.offerings`, `portal.tab.financials` → `portal.tab.giving`; replaced `portal finanicals.*` block with `portal.giving.*`; removed `client.tab.insurance`; added `offerings.*` and `topbar.offerings.*` key blocks
 - `packages/telemetry/src/surfaces.js` — `billing` → `offerings`, `portal.financials` → `portal.giving`, removed `client.insurance`, `studio.billing` → `studio.offerings`
 - `apps/web/src/components/Sidebar.jsx` — `billing` → `offerings`
 - `apps/web/src/components/TopBar.jsx` — `billing` → `offerings` in viewKeyMap

@@ -76,13 +76,32 @@ This hook blocks direct pushes to main and master.
 
 ---
 
+## Commit documentation requirements
+
+Every commit must update the following, with no exceptions:
+
+- **`README.md`** — update any sections affected by the change (features, setup steps, known issues, etc.).
+- **`docs/change-log.md`** — add an entry for the change. Entry format depends on the commit type:
+
+  | Commit type | Entry format |
+  | --- | --- |
+  | Bug fix / error | `### fix: <short description>` with date, affected area, and what was corrected |
+  | Feature / enhancement | `### feat: <short description>` with date and summary |
+  | Major revision / release | `### release: vX.Y.Z — <title>` with date and summary; **also** create a release summary file (see below) |
+
+- **Release summary file** — required for any major revision or version bump. Create `docs/vX.Y.Z-RELEASE-SUMMARY.md` following the naming convention of existing release files in `docs/`. The file must include: version, date, summary of changes, migration steps if any, and known issues.
+
+These documentation updates must be part of the same commit as the code change. Do not defer them to a follow-up commit.
+
+---
+
 ## Required execution checklist for every task
 
 1. Read `AGENTS.md` (this file).
 2. Confirm task scope — identify whether monitoring or security plans apply.
 3. Make changes on a new feature branch.
 4. Run relevant validation and tests.
-5. Update docs when behavior or user-facing flow changes.
+5. Update `README.md` and `docs/change-log.md` (and create a release summary if applicable).
 6. Commit with a signed commit.
 7. Push branch and open a PR with a clear summary and validation notes.
 

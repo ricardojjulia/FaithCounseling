@@ -72,6 +72,81 @@ function NoteTypeBadge({ noteType }) {
   );
 }
 
+function getTimelineState(appointment, linkedNotes) {
+  if (appointment.status === 'cancelled') {
+    return { label: 'Cancelled', color: 'red', detail: 'Session cancelled' };
+  }
+  if (appointment.status === 'scheduled') {
+    return { label: 'Upcoming', color: 'blue', detail: 'Scheduled session ahead' };
+  }
+  if (linkedNotes.length === 0) {
+    return { label: 'Note due', color: 'red', detail: 'No linked note yet' };
+  }
+  if (linkedNotes.some((note) => note.locked)) {
+    return { label: 'Signed', color: 'teal', detail: 'Signed note on file' };
+  }
+  return { label: 'Draft open', color: 'yellow', detail: 'Draft note still open' };
+}
+
+function SessionTimeline({ appointments, notesByAppt }) {
+  const timelineItems = [...appointments]
+    .sort((left, right) => new Date(right.startsAt ?? right.scheduledAt ?? 0) - new Date(left.startsAt ?? left.scheduledAt ?? 0))
+    .slice(0, 6);
+
+  if (timelineItems.length === 0) return null;
+
+  return (
+    <Paper withBorder radius="xl" p="md" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.96), rgba(244,247,255,0.92))' }}>
+      <Stack gap="sm">
+        <div>
+          <Text size="xs" tt="uppercase" fw={700} c="indigo" style={{ letterSpacing: '0.08em' }}>
+            Session Timeline
+          </Text>
+          <Text c="dimmed" size="sm">
+            Recent and upcoming sessions, with note completion state at a glance.
+          </Text>
+        </div>
+        <Group wrap="nowrap" gap="sm" style={{ overflowX: 'auto', paddingBottom: 4 }}>
+          {timelineItems.map((appointment) => {
+            const state = getTimelineState(appointment, notesByAppt[appointment.id] ?? []);
+            return (
+              <Paper
+                key={appointment.id}
+                withBorder
+                radius="lg"
+                p="sm"
+                style={{
+                  minWidth: 190,
+                  flex: '0 0 auto',
+                  borderColor: `var(--mantine-color-${state.color}-3)`,
+                  background: `var(--mantine-color-${state.color}-0)`,
+                }}
+              >
+                <Stack gap={6}>
+                  <Group justify="space-between" gap="xs" wrap="nowrap">
+                    <Text fw={700} size="sm" lineClamp={1}>
+                      {formatDate(appointment.startsAt ?? appointment.scheduledAt)}
+                    </Text>
+                    <Badge size="xs" color={state.color} variant="filled">
+                      {state.label}
+                    </Badge>
+                  </Group>
+                  <Text size="xs" c="dimmed">
+                    {APPT_TYPE_LABELS[appointment.appointmentType] ?? appointment.appointmentType ?? 'Session'}
+                  </Text>
+                  <Text size="xs" fw={600}>
+                    {state.detail}
+                  </Text>
+                </Stack>
+              </Paper>
+            );
+          })}
+        </Group>
+      </Stack>
+    </Paper>
+  );
+}
+
 function NoteCard({ note, appointment, onSign, onUpdate }) {
   const { t } = useI18n();
   const [editing, setEditing] = useState(false);
@@ -309,7 +384,7 @@ export default function SessionNotesTab({
     try {
       await apiFetch(`/api/v1/clients/${encodeURIComponent(clientId)}/progress-notes`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+        headers: csrfHeaders(),
         body: JSON.stringify({
           appointmentId: draft.appointmentId,
           noteType: draft.noteType,
@@ -334,7 +409,7 @@ export default function SessionNotesTab({
   const handleUpdate = async (noteId, fields) => {
     await apiFetch(`/api/v1/clients/${encodeURIComponent(clientId)}/progress-notes/${encodeURIComponent(noteId)}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+      headers: csrfHeaders(),
       body: JSON.stringify(fields),
     });
     await loadNotes();
@@ -343,7 +418,7 @@ export default function SessionNotesTab({
   const handleSign = async (noteId) => {
     await apiFetch(`/api/v1/clients/${encodeURIComponent(clientId)}/progress-notes/${encodeURIComponent(noteId)}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+      headers: csrfHeaders(),
       body: JSON.stringify({
         locked: true,
         signedBy: currentUser
@@ -376,6 +451,8 @@ export default function SessionNotesTab({
 
   return (
     <Stack gap="md">
+      <SessionTimeline appointments={appointments} notesByAppt={notesByAppt} />
+
       <Group justify="space-between">
         <Title order={4}>{t('chart.tab.sessionNotes')}</Title>
         <Button size="sm" onClick={() => setComposerOpen((v) => !v)}>

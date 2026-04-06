@@ -82,7 +82,7 @@ export default function OfferingsTab() {
       const amountCents = Math.round((suggestedDraft ?? 0) * 100);
       await apiFetch('/api/v1/portal/settings', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+        headers: csrfHeaders(),
         body: JSON.stringify({
           suggestedOfferingCents: amountCents,
           offeringMinistryNote: ministryNote,

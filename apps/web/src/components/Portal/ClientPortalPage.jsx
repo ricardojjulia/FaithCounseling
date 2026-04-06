@@ -226,7 +226,15 @@ function fileToBase64(file) {
   });
 }
 
-export default function ClientPortalPage({ currentUser, clients = [], onSignOut = async () => {} }) {
+export default function ClientPortalPage({
+  currentUser,
+  clients = [],
+  initialClientId = null,
+  initialTab = 'dashboard',
+  onSignOut = async () => {},
+  onBackToClient = null,
+  onAssignForms = null,
+}) {
   const { t } = useI18n();
   const userRole = currentUser?.role ?? null;
   const isClientRole = userRole === 'client';
@@ -268,6 +276,16 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
   const activeSurfaceId = PORTAL_TAB_SURFACES[activeTab] ?? 'portal.dashboard';
   const overview = portalData.overview;
   const profile = portalData.profile;
+
+  useEffect(() => {
+    setActiveTab(initialTab || 'dashboard');
+  }, [initialTab]);
+
+  useEffect(() => {
+    if (isClientRole) return;
+    if (!initialClientId) return;
+    setSelectedClientId(initialClientId);
+  }, [initialClientId, isClientRole]);
 
   useSurfaceTelemetry(activeSurfaceId, {
     surfaceKind: 'tab',
@@ -719,7 +737,14 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
     <Stack p="md" gap="md">
       <Group justify="space-between" align="flex-start">
         <Box>
-          <Title order={2}>Client Portal</Title>
+          <Group gap="sm" align="center">
+            {onBackToClient && initialClientId && (
+              <Button variant="subtle" size="xs" onClick={() => onBackToClient(initialClientId)}>
+                ← Back to Client
+              </Button>
+            )}
+            <Title order={2}>Client Portal</Title>
+          </Group>
           <Text c="dimmed" size="sm">
             {overview?.settings?.practiceName || 'FaithCounseling'} portal overview, profile preferences, secure uploads, and data-rights self-service.
           </Text>
@@ -1131,7 +1156,18 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
 
               <SimpleGrid cols={{ base: 1, lg: 2 }}>
                 <Paper withBorder radius="md" p="md">
-                  <Title order={4}>{t('portal.documents.assignedFormsTitle')}</Title>
+                  <Group justify="space-between" align="center">
+                    <Title order={4}>{t('portal.documents.assignedFormsTitle')}</Title>
+                    {onAssignForms && (
+                      <Button
+                        size="xs"
+                        variant="light"
+                        onClick={() => onAssignForms(effectiveClientId)}
+                      >
+                        + Assign Forms
+                      </Button>
+                    )}
+                  </Group>
                   <Stack gap="sm" mt="md">
                     {overview?.assignedForms?.length ? overview.assignedForms.map((item) => (
                       <Paper key={item.id} withBorder radius="sm" p="sm">

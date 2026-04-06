@@ -1655,6 +1655,11 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/portal/public-requests/convert') {
+      await handlePortalPublicRequestConversion(request, response, session);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/portal/public-requests') {
       await handlePortalPublicRequests(request, response, requestUrl, session);
       return;
@@ -2270,7 +2275,9 @@ async function enforceAssignedClientAccess(request, response, client, session, d
   }
 
   const counselorScopeId = await resolveCallerCounselorScopeIdForAccess(request, session);
-  if (counselorScopeId && client?.primaryCounselorId === counselorScopeId) {
+  // Allow access when: client has no assigned primary counselor (unassigned clients are open),
+  // OR the calling counselor is the assigned primary counselor for this client.
+  if (!client?.primaryCounselorId || client?.primaryCounselorId === counselorScopeId) {
     return false;
   }
 
@@ -4770,8 +4777,6 @@ async function activatePortalSignupRequest({ tenantId, requestRecord, actorId = 
   const normalizedEmail = normalizePortalEmail(requestRecord.email);
   if (!normalizedEmail) return null;
 
-  const onboardingDetails = normalizePortalOnboardingDetails(requestRecord.onboardingDetails ?? {});
-  const preferredName = onboardingDetails.preferredName || requestRecord.firstName;
   const temporaryPassword = generateTemporaryPassword();
 
   if (process.env.DB_NAME) {
@@ -4789,13 +4794,11 @@ async function activatePortalSignupRequest({ tenantId, requestRecord, actorId = 
       };
     }
 
-    const client = await createClientRecord({
-      id: genId('c'),
+    const { client } = await createPortalRequestClientRecord({
       tenantId,
-      firstName: requestRecord.firstName,
-      lastName: requestRecord.lastName,
-      status: 'active',
-      faithBackground: onboardingDetails.faithPreference || 'Undeclared',
+      requestRecord,
+      clientStatus: 'active',
+      createLifecycleRecord: false,
     });
     const passwordHash = await argon2.hash(temporaryPassword, {
       type: argon2.argon2id,
@@ -4812,36 +4815,14 @@ async function activatePortalSignupRequest({ tenantId, requestRecord, actorId = 
       status: 'active',
       mfaEnabled: false,
     });
-    await upsertPortalClientProfile({
-      id: genId('pcp'),
-      tenantId,
-      clientId: client.id,
-      preferredName,
-      contactEmail: normalizedEmail,
-      contactPhone: requestRecord.phone ?? '',
-      contactPreferences: {
-        preferredContactMethod: requestRecord.preferredContactMethod || 'email',
-        okToText: requestRecord.preferredContactMethod === 'sms',
-        okToLeaveMessage: true,
-        enabledChannels: [requestRecord.preferredContactMethod || 'email'],
-      },
-      profileDetails: {
-        demographics: {
-          pronouns: onboardingDetails.pronouns || '',
-          maritalStatus: '',
-        },
-        education: {
-          level: onboardingDetails.educationLevel || '',
-          occupation: '',
-        },
-        affiliations: onboardingDetails.affiliations ?? [],
-      },
-    });
     const assignedForms = await autoAssignStandardSignupForms({
       tenantId,
       clientId: client.id,
       assignedBy: actorId,
     });
+    if (requestRecord.id) {
+      await updatePortalRegistrationRequest(requestRecord.id, tenantId, { convertedClientId: client.id });
+    }
     return {
       status: 'activated',
       email: normalizedEmail,
@@ -4862,15 +4843,12 @@ async function activatePortalSignupRequest({ tenantId, requestRecord, actorId = 
     };
   }
 
-  const client = {
-    id: createId('c', clients),
+  const { client } = await createPortalRequestClientRecord({
     tenantId,
-    firstName: requestRecord.firstName,
-    lastName: requestRecord.lastName,
-    status: 'active',
-    faithBackground: onboardingDetails.faithPreference || 'Undeclared',
-  };
-  clients.push(client);
+    requestRecord,
+    clientStatus: 'active',
+    createLifecycleRecord: false,
+  });
 
   const account = {
     id: createId('pa', portalAccounts),
@@ -4884,35 +4862,6 @@ async function activatePortalSignupRequest({ tenantId, requestRecord, actorId = 
     invitedAt: new Date().toISOString(),
   };
   portalAccounts.push(account);
-
-  const now = new Date().toISOString();
-  portalClientProfiles.push({
-    id: createId('pcp', portalClientProfiles),
-    tenantId,
-    clientId: client.id,
-    preferredName,
-    contactEmail: normalizedEmail,
-    contactPhone: requestRecord.phone ?? '',
-    contactPreferences: {
-      preferredContactMethod: requestRecord.preferredContactMethod || 'email',
-      okToText: requestRecord.preferredContactMethod === 'sms',
-      okToLeaveMessage: true,
-      enabledChannels: [requestRecord.preferredContactMethod || 'email'],
-    },
-    profileDetails: {
-      demographics: {
-        pronouns: onboardingDetails.pronouns || '',
-        maritalStatus: '',
-      },
-      education: {
-        level: onboardingDetails.educationLevel || '',
-        occupation: '',
-      },
-      affiliations: onboardingDetails.affiliations ?? [],
-    },
-    createdAt: now,
-    updatedAt: now,
-  });
   const assignedForms = await autoAssignStandardSignupForms({
     tenantId,
     clientId: client.id,
@@ -4926,6 +4875,239 @@ async function activatePortalSignupRequest({ tenantId, requestRecord, actorId = 
     clientId: client.id,
     assignedForms,
   };
+}
+
+function buildPortalRequestContactPreferences(requestRecord) {
+  const preferredContactMethod = sanitizeStr(requestRecord?.preferredContactMethod, 64) || 'email';
+  return {
+    preferredContactMethod,
+    okToText: preferredContactMethod === 'sms',
+    okToLeaveMessage: true,
+    enabledChannels: [preferredContactMethod],
+  };
+}
+
+function buildPortalRequestProfileDetails(onboardingDetails) {
+  return {
+    demographics: {
+      pronouns: onboardingDetails.pronouns || '',
+      maritalStatus: '',
+    },
+    education: {
+      level: onboardingDetails.educationLevel || '',
+      occupation: '',
+    },
+    affiliations: onboardingDetails.affiliations ?? [],
+  };
+}
+
+async function resolveLinkedPortalRequestClient(tenantId, requestRecord) {
+  const convertedClientId = sanitizeStr(requestRecord?.convertedClientId, 64);
+  if (!convertedClientId) return null;
+
+  if (process.env.DB_NAME) {
+    const [rows] = await pool.query('SELECT * FROM clients WHERE id = ? AND tenant_id = ? LIMIT 1', [convertedClientId, tenantId]);
+    return rows[0] ? dbRowToClient(rows[0]) : null;
+  }
+
+  return clients.find((item) => item.id === convertedClientId && item.tenantId === tenantId) ?? null;
+}
+
+async function createPortalRequestClientRecord({
+  tenantId,
+  requestRecord,
+  clientStatus = 'active',
+  createLifecycleRecord = false,
+}) {
+  if (!requestRecord) return null;
+
+  const existingClient = await resolveLinkedPortalRequestClient(tenantId, requestRecord);
+  if (existingClient) {
+    return { client: existingClient, linked: true };
+  }
+
+  const firstName = sanitizeStr(requestRecord.firstName, 120);
+  const lastName = sanitizeStr(requestRecord.lastName, 120);
+  if (!firstName || !lastName) {
+    return null;
+  }
+
+  const onboardingDetails = normalizePortalOnboardingDetails(requestRecord.onboardingDetails ?? {});
+  const normalizedClientStatus = normalizeClientStatus(clientStatus) ?? 'active';
+  const faithBackground = onboardingDetails.faithPreference || 'Undeclared';
+  const preferredName = onboardingDetails.preferredName || firstName;
+  const referralSource = onboardingDetails.referralSource || 'portal_care_request';
+  const contactPreferences = buildPortalRequestContactPreferences(requestRecord);
+  const profileDetails = buildPortalRequestProfileDetails(onboardingDetails);
+
+  if (process.env.DB_NAME) {
+    const client = await createClientRecord({
+      id: genId('c'),
+      tenantId,
+      firstName,
+      lastName,
+      status: normalizedClientStatus,
+      faithBackground,
+    });
+    if (createLifecycleRecord) {
+      await createLifecycle({
+        id: genId('lc'),
+        clientId: client.id,
+        tenantId,
+        caseStatus: normalizeCaseStatus(normalizedClientStatus) ?? 'active',
+        referralSource,
+        emergencyContact: null,
+      });
+    }
+    await upsertPortalClientProfile({
+      id: genId('pcp'),
+      tenantId,
+      clientId: client.id,
+      preferredName,
+      contactEmail: normalizePortalEmail(requestRecord.email),
+      contactPhone: sanitizeStr(requestRecord.phone, 40) ?? '',
+      contactPreferences,
+      profileDetails,
+    });
+    if (requestRecord.id) {
+      await updatePortalRegistrationRequest(requestRecord.id, tenantId, { convertedClientId: client.id });
+    }
+    return { client, linked: false };
+  }
+
+  const now = new Date().toISOString();
+  const client = {
+    id: createId('c', clients),
+    tenantId,
+    firstName,
+    lastName,
+    status: normalizedClientStatus,
+    faithBackground,
+    highTouchpoint: false,
+    primaryCounselorId: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  clients.push(client);
+
+  if (createLifecycleRecord) {
+    clientLifecycles[client.id] = {
+      tenantId,
+      clientId: client.id,
+      caseStatus: normalizeCaseStatus(normalizedClientStatus) ?? 'active',
+      referralSource,
+      emergencyContact: null,
+      dischargeRecord: null,
+      updatedAt: now,
+    };
+  }
+
+  const existingProfileIndex = portalClientProfiles.findIndex((item) => item.clientId === client.id && item.tenantId === tenantId);
+  const profile = {
+    id: existingProfileIndex >= 0 ? portalClientProfiles[existingProfileIndex].id : createId('pcp', portalClientProfiles),
+    tenantId,
+    clientId: client.id,
+    preferredName,
+    contactEmail: normalizePortalEmail(requestRecord.email),
+    contactPhone: sanitizeStr(requestRecord.phone, 40) ?? '',
+    contactPreferences,
+    profileDetails,
+    createdAt: existingProfileIndex >= 0 ? portalClientProfiles[existingProfileIndex].createdAt : now,
+    updatedAt: now,
+  };
+  if (existingProfileIndex >= 0) {
+    portalClientProfiles[existingProfileIndex] = profile;
+  } else {
+    portalClientProfiles.push(profile);
+  }
+
+  if (requestRecord.id) {
+    requestRecord.convertedClientId = client.id;
+    requestRecord.updatedAt = now;
+  }
+
+  return { client, linked: false };
+}
+
+async function convertPortalCareRequestToClient({ tenantId, requestRecord }) {
+  if (!requestRecord || requestRecord.requestType !== 'care_request') {
+    return null;
+  }
+
+  const result = await createPortalRequestClientRecord({
+    tenantId,
+    requestRecord,
+    clientStatus: 'active',
+    createLifecycleRecord: true,
+  });
+  if (!result?.client) return null;
+
+  return {
+    status: result.linked ? 'already_converted' : 'created',
+    clientId: result.client.id,
+  };
+}
+
+async function handlePortalPublicRequestConversion(request, response, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (requirePracticeAdmin(request, response, session)) return;
+
+  const payload = await readJsonBody(request);
+  const requestId = sanitizeStr(payload.requestId, 64);
+  if (!requestId) {
+    writeJson(response, 400, { error: 'requestId is required' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  let requestRecord;
+  if (process.env.DB_NAME) {
+    const items = await listPortalRegistrationRequests(tenantId);
+    requestRecord = items.find((item) => item.id === requestId) ?? null;
+  } else {
+    requestRecord = portalRegistrationRequests.find((item) => item.id === requestId && item.tenantId === tenantId) ?? null;
+  }
+
+  if (!requestRecord) {
+    writeJson(response, 404, { error: 'Portal registration request not found' });
+    return;
+  }
+  if (requestRecord.requestType !== 'care_request') {
+    writeJson(response, 409, { error: 'Only approved care requests can create client records' });
+    return;
+  }
+  if (requestRecord.status !== 'approved') {
+    writeJson(response, 409, { error: 'Request must be approved before creating a client record' });
+    return;
+  }
+
+  const conversion = await convertPortalCareRequestToClient({ tenantId, requestRecord });
+  if (!conversion?.clientId) {
+    writeJson(response, 500, { error: 'Unable to create client record from portal request' });
+    return;
+  }
+
+  if (conversion.status === 'created') {
+    const actorId = callerIdentity(request, session)?.staffId ?? null;
+    await autoAssignStandardSignupForms({
+      tenantId,
+      clientId: conversion.clientId,
+      assignedBy: actorId ?? 'system',
+    });
+  }
+
+  let item = requestRecord;
+  if (process.env.DB_NAME) {
+    const items = await listPortalRegistrationRequests(tenantId);
+    item = items.find((entry) => entry.id === requestId) ?? requestRecord;
+  }
+
+  telemetry.recordMutation('portal.public_request.convert');
+  await emitAudit(request, 'portal.public_request.convert', 'portal_registration_request', requestId, session);
+  writeJson(response, 200, { item, conversion });
 }
 
 async function handlePortalPublicRequests(request, response, requestUrl, session) {
@@ -5153,6 +5335,7 @@ async function handleAppointmentsCollection(request, response, session) {
       const client = await resolveOptionalAuthorizedClient(request, response, filterClientId, session, 'appointment.list.read');
       if (!client) return;
     }
+    const filterSeriesId = sanitizeStr(requestUrl.searchParams.get('seriesId') ?? '', 64) || null;
     const counselorScopeId = await resolveEffectiveCounselorFilterId(request, response, requestUrl, session, 'appointment.list.read');
     if (counselorScopeId === false) return;
     let items;
@@ -5160,12 +5343,14 @@ async function handleAppointmentsCollection(request, response, session) {
       items = await listAppointments(callerTenant(request, session), {
         clientId: filterClientId,
         counselorId: counselorScopeId,
+        seriesId: filterSeriesId,
       });
     } else {
-      const all = [...appointments].sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+      const all = [...appointments].sort((left, right) => (left.startsAt || '').localeCompare(right.startsAt || ''));
       items = all
         .filter((appointment) => !filterClientId || appointment.clientId === filterClientId)
-        .filter((appointment) => !counselorScopeId || appointment.counselorId === counselorScopeId);
+        .filter((appointment) => !counselorScopeId || appointment.counselorId === counselorScopeId)
+        .filter((appointment) => !filterSeriesId || appointment.seriesId === filterSeriesId);
     }
     await emitAudit(request, 'appointment.list.read', 'appointment', 'collection', session);
     writeJson(response, 200, { items });
@@ -5781,6 +5966,93 @@ async function handleWaitlist(request, response, session) {
 const AVAILABILITY_OVERRIDE_WRITE_ROLES = new Set(['platform_admin', 'practice_owner', 'practice_admin', 'scheduler_biller']);
 const SERIES_WRITE_ROLES = new Set(['platform_admin', 'practice_owner', 'practice_admin', 'scheduler_biller', 'counselor']);
 
+const DAY_NAMES_MAP = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+
+function expandRecurrenceRule(rruleStr, startDateStr, endDateStr, maxOccurrences = 200) {
+  const parts = {};
+  for (const seg of (rruleStr || '').split(';')) {
+    const [k, v] = seg.split('=');
+    if (k && v !== undefined) parts[k.trim().toUpperCase()] = v.trim().toUpperCase();
+  }
+
+  let freq = parts.FREQ || 'WEEKLY';
+  if (freq === 'BIWEEKLY') { freq = 'WEEKLY'; if (!parts.INTERVAL) parts.INTERVAL = '2'; }
+
+  const interval = Math.max(1, parseInt(parts.INTERVAL || '1', 10) || 1);
+  const byDayStrs = parts.BYDAY ? parts.BYDAY.split(',').map((s) => s.trim()) : [];
+  const byMonthDay = parts.BYMONTHDAY ? parseInt(parts.BYMONTHDAY, 10) : null;
+  const count = parts.COUNT ? Math.min(parseInt(parts.COUNT, 10), maxOccurrences) : maxOccurrences;
+
+  const start = new Date(`${startDateStr}T00:00:00Z`);
+  const end = endDateStr ? new Date(`${endDateStr}T23:59:59Z`) : null;
+  const dates = [];
+
+  if (freq === 'DAILY') {
+    let cur = new Date(start);
+    while (dates.length < count) {
+      if (end && cur > end) break;
+      dates.push(cur.toISOString().slice(0, 10));
+      cur = new Date(cur.getTime() + interval * 86_400_000);
+    }
+  } else if (freq === 'WEEKLY') {
+    const targetDows = byDayStrs.length > 0
+      ? byDayStrs.map((d) => DAY_NAMES_MAP[d.replace(/^-?\d+/, '')]).filter((d) => d !== undefined)
+      : [start.getUTCDay()];
+
+    let weekSunday = new Date(start);
+    weekSunday.setUTCDate(weekSunday.getUTCDate() - weekSunday.getUTCDay());
+
+    outer: while (true) {
+      for (let d = 0; d < 7; d++) {
+        const candidate = new Date(weekSunday.getTime() + d * 86_400_000);
+        if (candidate < start) continue;
+        if (end && candidate > end) break outer;
+        if (targetDows.includes(candidate.getUTCDay())) {
+          dates.push(candidate.toISOString().slice(0, 10));
+          if (dates.length >= count) break outer;
+        }
+      }
+      weekSunday = new Date(weekSunday.getTime() + interval * 7 * 86_400_000);
+      if (end && weekSunday > new Date(end.getTime() + 7 * 86_400_000)) break;
+    }
+  } else if (freq === 'MONTHLY') {
+    let year = start.getUTCFullYear();
+    let month = start.getUTCMonth();
+
+    while (dates.length < count) {
+      let candidate;
+      if (byMonthDay) {
+        candidate = new Date(Date.UTC(year, month, byMonthDay));
+      } else if (byDayStrs.length > 0) {
+        const dayStr = byDayStrs[0];
+        const pos = parseInt(dayStr, 10) || 1;
+        const dayName = dayStr.replace(/^-?\d+/, '');
+        const targetDow = DAY_NAMES_MAP[dayName];
+        if (targetDow !== undefined) {
+          const firstDow = new Date(Date.UTC(year, month, 1)).getUTCDay();
+          const daysUntil = (targetDow - firstDow + 7) % 7;
+          candidate = new Date(Date.UTC(year, month, 1 + daysUntil + (pos - 1) * 7));
+        } else {
+          candidate = new Date(Date.UTC(year, month, start.getUTCDate()));
+        }
+      } else {
+        candidate = new Date(Date.UTC(year, month, start.getUTCDate()));
+      }
+
+      if (candidate >= start) {
+        if (end && candidate > end) break;
+        dates.push(candidate.toISOString().slice(0, 10));
+      }
+
+      month += interval;
+      if (month >= 12) { year += Math.floor(month / 12); month = month % 12; }
+      if (dates.length === 0 && month > 24) break; // guard against infinite loops
+    }
+  }
+
+  return dates;
+}
+
 async function handleAvailabilityOverrides(request, response, requestUrl, session) {
   const tenantId = callerTenant(request, session);
   const role = callerRole(request, session);
@@ -5919,24 +6191,64 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
     const client = await resolveAuthorizedClient(request, response, payload.clientId, session, 'series.create');
     if (!client) return;
     if (process.env.DB_NAME) {
+      const startDate       = sanitizeStr(payload.startDate, 12);
+      const endDate         = sanitizeStr(payload.endDate ?? '', 12) || null;
+      const startTime       = sanitizeStr(payload.startTime ?? '09:00', 8) || '09:00';
+      const durationMinutes = Number.isFinite(Number(payload.durationMinutes)) ? Number(payload.durationMinutes) : 50;
+      const recurrenceRule  = sanitizeStr(payload.recurrenceRule, 200);
+      const clientName      = sanitizeStr(payload.clientName ?? '', 160) || null;
+      const counselorName   = sanitizeStr(payload.counselorName ?? '', 160) || null;
+      const appointmentType = sanitizeStr(payload.appointmentType ?? '', 60) || null;
+      const remoteSession   = !!payload.remoteSession;
+
       const item = await createSeries({
         id: crypto.randomUUID(),
         tenantId,
-        counselorId:     sanitizeStr(payload.counselorId, 50),
-        clientId:        client.id,
-        clientName:      sanitizeStr(payload.clientName ?? '', 160)    || null,
-        counselorName:   sanitizeStr(payload.counselorName ?? '', 160) || null,
-        appointmentType: sanitizeStr(payload.appointmentType ?? '', 60) || null,
-        recurrenceRule:  sanitizeStr(payload.recurrenceRule, 200),
-        startDate:       sanitizeStr(payload.startDate, 12),
-        endDate:         sanitizeStr(payload.endDate ?? '', 12) || null,
-        durationMinutes: Number.isFinite(Number(payload.durationMinutes)) ? Number(payload.durationMinutes) : 50,
-        locationId:      sanitizeStr(payload.locationId ?? '', 50) || null,
-        remoteSession:   !!payload.remoteSession,
+        counselorId:  sanitizeStr(payload.counselorId, 50),
+        clientId:     client.id,
+        clientName, counselorName, appointmentType, recurrenceRule,
+        startDate, endDate, startTime, durationMinutes,
+        locationId:   sanitizeStr(payload.locationId ?? '', 50) || null,
+        remoteSession,
       });
+
+      // Expand the recurrence rule and create individual appointment records
+      const dates = expandRecurrenceRule(recurrenceRule, startDate, endDate);
+      const [h, m] = startTime.split(':').map(Number);
+      let generatedCount = 0;
+      let generationError = null;
+      for (const dateStr of dates) {
+        try {
+          const startsAt = new Date(`${dateStr}T00:00:00Z`);
+          startsAt.setUTCHours(h || 9, m || 0, 0, 0);
+          const endsAt = new Date(startsAt.getTime() + durationMinutes * 60_000);
+          await createAppointment({
+            id: crypto.randomUUID(),
+            tenantId,
+            clientId: client.id,
+            counselorId: sanitizeStr(payload.counselorId, 50),
+            clientName: clientName || '',
+            counselorName: counselorName || '',
+            startsAt: startsAt.toISOString(),
+            endsAt: endsAt.toISOString(),
+            status: 'scheduled',
+            appointmentType: appointmentType || 'individual_therapy',
+            locationName: remoteSession ? 'Remote Session' : 'Main Office',
+            remoteSession,
+            timezone: 'UTC',
+            seriesId: item.id,
+          });
+          generatedCount++;
+        } catch (apptErr) {
+          console.error(`[series] failed to create appointment for ${dateStr}:`, apptErr.message);
+          generationError = apptErr.message;
+          break;
+        }
+      }
+
       telemetry.recordMutation('series.create');
       emitAudit(request, 'series.create', 'appointment_series', item.id, session);
-      writeJson(response, 201, { item });
+      writeJson(response, 201, { item, generatedCount, generationError: generationError ?? undefined });
       return;
     }
     const counselorId = sanitizeStr(payload.counselorId, 50);
@@ -5945,6 +6257,11 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
       writeJson(response, 400, { error: 'Valid counselorId is required' });
       return;
     }
+    const mockStartDate       = sanitizeStr(payload.startDate, 12);
+    const mockEndDate         = sanitizeStr(payload.endDate ?? '', 12) || null;
+    const mockStartTime       = sanitizeStr(payload.startTime ?? '09:00', 8) || '09:00';
+    const mockDurationMinutes = Number.isFinite(Number(payload.durationMinutes)) ? Number(payload.durationMinutes) : 50;
+    const mockRecurrenceRule  = sanitizeStr(payload.recurrenceRule, 200);
     const item = {
       id: createId('ser', appointmentSeriesRecords),
       tenantId,
@@ -5953,10 +6270,11 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
       clientName: sanitizeStr(payload.clientName ?? '', 160) || `${client.firstName} ${client.lastName}`.trim(),
       counselorName: sanitizeStr(payload.counselorName ?? '', 160) || `${counselor.firstName} ${counselor.lastName}`.trim(),
       appointmentType: sanitizeStr(payload.appointmentType ?? '', 60) || 'individual_therapy',
-      recurrenceRule: sanitizeStr(payload.recurrenceRule, 200),
-      startDate: sanitizeStr(payload.startDate, 12),
-      endDate: sanitizeStr(payload.endDate ?? '', 12) || null,
-      durationMinutes: Number.isFinite(Number(payload.durationMinutes)) ? Number(payload.durationMinutes) : 50,
+      recurrenceRule: mockRecurrenceRule,
+      startDate: mockStartDate,
+      endDate: mockEndDate,
+      startTime: mockStartTime,
+      durationMinutes: mockDurationMinutes,
       locationId: sanitizeStr(payload.locationId ?? '', 50) || null,
       remoteSession: !!payload.remoteSession,
       status: 'active',
@@ -5964,6 +6282,32 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
       updatedAt: new Date().toISOString(),
     };
     appointmentSeriesRecords.push(item);
+
+    // Generate individual appointment records in memory
+    const mockDates = expandRecurrenceRule(mockRecurrenceRule, mockStartDate, mockEndDate);
+    const [mockH, mockM] = mockStartTime.split(':').map(Number);
+    for (const dateStr of mockDates) {
+      const startsAt = new Date(`${dateStr}T00:00:00Z`);
+      startsAt.setUTCHours(mockH || 9, mockM || 0, 0, 0);
+      const endsAt = new Date(startsAt.getTime() + mockDurationMinutes * 60_000);
+      appointments.push({
+        id: createId('appt', appointments),
+        tenantId,
+        clientId: client.id,
+        counselorId: counselor.id,
+        clientName: item.clientName,
+        counselorName: item.counselorName,
+        appointmentType: item.appointmentType,
+        status: 'scheduled',
+        startsAt: startsAt.toISOString(),
+        endsAt: endsAt.toISOString(),
+        durationMinutes: mockDurationMinutes,
+        remoteSession: item.remoteSession,
+        seriesId: item.id,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
     telemetry.recordMutation('series.create');
     emitAudit(request, 'series.create', 'appointment_series', item.id);
     writeJson(response, 201, { item });
@@ -13560,6 +13904,8 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/portal/resources') return '/v1/portal/resources';
   if (pathname === '/v1/portal/data-rights') return '/v1/portal/data-rights';
   if (pathname === '/v1/portal/data-rights/review') return '/v1/portal/data-rights/review';
+  if (pathname === '/v1/portal/public-requests') return '/v1/portal/public-requests';
+  if (pathname === '/v1/portal/public-requests/convert') return '/v1/portal/public-requests/convert';
   if (pathname.startsWith('/v1/offerings/')) return '/v1/offerings/:id';
   if (pathname === '/v1/workflows/recommendations/state') return '/v1/workflows/recommendations/state';
   if (pathname.startsWith('/v1/workflows/recommendations/state/')) return '/v1/workflows/recommendations/state/:id';

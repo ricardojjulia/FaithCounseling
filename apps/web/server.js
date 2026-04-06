@@ -289,18 +289,21 @@ async function proxyApiRequest(request, response) {
 
 function readRequestBody(request) {
   return new Promise((resolve, reject) => {
-    let buffer = '';
+    const chunks = [];
+    let size = 0;
 
     request.on('data', (chunk) => {
-      buffer += chunk;
-      if (buffer.length > 1_000_000) {
+      chunks.push(chunk);
+      size += chunk.length;
+      if (size > 1_000_000) {
         request.destroy();
         reject(new Error('Payload too large'));
       }
     });
 
     request.on('end', () => {
-      resolve(buffer || undefined);
+      const buf = Buffer.concat(chunks);
+      resolve(buf.length > 0 ? buf : undefined);
     });
 
     request.on('error', reject);

@@ -6,58 +6,74 @@
     <title>About · Faith Counseling</title>
     <meta
       name="description"
-      content="About Faith Counseling operations workspace, architecture, and product scope."
+      content="Faith Counseling is a counselor-first practice platform built for clinical clarity, operational discipline, and faith-integrated care."
     />
     <link rel="stylesheet" href="/styles.css" />
     <style>
       .about-page {
-        --about-bg: linear-gradient(180deg, #f6f8fc 0%, #eef2ff 32%, #f6f8fc 100%);
+        --about-bg: #f6f8fc;
+        --about-paper: rgba(255, 255, 255, 0.9);
+        --about-panel: rgba(17, 28, 38, 0.9);
+        --about-panel-soft: rgba(24, 39, 52, 0.78);
         --about-ink: #182132;
         --about-soft: #62708b;
         --about-line: rgba(79, 70, 229, 0.12);
-        --about-panel: rgba(255, 255, 255, 0.82);
-        --about-panel-strong: rgba(255, 255, 255, 0.94);
-        --about-glow: rgba(79, 70, 229, 0.14);
+        --about-line-strong: rgba(67, 56, 202, 0.2);
         --about-accent: #4f46e5;
         --about-accent-deep: #312e81;
-        --about-indigo: #4338ca;
+        --about-accent-soft: #6366f1;
+        --about-shadow: 0 26px 70px rgba(34, 51, 93, 0.12);
         background:
-          radial-gradient(circle at top left, rgba(226, 227, 255, 0.9), transparent 38%),
-          radial-gradient(circle at top right, rgba(199, 210, 254, 0.55), transparent 34%),
-          var(--about-bg);
+          radial-gradient(circle at top left, rgba(226, 227, 255, 0.92), transparent 34%),
+          radial-gradient(circle at top right, rgba(199, 210, 254, 0.58), transparent 28%),
+          linear-gradient(180deg, #f6f8fc 0%, #eef2ff 32%, #f6f8fc 100%);
         color: var(--about-ink);
         font-family: "Avenir Next", "Segoe UI", "Trebuchet MS", sans-serif;
       }
 
+      .about-page::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.14) 1px, transparent 1px);
+        background-size: 48px 48px;
+        mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.18), transparent 72%);
+        opacity: 0.28;
+      }
+
       .about-shell {
-        width: min(1180px, calc(100vw - 32px));
+        position: relative;
+        width: min(1220px, calc(100vw - 32px));
         margin: 0 auto;
-        padding: 40px 0 72px;
+        padding: 32px 0 72px;
       }
 
       .about-nav {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 16px;
-        margin-bottom: 18px;
+        gap: 18px;
+        margin-bottom: 22px;
       }
 
       .about-brand {
         display: inline-flex;
         align-items: center;
-        gap: 12px;
+        gap: 14px;
       }
 
       .about-mark {
-        width: 48px;
-        height: 48px;
-        border-radius: 15px;
+        width: 52px;
+        height: 52px;
+        border-radius: 16px;
         background:
           linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(226, 227, 255, 0.88)),
           linear-gradient(145deg, #818cf8, #4338ca);
         box-shadow:
-          0 18px 45px rgba(52, 68, 130, 0.18),
+          0 16px 34px rgba(52, 68, 130, 0.18),
           inset 0 1px 0 rgba(255, 255, 255, 0.9);
         position: relative;
         overflow: hidden;
@@ -67,22 +83,23 @@
       .about-mark::after {
         content: "";
         position: absolute;
-        border-radius: 999px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(165, 180, 252, 0.82));
       }
 
       .about-mark::before {
-        inset: 10px 14px auto auto;
-        width: 22px;
-        height: 22px;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(165, 180, 252, 0.78));
+        width: 10px;
+        height: 30px;
+        border-radius: 999px;
+        left: 21px;
+        top: 10px;
       }
 
       .about-mark::after {
-        left: 8px;
-        right: 8px;
-        bottom: 8px;
-        height: 10px;
-        background: linear-gradient(90deg, rgba(99, 102, 241, 0.9), rgba(67, 56, 202, 0.78));
+        width: 28px;
+        height: 8px;
+        border-radius: 999px;
+        left: 12px;
+        top: 21px;
       }
 
       .about-brand-copy {
@@ -91,16 +108,16 @@
       }
 
       .about-eyebrow {
-        font-size: 0.76rem;
-        letter-spacing: 0.22em;
+        font-size: 0.74rem;
+        letter-spacing: 0.24em;
         text-transform: uppercase;
         color: var(--about-accent);
-        font-weight: 700;
+        font-weight: 800;
       }
 
       .about-brand-copy strong {
-        font-size: 1rem;
-        font-weight: 700;
+        font-size: 1.04rem;
+        font-weight: 800;
       }
 
       .about-back {
@@ -108,293 +125,433 @@
         align-items: center;
         gap: 10px;
         text-decoration: none;
-        color: var(--about-ink);
-        border: 1px solid rgba(25, 34, 53, 0.12);
-        background: rgba(255, 255, 255, 0.72);
+        color: #ffffff;
+        background: linear-gradient(135deg, rgba(17, 28, 38, 0.94), rgba(24, 39, 52, 0.9));
+        border: 1px solid rgba(226, 227, 255, 0.22);
         border-radius: 999px;
         padding: 12px 18px;
-        font-weight: 700;
-        box-shadow: 0 14px 30px rgba(25, 34, 53, 0.08);
+        font-weight: 800;
+        letter-spacing: 0.01em;
+        box-shadow: 0 18px 40px rgba(15, 27, 38, 0.18);
         transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
       }
 
       .about-back:hover,
       .about-back:focus-visible {
         transform: translateY(-1px);
-        box-shadow: 0 18px 34px rgba(25, 34, 53, 0.12);
-        border-color: rgba(48, 70, 185, 0.25);
+        box-shadow: 0 22px 44px rgba(15, 27, 38, 0.24);
+        border-color: rgba(129, 140, 248, 0.4);
       }
 
-      .hero-panel {
+      .hero {
         position: relative;
         overflow: hidden;
         display: grid;
-        grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
+        grid-template-columns: minmax(0, 1.45fr) minmax(310px, 0.9fr);
         gap: 28px;
-        align-items: stretch;
-        padding: 34px;
-        border-radius: 28px;
+        padding: 36px;
+        border-radius: 34px;
         background:
-          linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(240, 244, 255, 0.9)),
-          var(--about-panel-strong);
+          linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(240, 244, 255, 0.9)),
+          var(--about-paper);
         border: 1px solid rgba(255, 255, 255, 0.7);
-        box-shadow:
-          0 26px 70px rgba(34, 51, 93, 0.12),
-          inset 0 1px 0 rgba(255, 255, 255, 0.85);
+        box-shadow: var(--about-shadow);
       }
 
-      .hero-panel::before {
+      .hero::before {
         content: "";
         position: absolute;
-        right: -70px;
-        top: -70px;
-        width: 220px;
-        height: 220px;
-        border-radius: 50%;
-        background: radial-gradient(circle, rgba(129, 140, 248, 0.34), transparent 72%);
+        inset: 0;
+        background:
+          radial-gradient(circle at 78% 14%, rgba(129, 140, 248, 0.28), transparent 20%),
+          radial-gradient(circle at 92% 32%, rgba(79, 70, 229, 0.14), transparent 18%);
+        pointer-events: none;
+      }
+
+      .hero-copy,
+      .hero-side {
+        position: relative;
+        z-index: 1;
       }
 
       .hero-copy {
-        position: relative;
-        z-index: 1;
         display: grid;
         gap: 18px;
       }
 
-      .hero-copy h1 {
+      .section-label {
         margin: 0;
-        max-width: 12ch;
-        font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
-        font-size: clamp(2.4rem, 5vw, 4.4rem);
-        line-height: 0.94;
-        letter-spacing: -0.04em;
+        color: var(--about-accent);
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        font-size: 0.78rem;
+        font-weight: 800;
       }
 
-      .hero-subtitle {
+      .hero-copy h1,
+      .section-title {
         margin: 0;
-        max-width: 60ch;
+        font-family: "Baskerville", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+        font-weight: 700;
+        letter-spacing: -0.05em;
+      }
+
+      .hero-copy h1 {
+        max-width: 10ch;
+        font-size: clamp(2.9rem, 6vw, 5.5rem);
+        line-height: 0.9;
+      }
+
+      .hero-lead {
+        margin: 0;
+        max-width: 62ch;
         color: var(--about-soft);
         font-size: 1.08rem;
-        line-height: 1.68;
+        line-height: 1.72;
       }
 
-      .hero-badges {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-      }
-
-      .hero-badges span {
+      .hero-note {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
+        gap: 10px;
+        width: fit-content;
+        padding: 12px 16px;
         border-radius: 999px;
-        padding: 10px 14px;
-        background: rgba(255, 255, 255, 0.78);
-        border: 1px solid rgba(48, 70, 185, 0.08);
-        color: var(--about-accent-deep);
-        font-size: 0.86rem;
+        background: rgba(255, 255, 255, 0.66);
+        border: 1px solid rgba(16, 32, 44, 0.08);
+        color: var(--about-ink);
+        font-size: 0.92rem;
         font-weight: 700;
       }
 
-      .hero-badges span::before {
+      .hero-note::before {
         content: "";
-        width: 8px;
-        height: 8px;
+        width: 10px;
+        height: 10px;
         border-radius: 999px;
         background: linear-gradient(180deg, #818cf8, #4338ca);
+        box-shadow: 0 0 0 5px rgba(99, 102, 241, 0.14);
       }
 
-      .hero-summary {
-        position: relative;
-        z-index: 1;
+      .hero-stat-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .hero-stat {
+        border-radius: 24px;
+        padding: 18px;
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(16, 32, 44, 0.08);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+      }
+
+      .hero-stat strong {
+        display: block;
+        font-family: "Baskerville", "Iowan Old Style", Georgia, serif;
+        font-size: 2rem;
+        letter-spacing: -0.05em;
+      }
+
+      .hero-stat span {
+        display: block;
+        margin-top: 6px;
+        color: var(--about-soft);
+        font-size: 0.88rem;
+        line-height: 1.5;
+      }
+
+      .hero-side {
         display: grid;
         gap: 14px;
         align-content: start;
       }
 
-      .hero-summary-card {
-        border-radius: 22px;
-        padding: 20px;
+      .hero-panel {
+        border-radius: 26px;
+        padding: 22px;
         background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 244, 251, 0.92)),
+          linear-gradient(180deg, rgba(20, 33, 44, 0.98), rgba(15, 26, 36, 0.94)),
           var(--about-panel);
-        border: 1px solid var(--about-line);
-        box-shadow: 0 18px 36px rgba(25, 34, 53, 0.08);
+        color: #f8f3eb;
+        box-shadow: 0 22px 46px rgba(15, 27, 38, 0.24);
       }
 
-      .hero-summary-card h2,
-      .hero-summary-card h3,
-      .hero-summary-card p {
+      .hero-panel h2,
+      .hero-panel p,
+      .hero-panel ul {
         margin: 0;
       }
 
-      .hero-summary-card h2 {
-        font-size: 0.78rem;
+      .hero-panel h2 {
+        font-size: 0.84rem;
         text-transform: uppercase;
-        letter-spacing: 0.16em;
-        color: var(--about-accent);
-        margin-bottom: 10px;
+        letter-spacing: 0.18em;
+        color: #c7d2fe;
       }
 
-      .hero-summary-card p {
-        color: var(--about-soft);
-        line-height: 1.62;
+      .hero-panel p {
+        margin-top: 12px;
+        line-height: 1.72;
+        color: rgba(241, 244, 251, 0.8);
       }
 
-      .hero-metrics {
+      .hero-panel ul {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 10px;
+        margin-top: 18px;
+        padding: 0;
+        list-style: none;
       }
 
-      .hero-metrics div {
-        border-radius: 18px;
-        padding: 16px 14px;
-        background: rgba(255, 255, 255, 0.72);
-        border: 1px solid rgba(25, 34, 53, 0.08);
+      .hero-panel li {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        line-height: 1.55;
       }
 
-      .hero-metrics strong {
-        display: block;
-        font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-        font-size: 1.8rem;
-        letter-spacing: -0.05em;
-      }
-
-      .hero-metrics span {
-        display: block;
-        margin-top: 6px;
-        font-size: 0.82rem;
-        line-height: 1.45;
-        color: var(--about-soft);
+      .hero-panel li::before {
+        content: "";
+        width: 9px;
+        height: 9px;
+        margin-top: 7px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, #818cf8, #4338ca);
+        flex: 0 0 auto;
       }
 
       .about-grid {
         display: grid;
-        grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+        grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
         gap: 22px;
         margin-top: 24px;
       }
 
       .about-section {
-        border-radius: 24px;
-        padding: 26px;
-        background: var(--about-panel);
-        border: 1px solid rgba(255, 255, 255, 0.72);
-        box-shadow: 0 22px 48px rgba(25, 34, 53, 0.08);
-        backdrop-filter: blur(12px);
-      }
-
-      .section-label {
-        margin: 0 0 8px;
-        color: var(--about-accent);
-        text-transform: uppercase;
-        letter-spacing: 0.18em;
-        font-size: 0.78rem;
-        font-weight: 700;
+        border-radius: 28px;
+        padding: 28px;
+        background: var(--about-paper);
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        box-shadow: 0 22px 52px rgba(34, 51, 93, 0.08);
+        backdrop-filter: blur(10px);
       }
 
       .section-title {
-        margin: 0;
-        font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-        font-size: clamp(1.6rem, 3vw, 2.35rem);
-        letter-spacing: -0.04em;
+        font-size: clamp(1.75rem, 3vw, 2.65rem);
       }
 
       .section-intro {
-        margin: 10px 0 0;
+        margin: 12px 0 0;
+        max-width: 64ch;
         color: var(--about-soft);
-        line-height: 1.68;
-        max-width: 62ch;
+        line-height: 1.72;
       }
 
-      .module-grid,
-      .utility-grid {
+      .story-grid,
+      .link-grid {
         display: grid;
-        gap: 14px;
-        margin-top: 20px;
+        gap: 16px;
+        margin-top: 22px;
       }
 
-      .module-grid {
+      .story-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
-      .module-card,
-      .utility-card {
+      .story-card,
+      .link-card {
         position: relative;
         overflow: hidden;
         border-radius: 22px;
-        padding: 18px 18px 16px;
-        background: rgba(255, 255, 255, 0.88);
-        border: 1px solid rgba(25, 34, 53, 0.08);
-        min-height: 170px;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.74);
+        border: 1px solid rgba(16, 32, 44, 0.08);
       }
 
-      .module-card::before,
-      .utility-card::before {
+      .story-card::before,
+      .link-card::before {
         content: "";
         position: absolute;
         inset: 0 auto auto 0;
         width: 100%;
-        height: 5px;
-        background: linear-gradient(90deg, rgba(99, 102, 241, 0.95), rgba(67, 56, 202, 0.88));
+        height: 4px;
+        background: linear-gradient(90deg, var(--about-accent), var(--about-accent-soft));
       }
 
-      .module-card h3,
-      .utility-card h3 {
-        margin: 14px 0 10px;
-        font-size: 1.05rem;
-      }
-
-      .module-card p,
-      .utility-card p {
-        margin: 0;
-        color: var(--about-soft);
-        line-height: 1.6;
-      }
-
-      .card-kicker {
+      .story-kicker,
+      .link-kicker {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 46px;
-        height: 46px;
-        border-radius: 14px;
-        background: linear-gradient(180deg, rgba(238, 242, 255, 0.98), rgba(226, 227, 255, 0.92));
-        color: var(--about-indigo);
-        font-size: 1.18rem;
+        min-width: 48px;
+        height: 48px;
+        border-radius: 16px;
+        background: linear-gradient(180deg, rgba(226, 227, 255, 0.98), rgba(199, 210, 254, 0.82));
+        color: var(--about-accent-deep);
+        font-size: 1.05rem;
         font-weight: 800;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
       }
 
-      .utility-card {
-        min-height: unset;
+      .story-card h3,
+      .link-card h3,
+      .manifesto h2,
+      .cta-panel h2 {
+        margin: 16px 0 10px;
       }
 
-      .utility-card a {
-        color: var(--about-indigo);
-        font-weight: 700;
+      .story-card p,
+      .link-card p,
+      .manifesto p,
+      .cta-panel p {
+        margin: 0;
+        color: var(--about-soft);
+        line-height: 1.65;
+      }
+
+      .manifesto {
+        margin-top: 18px;
+        padding: 22px;
+        border-radius: 24px;
+        background:
+          linear-gradient(145deg, rgba(17, 28, 38, 0.97), rgba(27, 43, 56, 0.92)),
+          var(--about-panel-soft);
+        color: #ffffff;
+      }
+
+      .manifesto h2 {
+        font-family: "Baskerville", "Iowan Old Style", Georgia, serif;
+        font-size: 1.7rem;
+        letter-spacing: -0.04em;
+      }
+
+      .manifesto p {
+        color: rgba(241, 244, 251, 0.76);
+      }
+
+      .manifesto strong {
+        color: #c7d2fe;
+      }
+
+      .manifesto-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .manifesto-grid div {
+        border-radius: 18px;
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .manifesto-grid strong {
+        display: block;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+      }
+
+      .manifesto-grid span {
+        display: block;
+        margin-top: 8px;
+        color: rgba(241, 244, 251, 0.82);
+        line-height: 1.55;
+      }
+
+      .link-card a {
+        color: var(--about-accent-deep);
+        font-weight: 800;
         text-decoration: none;
       }
 
-      .utility-card a:hover,
-      .utility-card a:focus-visible {
+      .link-card a:hover,
+      .link-card a:focus-visible {
         text-decoration: underline;
       }
 
-      .about-footer-note {
-        margin-top: 22px;
-        padding: 16px 18px;
-        border-radius: 18px;
-        background: rgba(25, 34, 53, 0.04);
-        color: var(--about-soft);
-        line-height: 1.6;
+      .stack-list {
+        display: grid;
+        gap: 12px;
+        margin-top: 20px;
       }
 
-      @media (max-width: 960px) {
-        .hero-panel,
-        .about-grid {
+      .stack-row {
+        display: grid;
+        gap: 6px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid rgba(16, 32, 44, 0.08);
+      }
+
+      .stack-row:last-child {
+        padding-bottom: 0;
+        border-bottom: 0;
+      }
+
+      .stack-row strong {
+        font-size: 0.94rem;
+        letter-spacing: 0.01em;
+      }
+
+      .stack-row span {
+        color: var(--about-soft);
+        line-height: 1.58;
+      }
+
+      .cta-panel {
+        margin-top: 24px;
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) auto;
+        gap: 16px;
+        align-items: center;
+        padding: 22px 24px;
+        border-radius: 24px;
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(129, 140, 248, 0.18));
+        border: 1px solid var(--about-line-strong);
+      }
+
+      .cta-panel h2 {
+        font-family: "Baskerville", "Iowan Old Style", Georgia, serif;
+        font-size: 1.65rem;
+        letter-spacing: -0.04em;
+      }
+
+      .cta-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .cta-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 48px;
+        padding: 0 18px;
+        border-radius: 999px;
+        text-decoration: none;
+        font-weight: 800;
+      }
+
+      .cta-link-primary {
+        background: linear-gradient(135deg, #4f46e5, #4338ca);
+        color: #ffffff;
+        box-shadow: 0 16px 32px rgba(15, 27, 38, 0.18);
+      }
+
+      .cta-link-secondary {
+        background: rgba(255, 255, 255, 0.72);
+        color: var(--about-accent-deep);
+        border: 1px solid rgba(16, 32, 44, 0.1);
+      }
+
+      @media (max-width: 1080px) {
+        .hero,
+        .about-grid,
+        .cta-panel {
           grid-template-columns: 1fr;
         }
 
@@ -403,9 +560,9 @@
         }
       }
 
-      @media (max-width: 720px) {
+      @media (max-width: 760px) {
         .about-shell {
-          width: min(100vw - 20px, 1180px);
+          width: min(100vw - 20px, 1220px);
           padding-top: 18px;
           padding-bottom: 48px;
         }
@@ -415,18 +572,20 @@
           align-items: stretch;
         }
 
-        .hero-panel,
-        .about-section {
+        .hero,
+        .about-section,
+        .hero-panel {
           padding: 22px;
         }
 
-        .module-grid,
-        .utility-grid,
-        .hero-metrics {
+        .story-grid,
+        .hero-stat-row,
+        .manifesto-grid {
           grid-template-columns: 1fr;
         }
 
-        .about-back {
+        .about-back,
+        .cta-link {
           justify-content: center;
         }
       }
@@ -439,133 +598,184 @@
         <div class="about-brand">
           <div class="about-mark" aria-hidden="true"></div>
           <div class="about-brand-copy">
-            <span class="about-eyebrow">Workspace Overview</span>
-            <strong>Faith Counseling Operations Console</strong>
+            <span class="about-eyebrow">About The Platform</span>
+            <strong>Faith Counseling</strong>
           </div>
         </div>
         <a class="about-back" href="/index.html">Back to App</a>
       </header>
 
-      <section class="hero-panel">
+      <section class="hero">
         <div class="hero-copy">
-          <p class="section-label">About Faith Counseling Workspace</p>
-          <h1>Run the practice from one intentional workspace.</h1>
-          <p class="hero-subtitle">
-            Operational console for counseling, documentation, billing, portal, and reporting workflows.
-            This workspace centralizes day-to-day operations for faith-integrated counseling practices with
-            role-aware views, clinical workflows, scheduling, client portal interactions, and billing/reporting
-            workflows backed by API endpoints.
+          <p class="section-label">Counselor-First Practice Software</p>
+          <h1>Built for the weight of care, not just the mechanics of admin.</h1>
+          <p class="hero-lead">
+            Faith Counseling is a practice platform for Christian counseling organizations that need real
+            clinical workflow depth without turning the work into a cold operations dashboard. It is meant
+            to help counselors stay oriented to people, sessions, notes, next steps, and trust, while the
+            platform quietly carries the structure underneath.
           </p>
-          <div class="hero-badges" aria-label="Key workspace characteristics">
-            <span>Role-aware navigation</span>
-            <span>Clinical and faith workflows</span>
-            <span>API-backed operations</span>
-            <span>Built-in health and telemetry</span>
+          <div class="hero-note">Made for real counseling work: intake, sessions, follow-up, documentation, and faith-integrated care.</div>
+          <div class="hero-stat-row" aria-label="Platform summary">
+            <div class="hero-stat">
+              <strong>1</strong>
+              <span>connected workspace for counselor, client, and practice operations</span>
+            </div>
+            <div class="hero-stat">
+              <strong>5</strong>
+              <span>major care rhythms covered end to end: intake, scheduling, charting, portal, and follow-up</span>
+            </div>
+            <div class="hero-stat">
+              <strong>0</strong>
+              <span>interest in making counselors think like system operators just to get through the day</span>
+            </div>
           </div>
         </div>
 
-        <aside class="hero-summary">
-          <div class="hero-summary-card">
-            <h2>What this app does</h2>
+        <aside class="hero-side">
+          <div class="hero-panel">
+            <h2>What makes it different</h2>
             <p>
-              Brings the operational rhythm of a counseling practice into one place: charting,
-              appointments, claims, portal exchange, and reporting, all with direct access to the
-              platform’s health and documentation surfaces.
+              This product is not trying to be a generic practice database with a cross icon on top.
+              It is designed around the actual cadence of Christian counseling practices and the need to
+              balance compassion, rigor, privacy, and operational follow-through.
             </p>
+            <ul>
+              <li>Counselor-facing flows are prioritized before administrative depth.</li>
+              <li>Clinical structure, faith context, and practice accountability live in one platform.</li>
+              <li>Monitoring and telemetry exist underneath the experience, not as the experience.</li>
+            </ul>
           </div>
-          <div class="hero-summary-card hero-metrics" aria-label="Workspace summary">
-            <div>
-              <strong>4</strong>
-              <span>core workflow families</span>
-            </div>
-            <div>
-              <strong>3</strong>
-              <span>documentation and monitoring entry points</span>
-            </div>
-            <div>
-              <strong>1</strong>
-              <span>shared operational console</span>
-            </div>
+          <div class="hero-panel">
+            <h2>Product posture</h2>
+            <p>
+              Strong software should feel calm, precise, and trustworthy. The goal is not more screens.
+              The goal is to make intake, discernment, documentation, follow-up, and coordination easier
+              to hold together without losing the human center of the work.
+            </p>
           </div>
         </aside>
       </section>
 
       <section class="about-grid">
         <article class="about-section">
-          <p class="section-label">Core Modules</p>
-          <h2 class="section-title">The day-to-day operating surface.</h2>
+          <p class="section-label">Why It Exists</p>
+          <h2 class="section-title">A practice platform that understands counseling has gravity.</h2>
           <p class="section-intro">
-            The workspace is organized around the practical flow of a counseling practice, from intake and
-            charting to follow-up scheduling, billing, and faith-integrated support workflows.
+            Most software in this category is either operationally thin or emotionally tone-deaf. Faith
+            Counseling is built to support care teams that need clinical discipline, practical visibility,
+            and faith-aware context without reducing the work to tickets, queues, and generic CRM patterns.
           </p>
 
-          <div class="module-grid">
-            <article class="module-card">
-              <div class="card-kicker" aria-hidden="true">CL</div>
-              <h3>Client Lifecycle &amp; Charting</h3>
-              <p>Client records, treatment plans, progress notes, consents, intake packets.</p>
+          <div class="story-grid">
+            <article class="story-card">
+              <div class="story-kicker" aria-hidden="true">CH</div>
+              <h3>Counselor Home</h3>
+              <p>See what matters now: today’s appointments, note gaps, follow-up obligations, and intake previews before the first session.</p>
             </article>
 
-            <article class="module-card">
-              <div class="card-kicker" aria-hidden="true">SO</div>
-              <h3>Scheduling &amp; Operations</h3>
-              <p>Appointments, reminders, waitlist, staffing, and availability support.</p>
+            <article class="story-card">
+              <div class="story-kicker" aria-hidden="true">CR</div>
+              <h3>Client Record</h3>
+              <p>Move from intake to charting, treatment planning, internal notes, documents, and lifecycle context without losing the thread.</p>
             </article>
 
-            <article class="module-card">
-              <div class="card-kicker" aria-hidden="true">BC</div>
-              <h3>Billing &amp; Claims</h3>
-              <p>Service codes, fee schedules, invoices, payments, superbills, claims, aging.</p>
+            <article class="story-card">
+              <div class="story-kicker" aria-hidden="true">FW</div>
+              <h3>Faithful Workflows</h3>
+              <p>Structured, explainable counselor-facing care recommendations that support judgment instead of pretending to replace it.</p>
             </article>
 
-            <article class="module-card">
-              <div class="card-kicker" aria-hidden="true">PF</div>
-              <h3>Portal &amp; Faith Workflows</h3>
-              <p>Portal messaging/documents plus faith resources, goals, and inventory workflows.</p>
+            <article class="story-card">
+              <div class="story-kicker" aria-hidden="true">PS</div>
+              <h3>Practice Spine</h3>
+              <p>Scheduling, portal workflows, documents, offerings, staffing, and operational follow-through stay connected to the care process.</p>
             </article>
           </div>
+
+          <section class="manifesto" aria-label="Design principles">
+            <h2>What this platform refuses to become</h2>
+            <p>
+              Software for counseling should not feel generic, loud, or clinical in the wrong way. It
+              should give structure without flattening nuance. It should help the practice act with
+              discipline while keeping <strong>care, judgment, and trust</strong> in the foreground.
+            </p>
+            <div class="manifesto-grid">
+              <div>
+                <strong>Never Generic</strong>
+                <span>Built around counseling workflows, not repurposed from sales or generic office software.</span>
+              </div>
+              <div>
+                <strong>Never Opaque</strong>
+                <span>Recommendations and operational signals should be explainable, reviewable, and calm.</span>
+              </div>
+              <div>
+                <strong>Never Fragile</strong>
+                <span>Monitoring, routing, and surface coverage matter because trust fails quickly when software is unstable.</span>
+              </div>
+            </div>
+          </section>
         </article>
 
         <aside class="about-section">
-          <p class="section-label">Platform &amp; Docs</p>
-          <h2 class="section-title">Health, contracts, and live operator visibility.</h2>
+          <p class="section-label">Platform Depth</p>
+          <h2 class="section-title">Operational strength underneath a human-facing experience.</h2>
           <p class="section-intro">
-            These entry points expose the system’s runtime health, machine-readable contracts,
-            and live monitoring surfaces for development and operations work.
+            The care-facing product is only credible if the underlying platform is durable. This system
+            keeps runtime health, surface monitoring, API contracts, and operational visibility close at
+            hand without forcing those concerns into every counselor interaction.
           </p>
 
-          <div class="utility-grid">
-            <article class="utility-card">
-              <div class="card-kicker" aria-hidden="true">AH</div>
-              <h3>API Health</h3>
-              <p>Health checks and telemetry summaries for API and web services.</p>
-            </article>
-
-            <article class="utility-card">
-              <div class="card-kicker" aria-hidden="true">OA</div>
-              <h3>OpenAPI</h3>
-              <p>Machine-readable contract at <a href="/api/openapi.yaml">/api/openapi.yaml</a>.</p>
-            </article>
-
-            <article class="utility-card">
-              <div class="card-kicker" aria-hidden="true">SW</div>
-              <h3>Swagger UI</h3>
-              <p>Interactive docs at <a href="/api/docs">/api/docs</a>.</p>
-            </article>
-
-            <article class="utility-card">
-              <div class="card-kicker" aria-hidden="true">MN</div>
-              <h3>Monitoring</h3>
-              <p>Live vitals, usage, and health dashboard at <a href="/monitor.html">/monitor.html</a>.</p>
-            </article>
+          <div class="stack-list" aria-label="Platform qualities">
+            <div class="stack-row">
+              <strong>Role-aware application shell</strong>
+              <span>Different workspaces for counselors, administrators, and client-facing flows so the product feels focused instead of overloaded.</span>
+            </div>
+            <div class="stack-row">
+              <strong>Monitoring baseline on every visible surface</strong>
+              <span>Performance, usability, error, and export signals remain available locally and through optional OTEL export.</span>
+            </div>
+            <div class="stack-row">
+              <strong>Security and audit separation</strong>
+              <span>Telemetry supports product health. Audit trails support trust, accountability, and compliance. They are not the same system.</span>
+            </div>
           </div>
 
-          <div class="about-footer-note">
-            This page is intentionally concise: it is meant to orient operators and developers quickly, then
-            route them back into the application, the live monitoring dashboard, or the API documentation
-            without friction.
+          <div class="link-grid">
+            <article class="link-card">
+              <div class="link-kicker" aria-hidden="true">MN</div>
+              <h3>Monitoring</h3>
+              <p>Live vitals, surface telemetry, and runtime summaries at <a href="/monitor.html">/monitor.html</a>.</p>
+            </article>
+
+            <article class="link-card">
+              <div class="link-kicker" aria-hidden="true">OA</div>
+              <h3>OpenAPI Contract</h3>
+              <p>Machine-readable API contract at <a href="/api/openapi.yaml">/api/openapi.yaml</a>.</p>
+            </article>
+
+            <article class="link-card">
+              <div class="link-kicker" aria-hidden="true">SW</div>
+              <h3>Swagger UI</h3>
+              <p>Interactive API documentation at <a href="/api/docs">/api/docs</a>.</p>
+            </article>
           </div>
         </aside>
+      </section>
+
+      <section class="cta-panel">
+        <div>
+          <p class="section-label">Explore The Product</p>
+          <h2>Return to the workspace, or inspect the platform in motion.</h2>
+          <p>
+            The About page should orient quickly, then get out of the way. The real proof is in the live
+            product, the monitored surfaces, and the rhythm of daily counselor work.
+          </p>
+        </div>
+        <div class="cta-actions">
+          <a class="cta-link cta-link-primary" href="/index.html">Open Workspace</a>
+          <a class="cta-link cta-link-secondary" href="/monitor.html">View Monitoring</a>
+        </div>
       </section>
     </main>
   </body>

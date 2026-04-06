@@ -44,7 +44,7 @@ export default function DemographicsTab({ client, clientId }) {
   const [lastName,     setLastName]     = useState(client.lastName     ?? '');
   const [preferredName,setPreferredName]= useState(client.preferredName ?? '');
   const [pronouns,     setPronouns]     = useState(client.pronouns     ?? '');
-  const [dateOfBirth,  setDateOfBirth]  = useState(strToDate(client.dateOfBirth));
+  const [dateOfBirth,  setDateOfBirth]  = useState(client.dateOfBirth || null);
   const [ssnLast4,     setSsnLast4]     = useState(client.ssnLast4     ?? '');
   const [status,       setStatus]       = useState(client.status       ?? 'active');
   const [idSaving,     setIdSaving]     = useState(false);
@@ -220,7 +220,7 @@ export default function DemographicsTab({ client, clientId }) {
           <TextInput label="Legal Last Name"  required value={lastName}  onChange={(e) => setLastName(e.target.value)} />
           <TextInput label="Preferred Name / Goes By" value={preferredName} onChange={(e) => setPreferredName(e.target.value)} />
           <TextInput label="Pronouns" placeholder="e.g. she/her, they/them" value={pronouns} onChange={(e) => setPronouns(e.target.value)} />
-          <DateInput label={age !== null ? `Date of Birth (${age} yrs)` : 'Date of Birth'} valueFormat="YYYY-MM-DD" value={dateOfBirth} onChange={setDateOfBirth} />
+          <DateInput label={age !== null ? `Date of Birth (${age} yrs)` : 'Date of Birth'} valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" value={dateOfBirth} onChange={setDateOfBirth} />
           <PasswordInput label="SSN Last 4" maxLength={4} value={ssnLast4} onChange={(e) => setSsnLast4(e.target.value.replace(/\D/g, '').slice(0, 4))} />
           <Select label="Status" data={STATUS_OPTIONS} value={status} onChange={(v) => setStatus(v ?? 'active')} />
         </SimpleGrid>

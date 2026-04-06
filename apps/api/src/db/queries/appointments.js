@@ -24,6 +24,7 @@ const APPOINTMENT_SELECT = `
     a.duration_minutes,
     a.location_id,
     l.name AS resolved_location_name,
+    a.series_id,
     a.remote_session,
     a.created_at,
     a.updated_at
@@ -75,6 +76,7 @@ function rowToAppointment(row) {
     appointmentType: row.appointment_type,
     locationId: row.location_id,
     locationName: row.stored_location_name ?? row.resolved_location_name ?? (row.remote_session ? 'Remote Session' : null),
+    seriesId: row.series_id ?? null,
     remoteSession: Boolean(row.remote_session),
     durationMinutes,
     timezone: row.timezone ?? 'UTC',
@@ -150,6 +152,7 @@ function rowToSeries(row) {
     recurrenceRule: row.recurrence_rule,
     startDate: row.start_date instanceof Date ? row.start_date.toISOString().slice(0, 10) : row.start_date,
     endDate: row.end_date instanceof Date ? row.end_date.toISOString().slice(0, 10) : (row.end_date ?? null),
+    startTime: row.start_time ?? '09:00',
     durationMinutes: Number(row.duration_minutes) || 50,
     locationId: row.location_id ?? null,
     remoteSession: Boolean(row.remote_session),
@@ -163,7 +166,7 @@ function rowToSeries(row) {
 // Appointments
 // ---------------------------------------------------------------------------
 
-export async function listAppointments(tenantId, { clientId, counselorId } = {}) {
+export async function listAppointments(tenantId, { clientId, counselorId, seriesId } = {}) {
   const conditions = ['a.tenant_id = ?'];
   const args = [tenantId];
 
@@ -171,26 +174,20 @@ export async function listAppointments(tenantId, { clientId, counselorId } = {})
     conditions.push('a.client_id = ?');
     args.push(clientId);
   }
-
   if (counselorId) {
     conditions.push('a.counselor_id = ?');
     args.push(counselorId);
   }
-
-  if (clientId || counselorId) {
-    const [rows] = await pool.query(
-      `${APPOINTMENT_SELECT}
-       WHERE ${conditions.join('\n         AND ')}
-       ORDER BY COALESCE(a.starts_at, a.scheduled_at) ASC`,
-      args
-    );
-    return rows.map(rowToAppointment);
+  if (seriesId) {
+    conditions.push('a.series_id = ?');
+    args.push(seriesId);
   }
+
   const [rows] = await pool.query(
     `${APPOINTMENT_SELECT}
-     WHERE a.tenant_id = ?
+     WHERE ${conditions.join('\n       AND ')}
      ORDER BY COALESCE(a.starts_at, a.scheduled_at) ASC`,
-    [tenantId]
+    args
   );
   return rows.map(rowToAppointment);
 }
@@ -220,6 +217,7 @@ export async function createAppointment({
   locationName,
   remoteSession,
   timezone,
+  seriesId = null,
 }) {
   const startsAtSql = toSqlTimestamp(startsAt);
   const endsAtSql = toSqlTimestamp(endsAt);
@@ -231,8 +229,8 @@ export async function createAppointment({
     `INSERT INTO appointments
        (id, tenant_id, client_id, counselor_id, client_name_enc, counselor_name_enc,
         starts_at, ends_at, scheduled_at, duration_minutes, status, appointment_type,
-        location_id, location_name, timezone, remote_session)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        location_id, location_name, timezone, remote_session, series_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       tenantId,
@@ -250,6 +248,7 @@ export async function createAppointment({
       effectiveLocationName,
       timezone ?? 'UTC',
       remoteSession ? 1 : 0,
+      seriesId,
     ]
   );
   return getAppointmentById(id, tenantId);
@@ -610,6 +609,7 @@ export async function createSeries({
   recurrenceRule,
   startDate,
   endDate,
+  startTime,
   durationMinutes,
   locationId,
   remoteSession,
@@ -617,15 +617,16 @@ export async function createSeries({
   await pool.query(
     `INSERT INTO appointment_series
        (id, tenant_id, counselor_id, client_id, client_name_enc, counselor_name_enc,
-        appointment_type, recurrence_rule, start_date, end_date, duration_minutes,
+        appointment_type, recurrence_rule, start_date, end_date, start_time, duration_minutes,
         location_id, remote_session, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
     [
       id, tenantId, counselorId, clientId,
       clientName ? encrypt(clientName) : null,
       counselorName ? encrypt(counselorName) : null,
       appointmentType ?? null, recurrenceRule,
       startDate, endDate ?? null,
+      startTime ?? '09:00',
       durationMinutes ?? 50, locationId ?? null,
       remoteSession ? 1 : 0,
     ]

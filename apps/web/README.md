@@ -25,11 +25,13 @@ Default URL: `http://localhost:3000`
 ## Current UI Scope
 
 - sidebar navigation shell
+- top-level workspace labels now use simpler counselor-friendly names: `Dashboard`, `Client Scheduling`, `Documents`, and `Client Portal`
 - role-aware navigation that gives counselors a smaller primary workspace and keeps monitoring/admin tools in admin-capable paths
 - dedicated counselor home surface for counselor and intern roles
 - dedicated counselor tasks surface for counselor note follow-up, assigned document/form review, and scheduling handoff
 - counselor home and task queues now hand off directly into scheduling composers and session-note charting flows for assigned clients
-- client detail now includes a counselor-only Intake Preview tab for pre-session clients with completed intake materials
+- client detail now includes a counselor-only Intake Preview tab for clients with completed intake materials
+- Clinical Chart now opens with a summary header, functional overview cards, session-status timeline, and stronger assessment/treatment-plan visual cues
 - global search across today's schedule
 - redesigned `Practice Operations Center` header with an animated counseling mark and stronger operational hierarchy
 - sidebar heading now uses an animated counseling icon with a simplified `Options` label
@@ -38,10 +40,13 @@ Default URL: `http://localhost:3000`
 - the top bar title and subtitle now follow the active workspace instead of reusing the dashboard label across unrelated screens
 - scheduling appointment creation and counselor-calendar filtering now use stable counselor IDs instead of counselor display names
 - key metric cards for today's sessions, future appointments, audit-event visibility, and current session identity/state
+- the dashboard `Faithful Workflows` metric card now opens the full Faithful Workflows workspace directly
 - operations panels for schedule, priority queue, and compliance watch
 - operational alerts now surface when counselor intake previews are available and can deep-link directly into the client Intake Preview tab
 - counselor home and task views now surface assigned intake previews directly and can open the client on the Intake Preview tab without requiring the dashboard
 - the client workspace list now marks preview-ready clients and can open the client record directly on the Intake Preview tab
+- approved care requests in Workspace Studio Portal can now create a client record directly, after which the request switches to a `View Client` action
+- Faithful Workflows demo/mock clients are disabled by default and only appear when explicitly enabled through `VITE_ENABLE_FAITH_WORKFLOWS_DEMO=true` or `localStorage['faith_workflows.demo_mode']='true'`
 - care flow progress indicators
 - Offerings workspace and Workspace Studio suggested-giving settings, including correction of incorrect offering entries
 - same-origin `/api/*` proxy for live dashboard hydration from the API service
@@ -50,7 +55,7 @@ Default URL: `http://localhost:3000`
 - branded Operations Studio page at `/operations.html` aligned to the same indigo/light workspace palette as the main app
 - OTEL status UI that reflects shared OTLP, traces-only, or metrics-only endpoint configuration
 - interactive API docs served through the same-origin proxy at `/api/docs`
-- branded static About page at `/about` with product-overview content and operational linkouts
+- branded static About page at `/about` with a stronger counselor-first product narrative, shared light-indigo app palette, and operational linkouts
 
 ## Monitoring Notes
 
@@ -65,6 +70,8 @@ Default URL: `http://localhost:3000`
 - Counselor client detail and chart-related API routes now enforce assigned-client access on the server for counselor and intern sessions
 - Counselor-only intake preview reads now follow the same assigned-client authorization model as client detail routes and remain explicitly provisional rather than diagnostic
 - Dashboard operational alerts now use the shared operations summary to surface intake-preview-ready clients and can open the client record directly on the Intake Preview tab
+- Faithful Workflows now receives the dashboard's canonical workflow counts directly from the app shell and still applies the shared operations-summary urgency signals to the left roster, so the banner and dashboard stay aligned even during workflow-page fallback/loading states
+- Workspace Studio Portal now uses an explicit admin-only conversion endpoint for approved `care_request` items so portal approvals can create a real client record without relying on `account_signup` activation paths
 - Counselor scheduling, form workflow, assignment, offerings, and faith referral API actions now reuse the same assigned-client access checks for counselor and intern sessions when those routes traverse client context
 - Counselor broad workflow collections now default to assigned-client scope on the server, including reminders, waitlist, document/form/inventory assignment collections, offerings, and faith referral coordination reads
 - Counselor-scoped client, appointment, scheduling calendar, operations-summary, and series collections now ignore caller-supplied counselor overrides for counselor and intern sessions while keeping explicit counselor filters available to admin-capable roles

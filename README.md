@@ -20,13 +20,20 @@ It is built specifically for Christian counseling practices and supports daily e
 
 ## Core Capabilities
 
-- **Faithful Workflows:** counselor-facing recommendation workspace powered by 27 deterministic clinical rules across 8 care categories, with explainable rationale, trend analysis, and three interchangeable canvas views (Classic List, Radial Hub, Priority Matrix)
-- **Clinical Chart:** session notes, internal notes, treatment plans, progress tracking, and homework
-- **Operations Dashboard:** live daily operations summary with counselor workload, note-gap compliance watch, portal request tracking, configurable operational alerts, and 7-day trend context
+- **Faithful Workflows:** counselor-facing recommendation workspace powered by 27 deterministic clinical rules across 8 care categories, with explainable rationale, trend analysis, three interchangeable canvas views (Classic List, Radial Hub, Priority Matrix), and shared operational urgency cues that keep banner counts and visible client severity aligned
+- **Clinical Chart:** session notes, internal notes, treatment plans, progress tracking, and homework, now with a chart summary header, session-status timeline, and visual assessment/progress cues
+- **Dashboard:** live daily operations summary with counselor workload, note-gap compliance watch, portal request tracking, configurable operational alerts, and 7-day trend context
+- **Workspace Studio:** full-featured practice administration hub with tabs for Practice profile, Locations CRUD, Staff roster, Lifecycle caseload board, Appointments (service codes), Documents, Offerings, and Portal workflows
 - **Scheduling and operations workflows:** appointments, waitlists, reminders, and utilization visibility
 - **Client portal workflows:** onboarding, forms, documents, and client self-service surfaces
 - **Monitoring and telemetry:** local monitoring + optional OpenTelemetry export
 - **Security and audit foundations:** role-aware access controls and structured audit event patterns
+
+The checked-in English runtime locale catalog also mirrors the current counselor-facing workspace labels so API-backed i18n does not drift back to older names like `Operations Dashboard` or `Portal`.
+
+The dashboard Faithful Workflows metric card also acts as a direct workspace handoff into the full Faithful Workflows page, matching the drill-down behavior already used by the other dashboard metric cards. The Faithful Workflows banner now also receives the same canonical count payload the dashboard renders, so both surfaces stay aligned even if the workflow page falls back to lighter local ranking data while loading.
+
+Encrypted DB reads now normalize Buffer-backed ciphertext values returned by MySQL before decrypting. That keeps authenticated workflow reads, including recurring scheduling series, stable even when legacy rows are hydrated as `Buffer` objects instead of plain strings.
 
 ## API Security And Compliance Baseline (v5.6.0)
 
@@ -46,6 +53,36 @@ Canonical reference:
 - `PLANS/FULL-SECURITY-AND-AUDITING.md` (includes the `v5.6.0 API Security And Compliance Engineering Standard` section)
 
 This baseline supports HIPAA-oriented safeguards, GDPR-aligned privacy principles, SOC 2 control expectations, and PCI-conscious engineering practices.
+
+## Date Picker Behavior
+
+All `DateInput` components (Mantine v8) across the application accept dates in `MM/DD/YYYY` format for manual entry and display. The calendar popover closes automatically when a day is selected. Date values are stored internally as `YYYY-MM-DD` strings. Affected forms: intake/form runner, client demographics, legal/admin, insurance, diagnoses, employment, certifications, and licenses.
+
+## Workspace Studio
+
+Workspace Studio is the practice administration hub, accessible from the main navigation. It provides a tabbed interface covering all practice management surfaces:
+
+- **Practice** — edit the practice profile: name, type (solo/group/multi-location), timezone, faith tradition, and contact information.
+- **Locations** — add, edit, and delete scheduling locations. Each location tracks name, address, capacity, and telehealth/remote-enabled flag.
+- **Staff** — read-only staff roster showing counselor cards (role, license type/number, supervision status, bio) and admin accounts. Links to the full Staff Management page for account creation and password resets.
+- **Lifecycle** — caseload management board. Clickable status summary cards (Active, Waitlist, Inactive, Discharged) filter the client list. Referral source breakdown. Per-client status transitions with a discharge modal capturing reason and notes.
+- **Appointments** — service code configuration (CPT/billing codes). Manage codes with category, default session duration, and active/inactive status.
+- **Documents** — assign forms to clients and review submission history. Supports direct navigation from a client record with the client pre-selected.
+- **Offerings** — track client service offerings and financial arrangements.
+- **Portal** — manage portal settings, review public registration requests, approve/convert care requests into client records, and manage authenticated portal accounts.
+
+## Client Detail Documents Shortcut
+
+Client Detail now includes a direct header action to open documents for the active client. The action routes staff into the Client Portal Documents tab with that client preselected, so records can be viewed and document tasks can be assigned without manually switching surfaces or reselecting the client.
+The checked-in public web bundle includes this shortcut so environments serving `apps/web/public` render the button without requiring local source recompilation.
+
+## Public Web Build Artifacts
+
+The `apps/web/public/assets` bundle files may be refreshed and committed when shipping UI workflow updates so the checked-in public web surface stays aligned with the latest source behavior.
+
+## Standalone Product Pages
+
+The static public surfaces are meant to reflect the current product posture, not an older generic admin-console identity. The checked-in About page at `/about` now presents Faith Counseling as a counselor-first, faith-aware practice platform with a stronger product narrative and the same light indigo visual language used across the rest of the app, while still linking back to live monitoring and API documentation.
 
 ## Architecture At A Glance
 
@@ -97,8 +134,17 @@ pnpm start
 - waits for MySQL readiness
 - runs API migration when DB is configured
 - starts API and web services
+- restarts existing repo-managed API and web processes on ports `3001` and `3002` so local changes are not served from stale long-running processes
 
 Avoid starting the app with `node start-servers.js` for normal development, because it does not apply the full startup preflight.
+
+## Faithful Workflows Demo Mode
+
+Faithful Workflows now defaults to real client data only. Demo/mock workflow clients are disabled unless you explicitly turn them on.
+
+- enable at build/start time with `VITE_ENABLE_FAITH_WORKFLOWS_DEMO=true`
+- or enable in the browser with `localStorage.setItem('faith_workflows.demo_mode', 'true')` and refresh
+- disable again with `localStorage.setItem('faith_workflows.demo_mode', 'false')` or by removing the key and leaving the env var unset
 
 ## Prerequisites
 
@@ -216,18 +262,21 @@ If `OTEL_EXPORTER_OTLP_ENDPOINT` is unset, telemetry remains local/console-only.
 
 Only the latest two entries are listed here. Full release history is in `docs/change-log.md`.
 
-### Maintenance (April 2, 2026)
+### v5.6.0 (April 3, 2026)
 
-Two bug fixes shipped on main:
-
-- **Login copy restored:** faith-centered welcome messaging ("Caring for the whole person") was missing from the main branch — `packages/i18n/src/index.js`, `apps/api/data/i18n/en.json`, and `apps/api/data/i18n/es.json` updated; web bundle rebuilt
-- **Operations Dashboard portal backlog aligned:** the backlog alert was counting all 68 historical portal requests while the Practice Operations tile showed 0 — both now derive from the same open/actionable request set (`requested` and `reviewing` statuses only)
+Portal client conversion flow: approved `account_signup` portal requests still auto-create and link a client on activation, and approved `care_request` items in Workspace Studio Portal now show **"Create Client"** so staff can generate the client record on demand and then open it from **"View Client"**.
 
 ### v5.5.2 (April 1, 2026)
 
-Faithful Workflows visual upgrade: adds two new parallel canvas views (Radial Hub and Priority Matrix) alongside the original Classic List view. A floating cycle button in the canvas panel switches between all three. Zero functional or engine changes; all 51 engine tests pass.
+Faithful Workflows visual upgrade: adds two new parallel canvas views (Radial Hub and Priority Matrix) alongside the original Classic List view. A floating cycle button in the page header switches between all three. Zero functional or engine changes; all 51 engine tests pass.
 
 - Full summary: `docs/v5.5.2-RELEASE-SUMMARY.md`
+
+### Month Picker Bug Fix (April 5, 2026)
+
+- Fixed a bug in the Scheduling calendar where selecting a month in the month picker could select the wrong month (e.g., clicking May would select June and vice versa).
+- The month picker now correctly sets the selected month, matching the user's choice.
+- See `docs/change-log.md` for details.
 
 ## Change Log
 

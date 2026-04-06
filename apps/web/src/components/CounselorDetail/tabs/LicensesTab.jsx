@@ -75,8 +75,8 @@ export default function LicensesTab({ staffId, currentUser }) {
       licenseNumber: lic.licenseNumber ?? '',
       issuingState:  lic.issuingState  ?? '',
       issuingBody:   lic.issuingBody   ?? '',
-      issueDate:     strToDate(lic.issueDate),
-      expiryDate:    strToDate(lic.expiryDate),
+      issueDate:     lic.issueDate     || null,
+      expiryDate:    lic.expiryDate    || null,
       status:        lic.status        ?? 'active',
       isPrimary:     Boolean(lic.isPrimary),
     });
@@ -169,8 +169,8 @@ export default function LicensesTab({ staffId, currentUser }) {
               <TextInput label="License Number" {...form.getInputProps('licenseNumber')} />
               <TextInput label="Issuing State / Region" placeholder="e.g. TX, CA" {...form.getInputProps('issuingState')} />
               <TextInput label="Issuing Body" {...form.getInputProps('issuingBody')} />
-              <DateInput label="Issue Date"  valueFormat="YYYY-MM-DD" {...form.getInputProps('issueDate')} />
-              <DateInput label="Expiry Date" valueFormat="YYYY-MM-DD" {...form.getInputProps('expiryDate')} />
+              <DateInput label="Issue Date"  valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" {...form.getInputProps('issueDate')} />
+              <DateInput label="Expiry Date" valueFormat="MM/DD/YYYY" placeholder="MM/DD/YYYY" {...form.getInputProps('expiryDate')} />
               <Select label="Status" data={STATUS_OPTIONS} {...form.getInputProps('status')} />
               <Checkbox label="Primary License" mt="xl" {...form.getInputProps('isPrimary', { type: 'checkbox' })} />
             </SimpleGrid>
