@@ -11,6 +11,8 @@
  * 6. No language implies that symptoms are caused by weak faith.
  */
 
+import { getLatestAssessment, daysSince } from '../utils.js';
+
 /**
  * Rule: Client has faith profile with biblical integration opted in
  */
@@ -151,5 +153,56 @@ export function ruleFaithAcknowledge(data, clientId) {
     status: 'pending',
     orderedAfter: null,
     docNote: 'If client preferences change regarding faith integration, update faith profile accordingly.',
+  };
+}
+
+/**
+ * Rule: Client has faith integration opted in but no Spiritual Wellness Inventory
+ * completed in the last 90 days
+ */
+export function ruleSpiritualAssessmentOverdue(data, clientId) {
+  const fp = data.faithProfile;
+  if (!fp || !fp.integratesFaith) return null;
+  if (data.client?.status !== 'active') return null;
+
+  const latest = getLatestAssessment(data.assessments, 'Spiritual Wellness');
+  const daysSinceAssessment = latest
+    ? daysSince(latest.scoredAt ?? latest.completedAt)
+    : Infinity;
+
+  if (daysSinceAssessment < 90) return null;
+
+  const neverAssessed = daysSinceAssessment === Infinity;
+
+  return {
+    id: `rule_spiritual_assessment_overdue:${clientId}`,
+    ruleId: 'rule_spiritual_assessment_overdue',
+    category: 'spiritual',
+    title: neverAssessed
+      ? 'Spiritual Wellness Assessment Not Yet Completed (Optional)'
+      : `Spiritual Wellness Assessment Overdue — ${Math.floor(daysSinceAssessment / 30)} months (Optional)`,
+    summary: neverAssessed
+      ? 'Client has faith integration opted in but has never completed a Spiritual Wellness Inventory. Administering one can surface meaningful spiritual care goals.'
+      : `It has been ${Math.floor(daysSinceAssessment / 30)} months since the last Spiritual Wellness Inventory. Re-administration can track spiritual growth and identify new spiritual care priorities.`,
+    rationale: `For faith-integrated clients, the Spiritual Wellness Inventory provides structured data on spirituality as a therapeutic dimension — including practices, community connection, and areas of spiritual struggle. Regular administration allows the counselor and client to celebrate spiritual growth alongside clinical progress, and to surface areas for faith-integrated intervention. This assessment is always optional and client-led.`,
+    evidence: [
+      neverAssessed
+        ? 'No Spiritual Wellness Inventory on record'
+        : `Last Spiritual Wellness Inventory: ${Math.floor(daysSinceAssessment)} days ago`,
+      'Faith integration: opted in',
+      `Faith tradition: ${fp.tradition ? fp.tradition.replace(/_/g, ' ') : 'noted'}`,
+    ],
+    priority: 2,
+    confidence: 0.75,
+    cautions: [
+      'OPTIONAL: Only administer if client is interested and finds spiritual assessment meaningful.',
+      'Results should inform — not drive — the clinical conversation.',
+      'Scores are not diagnostic; they support dialogue.',
+    ],
+    actions: ['add_reminder_task', 'generate_session_agenda'],
+    faithNote: 'Framing the assessment as a "spiritual health check-in" rather than a test may make it feel more natural for the client.',
+    status: 'pending',
+    orderedAfter: null,
+    docNote: 'Document whether the Spiritual Wellness Inventory was administered and any spiritual care priorities identified.',
   };
 }

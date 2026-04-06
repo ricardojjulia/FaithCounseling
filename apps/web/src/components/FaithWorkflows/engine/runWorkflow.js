@@ -33,6 +33,9 @@ import {
   ruleStaleTreatmentPlan,
   ruleNoRecentNote,
   ruleDiagnosisWithoutGoal,
+  rulePcl5Worsening,
+  ruleGad7Worsening,
+  ruleAuditHigh,
 } from './rules/clinicalRules.js';
 
 // Session focus rules
@@ -60,11 +63,12 @@ import {
   ruleFaithBasedGriefSupport,
   ruleFaithTransitionSupport,
   ruleFaithAcknowledge,
+  ruleSpiritualAssessmentOverdue,
 } from './rules/spiritualRules.js';
 
 // Coordination rules
 import {
-  ruleNoInsurance,
+  ruleGiftArrangementNote,
   ruleOpenReferral,
   ruleFaithReferralAvailable,
   ruleClosingSummaryNeeded,
@@ -75,6 +79,7 @@ import {
   ruleReassessmentOverdue,
   ruleDischargePlanning,
   ruleStableProgress,
+  ruleLongTermEngagement,
 } from './rules/monitoringRules.js';
 
 /** All rule functions, in evaluation order. */
@@ -88,6 +93,9 @@ const ALL_RULES = [
   // Clinical
   rulePhq9Worsening,
   ruleGad7High,
+  rulePcl5Worsening,
+  ruleGad7Worsening,
+  ruleAuditHigh,
   ruleNoTreatmentPlan,
   ruleStaleTreatmentPlan,
   ruleNoRecentNote,
@@ -107,8 +115,9 @@ const ALL_RULES = [
   ruleFaithBasedGriefSupport,
   ruleFaithTransitionSupport,
   ruleFaithAcknowledge,
+  ruleSpiritualAssessmentOverdue,
   // Coordination
-  ruleNoInsurance,
+  ruleGiftArrangementNote,
   ruleOpenReferral,
   ruleFaithReferralAvailable,
   ruleClosingSummaryNeeded,
@@ -116,6 +125,7 @@ const ALL_RULES = [
   ruleReassessmentOverdue,
   ruleDischargePlanning,
   ruleStableProgress,
+  ruleLongTermEngagement,
 ];
 
 /**
