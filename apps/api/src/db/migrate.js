@@ -273,6 +273,23 @@ async function applyColumnMigrations(conn) {
   await addColumnIfMissing('progress_notes', 'appointment_id', 'VARCHAR(64) NULL AFTER client_id');
   await addIndexIfMissing('progress_notes', 'idx_note_appointment', '(appointment_id)');
 
+  // Superbills: encrypt PHI diagnosis codes
+  await addColumnIfMissing('superbills', 'diagnosis_codes_enc', 'MEDIUMTEXT NULL AFTER diagnosis_codes');
+  const [superbillRows] = await conn.query(
+    'SELECT id, tenant_id, diagnosis_codes FROM superbills WHERE diagnosis_codes IS NOT NULL AND diagnosis_codes_enc IS NULL',
+  );
+  for (const row of superbillRows) {
+    const raw = typeof row.diagnosis_codes === 'string' ? row.diagnosis_codes : JSON.stringify(row.diagnosis_codes);
+    if (!raw) continue;
+    await conn.query(
+      'UPDATE superbills SET diagnosis_codes_enc = ?, diagnosis_codes = NULL WHERE id = ? AND tenant_id = ?',
+      [encrypt(raw), row.id, row.tenant_id],
+    );
+  }
+  if (superbillRows.length > 0) {
+    console.log(`  ~ migrated ${superbillRows.length} superbill diagnosis_codes rows to encrypted form`);
+  }
+
   console.log('Column migrations done.');
 }
 
@@ -397,10 +414,7 @@ async function seedDevData(conn) {
     ],
   );
 
-  console.log('Dev seed complete.');
-  console.log('  Tenant:   system');
-  console.log('  Email:    admin@faithcounseling.local');
-  console.log('  Password: ChangeMe!Dev2024#  (change immediately)');
+  console.log('Dev seed complete — default credentials are documented in apps/api/README.md');
 
   if (!shouldSeedDevPortalData()) {
     console.log('  Dev portal seed skipped (SEED_DEV_PORTAL_DATA=false).');
@@ -445,8 +459,7 @@ async function seedDevData(conn) {
       0,
     ],
   );
-  console.log('  Client portal email:    sarah.kim@example.test');
-  console.log('  Client portal password: ChangeMe!Client2026#  (change immediately)');
+  console.log('Dev portal client seeded — credentials documented in apps/api/README.md');
 }
 
 async function ensureDevPortalClient(conn) {

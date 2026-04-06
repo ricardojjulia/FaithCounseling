@@ -81,6 +81,33 @@ function checkDependencyVulnerabilities() {
   const issues = [];
   const summary = { critical: 0, high: 0, moderate: 0, low: 0, info: 0, total: 0 };
 
+  // Helper: try to parse pnpm audit JSON output using multiple flag formats
+  function tryAuditJson() {
+    // pnpm >= 7 uses --json; older versions used --reporter=json
+    for (const flags of [['audit', '--json'], ['audit', '--reporter=json']]) {
+      const result = spawnSync('pnpm', flags, { cwd: ROOT, encoding: 'utf8', timeout: 60_000 });
+      if (result.error) return { data: null, exitCode: null, unavailable: true }; // command not found
+      if (!result.stdout) continue;
+      try {
+        const parsed = JSON.parse(result.stdout);
+        if (parsed && (parsed.metadata || parsed.vulnerabilities)) return { data: parsed, exitCode: result.status };
+      } catch { /* try next flag */ }
+    }
+    // Last resort: plain audit, check exit code only
+    const plain = spawnSync('pnpm', ['audit'], { cwd: ROOT, encoding: 'utf8', timeout: 60_000 });
+    if (plain.error) return { data: null, exitCode: null, unavailable: true };
+    return { data: null, exitCode: plain.status };
+  }
+
+  try {
+    const { data: auditData, exitCode, unavailable } = tryAuditJson();
+
+    if (unavailable) {
+      issues.push(makeIssue('dependency-audit', 'info',
+        'pnpm not available in this environment — dependency audit skipped',
+        null, null,
+        'Run pnpm audit in the project root to check for dependency vulnerabilities.'));
+    } else if (auditData && auditData.metadata) {
   try {
     // pnpm audit outputs JSON with --reporter=json flag
     const result = spawnSync(
@@ -136,6 +163,15 @@ function checkDependencyVulnerabilities() {
         issues.push(makeIssue('dependency-audit', 'info',
           'No known vulnerabilities found in dependencies'));
       }
+    } else if (exitCode === 0) {
+      // JSON could not be parsed but audit exited cleanly — treat as no vulnerabilities
+      issues.push(makeIssue('dependency-audit', 'info',
+        'Dependency audit completed with no vulnerabilities reported'));
+    } else {
+      issues.push(makeIssue('dependency-audit', 'medium',
+        'Dependency audit returned warnings or could not parse structured output',
+        null, null,
+        'Run pnpm audit manually to review vulnerability details.'));
     } else {
       // Try plain text parsing for exit code
       const exitCode = result.status;
@@ -309,6 +345,8 @@ const DANGEROUS_PATTERNS = [
   },
   {
     name: 'no-https-check',
+    // Exclude localhost, loopback, and template literal patterns (e.g. new URL(req.url, `http://${host}`))
+    pattern: /http:\/\/(?!localhost|127\.0\.0\.1|0\.0\.0\.0|\$\{)/g,
     pattern: /http:\/\/(?!localhost|127\.0\.0\.1|0\.0\.0\.0)/g,
     level: 'low',
     recommendation: 'Ensure external URLs use HTTPS in production configurations.',
@@ -423,6 +461,8 @@ function checkAuthConfig(sourceFiles) {
     }
 
     // Check for secure cookie in production
+    // Exclude ops/ scripts — they contain scanner patterns and dev tooling, not production cookie config
+    if (source.includes('secure: false') && !rel.includes('test') && !rel.startsWith('ops/')) {
     if (source.includes('secure: false') && !rel.includes('test')) {
       issues.push(makeIssue('cookie-not-secure', 'medium',
         'Cookie configured with secure: false',

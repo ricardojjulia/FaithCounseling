@@ -2026,7 +2026,7 @@ async function handleAuthMe(request, response, session) {
   }
 
   const [rows] = await pool.query(
-    'SELECT sm.first_name_enc, sm.last_name_enc, sa.email, sa.email_enc FROM staff_accounts sa ' +
+    'SELECT sm.first_name_enc, sm.last_name_enc, sa.email_enc FROM staff_accounts sa ' +
     'JOIN staff_members sm ON sm.id = sa.staff_member_id ' +
     'WHERE sa.id = ?',
     [session.staff_account_id],
@@ -2037,7 +2037,7 @@ async function handleAuthMe(request, response, session) {
     tenantId: session.tenant_id,
     role: session.role,
     name: row ? `${decrypt(row.first_name_enc)} ${decrypt(row.last_name_enc)}` : null,
-    email: row?.email_enc ? decrypt(row.email_enc) : (row?.email ?? null),
+    email: row?.email_enc ? decrypt(row.email_enc) : null,
   });
 }
 
@@ -11663,10 +11663,10 @@ function createId(prefix, collection) {
   return `${prefix}-${String(maxNumeric + 1).padStart(3, '0')}`;
 }
 
-// Generates a unique ID for DB inserts using timestamp + random suffix.
+// Generates a unique ID for DB inserts using timestamp + crypto random suffix.
 // Use this instead of genId('prefix') on all DB paths.
 function genId(prefix) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  return `${prefix}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
 }
 
 function normalizeTenantId(value) {

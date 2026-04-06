@@ -72,6 +72,21 @@ The platform has moved quickly over the last few iterations, and the most recent
 - **Scheduling feels more human:** recurring appointment series can now be built with readable cadence options, weekday selection, and a live preview, while raw RRULE entry remains available only as an advanced fallback.
 - **Faithful Workflows stays in sync with operations:** dashboard drill-down and workflow urgency surfaces now share the same canonical counts so staff see one story, not competing numbers.
 
+## Nightly Security Checks
+
+The repository runs automated nightly AppSec and DB Security scans at **23:00 UTC** via GitHub Actions.
+
+| Script | Command | Description |
+|--------|---------|-------------|
+| AppSec scan | `node ops/appsec-scan.mjs` | 9-category application security review |
+| DB Security scan | `node ops/db-security-scan.mjs` | PHI/PII encryption coverage and DB config review |
+| Nightly runner | `node ops/nightly-security-runner.mjs` | Orchestrator — generates dated reports in `docs/SecurityChecks/` |
+| Dry run | `node ops/nightly-security-runner.mjs --dry-run` | Run scans without writing files or opening PRs |
+
+Reports are stored in [`docs/SecurityChecks/`](./docs/SecurityChecks/) as timestamped Markdown summaries and JSON raw data.
+
+**Current status:** AppSec `MEDIUM` (12 medium — `Math.random()` in UI key generation, deferred), DB Security `CLEAN` (0 critical/high/medium/low, PHI coverage 100%).
+
 ## API Security And Compliance Baseline (v5.6.0)
 
 This repository now includes a versioned API security and compliance engineering baseline for high-trust environments where sensitive data may exist.

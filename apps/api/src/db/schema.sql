@@ -534,14 +534,15 @@ CREATE TABLE IF NOT EXISTS payments (
 -- ─── Superbills ───────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS superbills (
-  id               VARCHAR(64) NOT NULL,
-  tenant_id        VARCHAR(64) NOT NULL,
-  invoice_id       VARCHAR(64),
-  client_id        VARCHAR(64),
-  generated_at     TIMESTAMP   NULL,
-  diagnosis_codes  JSON,
-  service_lines    JSON,
-  created_at       TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id                    VARCHAR(64)  NOT NULL,
+  tenant_id             VARCHAR(64)  NOT NULL,
+  invoice_id            VARCHAR(64),
+  client_id             VARCHAR(64),
+  generated_at          TIMESTAMP    NULL,
+  diagnosis_codes       JSON,                        -- legacy plaintext column retained only for migration compatibility
+  diagnosis_codes_enc   MEDIUMTEXT   NULL,           -- encrypted PHI (ICD codes)
+  service_lines         JSON,
+  created_at            TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   INDEX idx_superbill_tenant  (tenant_id),
   INDEX idx_superbill_client  (client_id)

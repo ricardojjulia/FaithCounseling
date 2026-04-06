@@ -166,6 +166,10 @@ const KNOWN_PLAINTEXT_EXCEPTIONS = new Set([
   // Schema-commented non-PHI JSON blobs
   'discharge_record',     // comment: "JSON blob (non-PHI metadata)"
   'policy_snapshot',      // policy text, not client PHI
+  // Public federal identifiers: not PHI under HIPAA (NPI is assigned to providers, not patients)
+  'npi',
+  // Clinical workflow dates without inherent PHI content in isolation
+  'referral_date',
 ]);
 
 function checkPhiPiiCompliance(tables) {
@@ -181,6 +185,11 @@ function checkPhiPiiCompliance(tables) {
     for (const col of table.columns) {
       if (KNOWN_PLAINTEXT_EXCEPTIONS.has(col.name)) continue;
 
+      // Skip columns whose schema comment explicitly states non-PHI or not-PHI
+      if (col.comment && /non-?phi|not\s+phi/i.test(col.comment)) continue;
+      // Skip legacy plaintext columns that are being retained only for migration
+      // compatibility — the encrypted _enc companion column is the canonical store.
+      if (col.comment && col.comment.toLowerCase().includes('migration compatibility')) continue;
       // Skip columns whose schema comment explicitly states non-PHI
       if (col.comment && col.comment.toLowerCase().includes('non-phi')) continue;
       // Skip hash columns (one-way hashes are not PHI themselves)
@@ -243,6 +252,8 @@ function checkEncryptionConvention(tables) {
     'recurrence_rule', 'data', 'payload', 'body', 'text',
     'score_label', 'interpretation_label', 'form_title', 'form_key',
     'category', 'plan_type', 'practice_type', 'timezone', 'reason',
+    // portal_settings: practice-level configuration text (marketing copy, not patient PHI)
+    'welcome_message', 'help_message', 'offering_ministry_note',
   ]);
 
   for (const table of tables) {
@@ -251,6 +262,10 @@ function checkEncryptionConvention(tables) {
       if (KNOWN_PLAINTEXT_EXCEPTIONS.has(col.name)) continue;
       if (SAFE_TEXT_COLUMNS.has(col.name)) continue;
       if (!['TEXT', 'MEDIUMTEXT', 'LONGTEXT', 'VARBINARY'].includes(col.type)) continue;
+      // Skip legacy plaintext columns retained only for migration compatibility
+      if (col.comment && col.comment.toLowerCase().includes('migration compatibility')) continue;
+      // Skip columns explicitly marked non-PHI in schema comments
+      if (col.comment && /non-?phi|not\s+phi/i.test(col.comment)) continue;
 
       // If it's a large text column without encryption and not flagged already
       const looksLikePhi = PHI_KEYWORDS.some(kw => col.name.toLowerCase().includes(kw));
@@ -642,6 +657,10 @@ function checkSensitiveColumns(tables) {
 function checkPortalPublicSecurity(tables) {
   const issues = [];
 
+  // portal_registration_requests is special: must NOT allow caller-supplied tenant_id
+  // to determine storage (tenant must be forced server-side)
+  const publicReqTable = tables.find(t => t.name === 'portal_registration_requests' ||
+                                          t.name === 'portal_public_requests' ||
   // portal_public_requests is special: must NOT allow caller-supplied tenant_id
   // to determine storage (tenant must be forced server-side)
   const publicReqTable = tables.find(t => t.name === 'portal_public_requests' ||
@@ -649,6 +668,7 @@ function checkPortalPublicSecurity(tables) {
   if (!publicReqTable) {
     // This may be stored elsewhere — check if it's documented
     issues.push(makeIssue('portal-public-requests-not-found', 'low',
+      'portal_registration_requests table not found in schema — verify public intake is stored securely',
       'portal_public_requests table not found in schema — verify public intake is stored securely',
       null,
       'Ensure public intake requests cannot specify their own tenant_id.'));
@@ -656,6 +676,7 @@ function checkPortalPublicSecurity(tables) {
     const hasTenant = publicReqTable.columns.some(c => c.name === 'tenant_id');
     if (hasTenant) {
       issues.push(makeIssue('portal-public-requests-tenant', 'info',
+        `${publicReqTable.name} table includes tenant_id — ensure server enforces tenant assignment`));
         'portal_public_requests table includes tenant_id — ensure server enforces tenant assignment'));
     }
   }

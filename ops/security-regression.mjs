@@ -12,6 +12,8 @@
  *   await req('/v1/clients', { headers: { cookie, 'content-type': 'application/json' } });
  */
 
+import { randomInt } from 'node:crypto';
+
 const base = process.env.API_BASE_URL || 'http://localhost:3001';
 
 /**
@@ -68,7 +70,7 @@ const headersByRole = {
 };
 
 function requestId(prefix) {
-  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  return `${prefix}-${Date.now()}-${randomInt(0, 10000)}`;
 }
 
 function assert(condition, message) {

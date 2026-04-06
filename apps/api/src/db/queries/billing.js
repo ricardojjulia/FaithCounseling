@@ -103,7 +103,9 @@ function rowToSuperbill(row) {
     invoiceId: row.invoice_id,
     generatedAt: row.generated_at instanceof Date ? row.generated_at.toISOString() : row.generated_at,
     serviceDate: row.generated_at instanceof Date ? row.generated_at.toISOString() : row.generated_at,
-    diagnosisCodes: typeof row.diagnosis_codes === 'string' ? JSON.parse(row.diagnosis_codes) : row.diagnosis_codes,
+    diagnosisCodes: row.diagnosis_codes_enc
+      ? decryptJson(row.diagnosis_codes_enc)
+      : (typeof row.diagnosis_codes === 'string' ? JSON.parse(row.diagnosis_codes) : row.diagnosis_codes),
     serviceLines: typeof row.service_lines === 'string' ? JSON.parse(row.service_lines) : row.service_lines,
     createdAt: row.created_at,
   };
@@ -405,7 +407,7 @@ export async function createSuperbill({
 }) {
   await pool.query(
     `INSERT INTO superbills
-       (id, tenant_id, client_id, invoice_id, generated_at, diagnosis_codes, service_lines)
+       (id, tenant_id, client_id, invoice_id, generated_at, diagnosis_codes_enc, service_lines)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
@@ -413,7 +415,7 @@ export async function createSuperbill({
       clientId,
       invoiceId,
       toSqlTimestamp(generatedAt),
-      JSON.stringify(diagnosisCodes),
+      encryptJson(diagnosisCodes),
       JSON.stringify(serviceLines),
     ]
   );
@@ -431,7 +433,7 @@ export async function updateSuperbill(id, tenantId, fields) {
   if (fields.clientId !== undefined) { setClauses.push('client_id = ?'); values.push(fields.clientId); }
   if (fields.invoiceId !== undefined) { setClauses.push('invoice_id = ?'); values.push(fields.invoiceId); }
   if (fields.generatedAt !== undefined) { setClauses.push('generated_at = ?'); values.push(toSqlTimestamp(fields.generatedAt)); }
-  if (fields.diagnosisCodes !== undefined) { setClauses.push('diagnosis_codes = ?'); values.push(JSON.stringify(fields.diagnosisCodes)); }
+  if (fields.diagnosisCodes !== undefined) { setClauses.push('diagnosis_codes_enc = ?'); values.push(encryptJson(fields.diagnosisCodes)); }
   if (fields.serviceLines !== undefined) { setClauses.push('service_lines = ?'); values.push(JSON.stringify(fields.serviceLines)); }
 
   if (setClauses.length > 0) {

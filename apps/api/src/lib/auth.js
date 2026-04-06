@@ -240,9 +240,9 @@ export async function login(email, password, response) {
   const [rows] = await pool.query(
     'SELECT sa.*, sm.role, sm.first_name_enc, sm.last_name_enc FROM staff_accounts sa ' +
     'JOIN staff_members sm ON sm.id = sa.staff_member_id ' +
-    'WHERE sa.email_lookup_hash = ? OR sa.email = ? ' +
+    'WHERE sa.email_lookup_hash = ? ' +
     'LIMIT 1',
-    [emailLookupHash, normalizedEmail],
+    [emailLookupHash],
   );
   const account = rows[0];
 
@@ -607,8 +607,8 @@ export async function createStaffAccount({ staffMemberId, tenantId, email, passw
 
   const emailLookupHash = deriveLookupHash(normalizedEmail, { lowercase: true });
   const [existingRows] = await pool.query(
-    'SELECT id FROM staff_accounts WHERE email_lookup_hash = ? OR email = ?',
-    [emailLookupHash, normalizedEmail],
+    'SELECT id FROM staff_accounts WHERE email_lookup_hash = ?',
+    [emailLookupHash],
   );
   if (existingRows.length > 0) {
     throw { statusCode: 409, error: 'An account with this email already exists' };
