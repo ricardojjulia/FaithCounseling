@@ -58,6 +58,19 @@ Public web bundle rebuilt and committed.
 
 ---
 
+## April 6, 2026 — Manual Security Review Refresh
+
+### fix: publish strict manual security findings and remediation documents
+
+**Date:** April 6, 2026
+**Affected area:** `docs/SecurityChecks/findings.md`, `docs/SecurityChecks/recommendations.md`, `README.md`
+
+Performed a strict code-based security review across the API, web proxy, worker, schema, migrations, security tests, and existing security documentation. Published a refreshed manual findings register and mapped remediation plan under `docs/SecurityChecks/`, then linked the review from the README so maintainers can distinguish automated nightly scan output from the current evidence-based manual review.
+
+The refreshed review flags critical/high concerns around portal credential disclosure paths, non-production reset-token exposure, MFA control drift, raw identifier logging in the worker, and missing upload hardening.
+
+---
+
 ## April 6, 2026 — Jaeger + Prometheus Observability Stack (v5.7.0)
 
 ### feat(observability): Jaeger distributed tracing, Prometheus metrics scraping, monitoring page stack panel

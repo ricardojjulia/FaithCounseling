@@ -88,6 +88,15 @@ Reports are stored in [`docs/SecurityChecks/`](./docs/SecurityChecks/) as timest
 
 **Current status:** AppSec `MEDIUM` (12 medium — `Math.random()` in UI key generation, deferred), DB Security `CLEAN` (0 critical/high/medium/low, PHI coverage 100%).
 
+## Manual Security Review — 2026-04-06
+
+A strict manual repository review is now tracked in:
+
+- [`docs/SecurityChecks/findings.md`](./docs/SecurityChecks/findings.md)
+- [`docs/SecurityChecks/recommendations.md`](./docs/SecurityChecks/recommendations.md)
+
+Current manual review posture: **High risk**. The highest-priority issues are authentication secret disclosure in portal flows, non-production reset-token exposure, worker log leakage of sensitive identifiers, and missing upload hardening.
+
 ## API Security And Compliance Baseline (v5.7.0)
 
 This repository now includes a versioned API security and compliance engineering baseline for high-trust environments where sensitive data may exist. v5.7.0 additionally ships a full Jaeger + Prometheus observability stack.
