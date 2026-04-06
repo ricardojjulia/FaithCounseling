@@ -2,6 +2,15 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 5, 2026 — README Latest Look Narrative
+
+### feat: add a new LATEST LOOK section to the README
+
+**Date:** April 5, 2026
+**Affected area:** `README.md`
+
+Added a new narrative `LATEST LOOK` section immediately after `Core Capabilities` so the README reflects the current product presentation more vividly across dashboard, Faithful Workflows, scheduling, records, Workspace Studio, portal, charting, and monitoring surfaces.
+
 ## April 5, 2026 — Demo Dataset SQL Generation
 
 ### feat: generate and apply SQL artifacts for the canonical demo dataset
