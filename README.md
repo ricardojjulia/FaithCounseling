@@ -1,8 +1,12 @@
 # Faith Counseling
 
-Faith Counseling is a web-first, faith-based Christian counseling practice management platform for solo counselors, group practices, and multi-location clinics.
+> *"Whatever you do, work at it with all your heart, as working for the Lord."* — Colossians 3:23
 
-It is built specifically for Christian counseling practices and supports daily end-to-end workflows including client management, scheduling, clinical charting, forms, portal interactions, offerings tracking, compliance-focused operations, and observability.
+Welcome to **Faith Counseling** — a practice management platform built from the ground up for Christian counseling organizations. Whether you run a solo ministry practice, a group clinic, or a multi-location operation, Faith Counseling is designed to feel like a tool made specifically for you.
+
+From the moment a new client submits a care request to the session note signed after their last appointment, every workflow in this platform carries your practice's values forward — with structured clinical support, faith-integrated care tools, and an operational foundation ready for Monday morning.
+
+📖 **New to the platform?** Start with the [User Manual →](docs/User%20Manual/README.md)
 
 ## Faith-Based Christian Practice Focus
 
@@ -129,17 +133,52 @@ The static public surfaces are meant to reflect the current product posture, not
 ## Architecture Diagram
 
 ```mermaid
-flowchart LR
-   U[Staff and Clients] --> WEB[apps/web\nReact + Mantine + Node server]
-   WEB --> API[apps/api\nNode.js API]
-   API --> DB[(MySQL)]
-   API --> WRK[apps/worker\nBackground processing]
+flowchart TB
+    subgraph users[" 👤  Who Uses It "]
+        STAFF["🏥 Staff\nCounselors · Admins · Schedulers · Billers"]
+        CLIENT["🙋 Clients\nSelf-Service Portal Users"]
+    end
 
-   WEB -. uses .-> I18N[packages/i18n]
-   WEB -. uses .-> TEL[packages/telemetry]
-   API -. uses .-> TEL
-   API -. uses .-> DOM[packages/domain]
-   WRK -. uses .-> TEL
+    subgraph frontend[" 🌐  Frontend — apps/web "]
+        WEB["React 18 + Mantine + Vite\nNode.js BFF · CSRF Protection · Session Proxy\nI18N Runtime · Surface Telemetry"]
+    end
+
+    subgraph backend[" 🔌  Backend — apps/api "]
+        API["Node.js ESM REST API\nAuth · RBAC · Tenant Isolation\nAudit Ledger · Encrypted PHI"]
+    end
+
+    subgraph worker[" ⚡  Background — apps/worker "]
+        WRK["Async Job Processing\nBackground Tasks"]
+    end
+
+    subgraph packages[" 📦  Shared Packages "]
+        DOM["@faith/domain\nContracts · Enums · Types"]
+        I18N["@faith/i18n\nLocale Catalogs · Runtime Translations"]
+        TEL["@faith/telemetry\nOTEL Signals · Local Monitoring"]
+    end
+
+    subgraph infra[" 🗄️  Data & Observability "]
+        DB[("MySQL\nEncrypted at Rest · Migrations")]
+        OTEL["🔭 OTEL Collector\n— optional export —"]
+        AGENT["🤖 Translation Guardian\nPython Agent · Docker"]
+    end
+
+    STAFF --> WEB
+    CLIENT --> WEB
+    WEB --> API
+    API --> DB
+    API --> WRK
+    WRK --> DB
+
+    WEB -. uses .-> I18N
+    WEB -. uses .-> TEL
+    WEB -. uses .-> DOM
+    API -. uses .-> TEL
+    API -. uses .-> DOM
+    WRK -. uses .-> TEL
+
+    TEL -.->|"export\n(optional)"| OTEL
+    AGENT -.->|"reviews"| I18N
 ```
 
 ## Tech Stack
@@ -303,7 +342,17 @@ If `OTEL_EXPORTER_OTLP_ENDPOINT` is unset, telemetry remains local/console-only.
 
 ## Recent Updates
 
-Only the latest two entries are listed here. Full release history is in `docs/change-log.md`.
+Only the latest entries are listed here. Full release history is in `docs/change-log.md`.
+
+### User Manual (April 5, 2026)
+
+A full 13-section end-user practice manual is now live under `docs/User Manual/`. It covers every platform surface and is organized by role — counselor, admin, scheduler, and client. Includes Getting Started, Dashboard, Client Management, Scheduling, Clinical Chart, Faithful Workflows, Workspace Studio, Client Portal, Forms, Offerings, Monitoring, Security, and Troubleshooting.
+
+- Full manual: `docs/User Manual/README.md`
+
+### Month Picker Bug Fix (April 5, 2026)
+
+Fixed a bug in the Scheduling calendar where selecting a month in the month picker could select the wrong month (e.g., clicking May would select June). The picker now correctly selects the month you click.
 
 ### v5.6.0 (April 3, 2026)
 
@@ -314,12 +363,6 @@ Portal client conversion flow: approved `account_signup` portal requests still a
 Faithful Workflows visual upgrade: adds two new parallel canvas views (Radial Hub and Priority Matrix) alongside the original Classic List view. A floating cycle button in the page header switches between all three. Zero functional or engine changes; all 51 engine tests pass.
 
 - Full summary: `docs/v5.5.2-RELEASE-SUMMARY.md`
-
-### Month Picker Bug Fix (April 5, 2026)
-
-- Fixed a bug in the Scheduling calendar where selecting a month in the month picker could select the wrong month (e.g., clicking May would select June and vice versa).
-- The month picker now correctly sets the selected month, matching the user's choice.
-- See `docs/change-log.md` for details.
 
 ## Change Log
 
