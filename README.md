@@ -240,9 +240,19 @@ pnpm test:launch-readiness
 ### Demo dataset workflows
 
 ```bash
+pnpm demo:sql:generate
+pnpm demo:sql:apply
+pnpm demo:sql:refresh
 pnpm demo:verify
 pnpm demo:finalize
 ```
+
+Generated SQL artifacts are written to `ops/demo-dataset/generated/`:
+
+- `demo-dataset.reset.sql`
+- `demo-dataset.seed.sql`
+- `demo-dataset.apply.sql`
+- `demo-dataset.meta.json`
 
 ### Translation Guardian agent
 

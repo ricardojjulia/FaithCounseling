@@ -2,6 +2,35 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 5, 2026 — Demo Dataset SQL Generation
+
+### feat: generate and apply SQL artifacts for the canonical demo dataset
+
+**Date:** April 5, 2026
+**Affected area:** `ops/demo-dataset/`, `package.json`, `README.md`, `docs/DATABASE-IMPLEMENTATION.md`
+
+Added a SQL-backed demo-data workflow alongside the existing JS finalizer so the canonical demo dataset can now be generated as concrete SQL files and loaded directly into MySQL. The new flow writes reset, seed, combined apply, and metadata artifacts under `ops/demo-dataset/generated/`, and `pnpm demo:sql:apply` validates the loaded dataset against the existing invariant checks after execution.
+
+## April 5, 2026 — Faith Workflows Evaluation Dimension Expansion
+
+### feat(workflows): add 5 new evaluation dimensions; replace insurance rule with gift arrangement
+
+**Date:** April 5, 2026
+**Affected area:** `apps/web/src/components/FaithWorkflows/engine/rules/`
+
+Expanded the Faith Workflows evaluation engine with 5 new rule dimensions and removed the practice-incompatible insurance check:
+
+**Removed:**
+- `ruleNoInsurance` — removed because the practice operates by gift-giving only and has no insurance billing model.
+
+**Added:**
+- `ruleGiftArrangementNote` (coordination, priority 3) — fires when an active client has no documented gift or financial arrangement. Replaces the insurance rule with one aligned to the gift-giving practice model. Surfaces a reminder to document the stewardship arrangement.
+- `rulePcl5Worsening` (clinical_caution, priority 8) — fires when PCL-5 scores show a worsening trend across 2 or more assessments. Prompts session agenda prep and treatment plan review.
+- `ruleGad7Worsening` (clinical_caution, priority 7) — fires when GAD-7 scores show a worsening trend across 2 or more assessments.
+- `ruleAuditHigh` (clinical_caution, priority 6–7) — fires when AUDIT score ≥ 8 (hazardous), ≥ 16 (harmful), or ≥ 20 (probable dependence). Includes a faith note on stewardship and body as a temple.
+- `ruleLongTermEngagement` (monitoring, priority 4) — fires after 18 months of active engagement with no formal continuation-of-care review note. Celebrates long-term growth and prompts formal review.
+- `ruleSpiritualAssessmentOverdue` (spiritual, priority 2) — fires when a client has faith integration opted in and has not completed a Spiritual Wellness Inventory in 90+ days (or never). Optional; surfaces as a gentle reminder only.
+
 ## April 4, 2026 — Recurring Series Builder
 
 ### fix(scheduling): replace raw recurrence syntax with a guided recurring-series builder

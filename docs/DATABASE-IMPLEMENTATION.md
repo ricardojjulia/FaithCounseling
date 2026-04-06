@@ -95,6 +95,33 @@ Expected response:
 }
 ```
 
+### Demo Dataset SQL Workflow
+
+To generate committed SQL artifacts for the canonical demo dataset:
+
+```bash
+pnpm demo:sql:generate
+```
+
+This writes:
+
+- `ops/demo-dataset/generated/demo-dataset.reset.sql`
+- `ops/demo-dataset/generated/demo-dataset.seed.sql`
+- `ops/demo-dataset/generated/demo-dataset.apply.sql`
+- `ops/demo-dataset/generated/demo-dataset.meta.json`
+
+To apply the generated SQL into the configured local MySQL database and then run the canonical demo-data verification:
+
+```bash
+pnpm demo:sql:apply
+```
+
+To regenerate and apply in one step:
+
+```bash
+pnpm demo:sql:refresh
+```
+
 ---
 
 ## Manual Setup (without Docker)

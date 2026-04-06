@@ -1,0 +1,23 @@
+{
+  "tenantId": "system",
+  "referenceDate": "2026-04-06T00:00:00.000Z",
+  "applied": {
+    "staff": 3,
+    "counselors": 2,
+    "clients": 10,
+    "appointments": 52,
+    "progressNotes": 10,
+    "formAssignments": 40,
+    "formSubmissions": 58,
+    "offerings": 5,
+    "invoices": 3,
+    "payments": 3,
+    "portalAccounts": 10,
+    "portalProfiles": 10
+  },
+  "files": {
+    "reset": "ops/demo-dataset/generated/demo-dataset.reset.sql",
+    "seed": "ops/demo-dataset/generated/demo-dataset.seed.sql",
+    "apply": "ops/demo-dataset/generated/demo-dataset.apply.sql"
+  }
+}

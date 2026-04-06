@@ -6,6 +6,7 @@ import { buildDemoDataset } from './manifest.mjs';
 
 const requireFromApiWorkspace = createRequire(new URL('../../apps/api/package.json', import.meta.url));
 const argon2 = requireFromApiWorkspace('argon2');
+const mysql2 = requireFromApiWorkspace('mysql2');
 
 const TENANT_SCOPED_PURGE_ORDER = Object.freeze([
   'sessions',
@@ -99,6 +100,83 @@ export async function closeDemoDatasetPool() {
 
 function placeholders(values) {
   return values.map(() => '?').join(',');
+}
+
+function formatSqlStatement(sql, params = []) {
+  return `${mysql2.format(sql, params).trim().replace(/;$/, '')};`;
+}
+
+function createSqlRecorder() {
+  const statements = [];
+
+  return {
+    statements,
+    connection: {
+      async query(sql, params = []) {
+        statements.push(formatSqlStatement(sql, params));
+        return [[], []];
+      },
+    },
+  };
+}
+
+function buildStaticResetStatements(dataset) {
+  const skippedTenantDeletes = new Set(['payments', 'superbills', 'claims', 'portal_messages', 'document_assignments']);
+  const statements = [
+    formatSqlStatement(
+      `DELETE FROM payments
+       WHERE invoice_id IN (
+         SELECT id FROM (
+           SELECT id FROM invoices WHERE tenant_id = ?
+         ) AS seeded_invoices
+       )`,
+      [dataset.tenantId],
+    ),
+    formatSqlStatement(
+      `DELETE FROM superbills
+       WHERE invoice_id IN (
+         SELECT id FROM (
+           SELECT id FROM invoices WHERE tenant_id = ?
+         ) AS seeded_invoices
+       )`,
+      [dataset.tenantId],
+    ),
+    formatSqlStatement(
+      `DELETE FROM claims
+       WHERE invoice_id IN (
+         SELECT id FROM (
+           SELECT id FROM invoices WHERE tenant_id = ?
+         ) AS seeded_invoices
+       )`,
+      [dataset.tenantId],
+    ),
+    formatSqlStatement(
+      `DELETE FROM portal_messages
+       WHERE thread_id IN (
+         SELECT id FROM (
+           SELECT id FROM portal_message_threads WHERE tenant_id = ?
+         ) AS seeded_threads
+       )`,
+      [dataset.tenantId],
+    ),
+    formatSqlStatement(
+      `DELETE FROM document_assignments
+       WHERE assignee_type = 'client'
+         AND assignee_id IN (
+           SELECT id FROM (
+             SELECT id FROM clients WHERE tenant_id = ?
+           ) AS seeded_clients
+         )`,
+      [dataset.tenantId],
+    ),
+  ];
+
+  for (const table of TENANT_SCOPED_PURGE_ORDER) {
+    if (skippedTenantDeletes.has(table)) continue;
+    statements.push(formatSqlStatement(`DELETE FROM \`${table}\` WHERE tenant_id = ?`, [dataset.tenantId]));
+  }
+
+  return statements;
 }
 
 async function purgeTableByTenant(connection, table, tenantId) {
@@ -1378,4 +1456,64 @@ export async function applyDemoDataset({ referenceDate = new Date() } = {}) {
   } finally {
     connection.release();
   }
+}
+
+export async function generateDemoDatasetSql({ referenceDate = new Date() } = {}) {
+  if (!hasDbEnv()) {
+    return {
+      skipped: true,
+      reason: 'DB environment not configured',
+    };
+  }
+
+  const dataset = buildDemoDataset(referenceDate);
+  const hashes = await buildCredentialHashes(dataset);
+  const resetStatements = buildStaticResetStatements(dataset);
+  const recorder = createSqlRecorder();
+
+  await insertTenantAndPractice(recorder.connection, dataset);
+  await insertStaff(recorder.connection, dataset, hashes);
+  await insertFormCatalog(recorder.connection, dataset);
+  await insertPortalSettingsAndResources(recorder.connection, dataset);
+  await insertBillingCatalog(recorder.connection, dataset);
+
+  for (const client of dataset.clients) {
+    await insertClientBundle(recorder.connection, dataset, client, hashes);
+  }
+
+  await clearSessions(recorder.connection, dataset.tenantId);
+
+  const seedStatements = recorder.statements;
+  const applySql = [
+    '-- Generated demo dataset SQL for FaithCounseling',
+    `-- Reference date: ${dataset.referenceDate}`,
+    'START TRANSACTION;',
+    ...resetStatements,
+    ...seedStatements,
+    'COMMIT;',
+  ].join('\n\n') + '\n';
+
+  const resetSql = [
+    '-- Generated demo dataset reset SQL for FaithCounseling',
+    `-- Reference date: ${dataset.referenceDate}`,
+    ...resetStatements,
+  ].join('\n\n') + '\n';
+
+  const seedSql = [
+    '-- Generated demo dataset seed SQL for FaithCounseling',
+    `-- Reference date: ${dataset.referenceDate}`,
+    ...seedStatements,
+  ].join('\n\n') + '\n';
+
+  return {
+    skipped: false,
+    tenantId: dataset.tenantId,
+    referenceDate: dataset.referenceDate,
+    applied: buildExpectedCounts(dataset),
+    files: {
+      resetSql,
+      seedSql,
+      applySql,
+    },
+  };
 }
