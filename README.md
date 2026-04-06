@@ -8,6 +8,8 @@ From the moment a new client submits a care request to the session note signed a
 
 📖 **New to the platform?** Start with the [User Manual →](docs/User%20Manual/README.md)
 
+Want a fully loaded local tour instead of a blank shell? The repo now includes a SQL-backed demo dataset workflow, so the product you start locally can feel much closer to the product shown below.
+
 ## Faith-Based Christian Practice Focus
 
 - designed for faith-based Christian counseling organizations and ministries
@@ -64,13 +66,17 @@ Workspace Studio gives the platform its control-room energy. Practice settings, 
 
 The portal, charting, and monitoring views complete the picture. The client-facing side feels warm and guided, the charting side feels focused and usable, and the monitoring surfaces make the whole platform feel observable and production-minded. Put together, the current product has range: part ministry operations center, part clinical workspace, part modern practice platform, and much closer to something people would want to use every day.
 
-The checked-in English runtime locale catalog also mirrors the current counselor-facing workspace labels so API-backed i18n does not drift back to older names like `Operations Dashboard` or `Portal`.
+Behind that presentation, the recent work has made the platform easier to trust and easier to demo. Scheduling now uses a guided recurring-series builder instead of making staff type raw recurrence syntax, dashboard and workflow counts stay visually aligned, runtime labels match the current product language, and authenticated reads stay stable even when older encrypted rows come back from MySQL in less convenient formats.
 
-The dashboard Faithful Workflows metric card also acts as a direct workspace handoff into the full Faithful Workflows page, matching the drill-down behavior already used by the other dashboard metric cards. The Faithful Workflows banner now also receives the same canonical count payload the dashboard renders, so both surfaces stay aligned even if the workflow page falls back to lighter local ranking data while loading.
+## Freshly Shipped
 
-Encrypted DB reads now normalize Buffer-backed ciphertext values returned by MySQL before decrypting. That keeps authenticated workflow reads, including recurring scheduling series, stable even when legacy rows are hydrated as `Buffer` objects instead of plain strings.
+The platform has moved quickly over the last few iterations, and the most recent work is aimed at making Faith Counseling easier to explore, easier to operate, and easier to present with confidence.
 
-Recurring series creation in Scheduling now defaults to a guided builder with readable cadence options such as weekly, every two weeks, or monthly, plus weekday selection and a live schedule preview. Raw RRULE entry remains available as an advanced fallback instead of being the primary input.
+- **A full User Manual is now live:** `docs/User Manual/README.md` walks every major role and product surface, from onboarding and scheduling to charting, monitoring, and security.
+- **Demo data is now reproducible in SQL:** `pnpm demo:sql:generate`, `pnpm demo:sql:apply`, and `pnpm demo:sql:refresh` create and load the canonical dataset under `ops/demo-dataset/generated/`, which makes local demos and reset workflows much more predictable.
+- **The README now shows the real product shape:** the new `LATEST LOOK` section and embedded screenshot grids turn the repository front door into an actual product tour instead of a bare technical landing page.
+- **Scheduling feels more human:** recurring appointment series can now be built with readable cadence options, weekday selection, and a live preview, while raw RRULE entry remains available only as an advanced fallback.
+- **Faithful Workflows stays in sync with operations:** dashboard drill-down and workflow urgency surfaces now share the same canonical counts so staff see one story, not competing numbers.
 
 ## API Security And Compliance Baseline (v5.6.0)
 
@@ -129,6 +135,8 @@ The static public surfaces are meant to reflect the current product posture, not
 - `packages/domain`: shared domain contracts and enums
 - `packages/i18n`: localization utilities and message catalogs
 - `packages/telemetry`: shared telemetry and monitoring utilities
+- `ops/demo-dataset`: reproducible SQL demo-data generation, apply, and verification workflow
+- `pnpm start`: canonical local launcher with env loading, DB preflight, migrations, and coordinated app startup
 
 ## Architecture Diagram
 
@@ -157,6 +165,11 @@ flowchart TB
         TEL["@faith/telemetry\nOTEL Signals · Local Monitoring"]
     end
 
+    subgraph ops[" 🚀  Local Startup & Demo Ops "]
+        START["▶️ pnpm start\nEnv Load · Docker/MySQL Preflight · Migrations"]
+        DEMO["🧪 Demo Dataset SQL\nGenerate · Apply · Verify"]
+    end
+
     subgraph infra[" 🗄️  Data & Observability "]
         DB[("MySQL\nEncrypted at Rest · Migrations")]
         OTEL["🔭 OTEL Collector\n— optional export —"]
@@ -176,6 +189,10 @@ flowchart TB
     API -. uses .-> TEL
     API -. uses .-> DOM
     WRK -. uses .-> TEL
+    START --> WEB
+    START --> API
+    START --> DB
+    DEMO --> DB
 
     TEL -.->|"export\n(optional)"| OTEL
     AGENT -.->|"reviews"| I18N
@@ -352,19 +369,20 @@ A full 13-section end-user practice manual is now live under `docs/User Manual/`
 
 - Full manual: `docs/User Manual/README.md`
 
-### Month Picker Bug Fix (April 5, 2026)
+### Demo Dataset SQL Workflow (April 5, 2026)
 
-Fixed a bug in the Scheduling calendar where selecting a month in the month picker could select the wrong month (e.g., clicking May would select June). The picker now correctly selects the month you click.
+The canonical demo dataset can now be generated as concrete SQL artifacts and loaded directly into MySQL. This gives the repo a fast, repeatable way to reset into a polished demo state with predictable records and validation.
 
-### v5.6.0 (April 3, 2026)
+- Commands: `pnpm demo:sql:generate`, `pnpm demo:sql:apply`, `pnpm demo:sql:refresh`
+- Artifacts: `ops/demo-dataset/generated/`
 
-Portal client conversion flow: approved `account_signup` portal requests still auto-create and link a client on activation, and approved `care_request` items in Workspace Studio Portal now show **"Create Client"** so staff can generate the client record on demand and then open it from **"View Client"**.
+### README Latest Look Refresh (April 5, 2026)
 
-### v5.5.2 (April 1, 2026)
+The README now includes a narrative `LATEST LOOK` section with embedded screenshot grids so new visitors see the real product surfaces immediately: dashboard, Faithful Workflows, scheduling, records, Workspace Studio, portal, charting, and monitoring.
 
-Faithful Workflows visual upgrade: adds two new parallel canvas views (Radial Hub and Priority Matrix) alongside the original Classic List view. A floating cycle button in the page header switches between all three. Zero functional or engine changes; all 51 engine tests pass.
+### Guided Recurring Series Builder (April 4, 2026)
 
-- Full summary: `docs/v5.5.2-RELEASE-SUMMARY.md`
+Recurring scheduling no longer starts with raw RRULE syntax. Staff now get readable cadence choices, weekday selection, and a live preview first, with advanced rule text kept available only when needed.
 
 ## Change Log
 
