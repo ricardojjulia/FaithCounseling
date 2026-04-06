@@ -258,6 +258,8 @@ cp .env.example .env
 
 Update `.env` values as needed for your local environment.
 
+Set `SEED_DEV_PORTAL_DATA=false` when you want a staff-only local database and do not want startup migration to recreate the seeded portal client/resource.
+
 ### 3. Start the full app stack
 
 ```bash

@@ -15,32 +15,13 @@ The architecture overview and Mermaid diagram were also updated to reflect the c
 
 ## April 5, 2026 — User Manual
 
-### feat: add docs/User Manual — full practice user manual
+### fix(api): add env guard to keep startup migration from recreating the seeded portal client
 
 **Date:** April 5, 2026
-**Affected area:** `docs/User Manual/`
+**Affected area:** `apps/api/src/db/migrate.js`, `.env.example`, `README.md`, `docs/DATABASE-IMPLEMENTATION.md`
 
-Created a comprehensive 13-section user manual under `docs/User Manual/` covering all platform surfaces and user roles. Sections include: Getting Started, Dashboard and Home, Client Management, Scheduling, Clinical Chart, Faithful Workflows, Workspace Studio, Client Portal, Forms and Documents, Offerings and Financials, Monitoring and Telemetry, Security and Compliance, and Troubleshooting and FAQ. The manual is role-organized with quick navigation by role and cross-links between sections.
+Local startup was re-creating the seeded `c-001` portal client on every `pnpm start` because migration always ran the dev portal backfill after schema setup. Added `SEED_DEV_PORTAL_DATA` so local environments can opt out of that behavior and keep the database staff-only across repeated startup and migration runs.
 
-## April 5, 2026 — README Latest Look Narrative
-
-### feat: add a new LATEST LOOK section to the README
-
-**Date:** April 5, 2026
-**Affected area:** `README.md`
-
-Added a new narrative `LATEST LOOK` section immediately after `Core Capabilities` so the README reflects the current product presentation more vividly across dashboard, Faithful Workflows, scheduling, records, Workspace Studio, portal, charting, and monitoring surfaces.
-
-The section now also embeds compact screenshot grids between the narrative paragraphs so the README shows the current product surfaces inline without overwhelming the page width.
-
-## April 5, 2026 — Demo Dataset SQL Generation
-
-### feat: generate and apply SQL artifacts for the canonical demo dataset
-
-**Date:** April 5, 2026
-**Affected area:** `ops/demo-dataset/`, `package.json`, `README.md`, `docs/DATABASE-IMPLEMENTATION.md`
-
-Added a SQL-backed demo-data workflow alongside the existing JS finalizer so the canonical demo dataset can now be generated as concrete SQL files and loaded directly into MySQL. The new flow writes reset, seed, combined apply, and metadata artifacts under `ops/demo-dataset/generated/`, and `pnpm demo:sql:apply` validates the loaded dataset against the existing invariant checks after execution.
 
 ## April 5, 2026 — Faith Workflows Evaluation Dimension Expansion
 
