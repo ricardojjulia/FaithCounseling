@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { MantineProvider } from '@mantine/core';
+import { MantineProvider, localStorageColorSchemeManager } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { DatesProvider } from '@mantine/dates';
 import App from './App';
@@ -13,6 +13,8 @@ import '@mantine/dates/styles.css';
 import './index.css';
 
 frontendTelemetry.start();
+
+const colorSchemeManager = localStorageColorSchemeManager({ key: 'faith.colorScheme' });
 
 function AppRuntime() {
   const { locale } = useI18n();
@@ -29,7 +31,7 @@ function AppRuntime() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <MantineProvider theme={theme}>
+    <MantineProvider theme={theme} colorSchemeManager={colorSchemeManager} defaultColorScheme="auto">
       <I18nProvider>
         <AppRuntime />
       </I18nProvider>

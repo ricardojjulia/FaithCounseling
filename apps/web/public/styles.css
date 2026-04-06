@@ -16,6 +16,22 @@
   --shadow: 0 12px 30px rgba(29, 43, 83, 0.08);
 }
 
+[data-mantine-color-scheme='dark'] {
+  color-scheme: dark;
+  --bg: #0f1521;
+  --surface: #1a2236;
+  --surface-muted: #1e2a3d;
+  --line: #2a3a52;
+  --text: #e8edf5;
+  --text-soft: #8a9ab5;
+  --brand: #818cf8;
+  --brand-soft: rgba(99, 102, 241, 0.18);
+  --success: #10b981;
+  --danger: #f87171;
+  --warning: #fbbf24;
+  --shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
 * {
   box-sizing: border-box;
 }

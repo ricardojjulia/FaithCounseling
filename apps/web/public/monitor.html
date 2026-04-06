@@ -504,7 +504,46 @@
     .db-table-pill-name { font-size: 11px; color: var(--indigo2); font-family: 'Menlo','Monaco',monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .db-table-pill-rows { font-size: 18px; font-weight: 700; color: var(--ink-strong); margin-top: 2px; font-variant-numeric: tabular-nums; }
     .db-table-pill-size { font-size: 10px; color: var(--muted); }
+
+    /* ── Dark mode ──────────────────────────────────────────────── */
+    [data-color-scheme='dark'] {
+      --bg:       #0f1521;
+      --surface:  rgba(30, 42, 61, 0.9);
+      --card:     rgba(26, 34, 54, 0.95);
+      --border:   rgba(99, 102, 241, 0.18);
+      --border2:  rgba(129, 140, 248, 0.28);
+      --text:     #e8edf5;
+      --muted:    #8a9ab5;
+      --dim:      #6a7a95;
+      --indigo:   #818cf8;
+      --indigo2:  #a5b4fc;
+      --ink-strong: #f1f5f9;
+      --shadow-soft: 0 22px 56px rgba(0, 0, 0, 0.4);
+      --shadow-card: 0 16px 34px rgba(0, 0, 0, 0.35);
+    }
+    [data-color-scheme='dark'] body {
+      background: radial-gradient(circle at top left, rgba(30, 35, 80, 0.7), transparent 34%),
+        radial-gradient(circle at top right, rgba(20, 30, 60, 0.5), transparent 28%),
+        linear-gradient(180deg, #0f1521 0%, #111827 100%);
+    }
+    [data-color-scheme='dark'] .topbar {
+      background: rgba(15, 21, 33, 0.9);
+    }
+    [data-color-scheme='dark'] .kpi-card,
+    [data-color-scheme='dark'] .chart-card,
+    [data-color-scheme='dark'] .db-table-pill {
+      background: var(--card);
+    }
   </style>
+  <script>
+    (function () {
+      var stored = localStorage.getItem('faith.colorScheme');
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (stored === 'dark' || ((!stored || stored === 'auto') && prefersDark)) {
+        document.documentElement.setAttribute('data-color-scheme', 'dark');
+      }
+    })();
+  </script>
 </head>
 <body>
 
@@ -523,9 +562,19 @@
     </div>
     <span class="countdown" id="countdown"></span>
     <button class="btn-sm primary" id="refreshBtn">↺ Refresh</button>
+    <button class="btn-sm" id="colorToggleBtn" onclick="(function(){var d=document.documentElement;var isDark=d.getAttribute('data-color-scheme')==='dark';d.setAttribute('data-color-scheme',isDark?'light':'dark');localStorage.setItem('faith.colorScheme',isDark?'light':'dark');document.getElementById('colorToggleBtn').textContent=isDark?'☾':'☀';})()">☾</button>
     <a class="btn-sm" href="/">← App</a>
   </div>
 </header>
+<script>
+  (function() {
+    var stored = localStorage.getItem('faith.colorScheme');
+    var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var isDark = stored === 'dark' || ((!stored || stored === 'auto') && prefersDark);
+    var btn = document.getElementById('colorToggleBtn');
+    if (btn) btn.textContent = isDark ? '☀' : '☾';
+  })();
+</script>
 
 <!-- ── Main ─────────────────────────────────────────────────────────────── -->
 <main class="main">
