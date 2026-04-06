@@ -33,9 +33,30 @@ It is built specifically for Christian counseling practices and supports daily e
 
 The latest look feels less like a generic admin console and more like a living counseling workspace. The home experience opens with calm, high-signal surfaces: a dashboard that tells staff what needs attention now, a Faithful Workflows space that turns raw status into visible care priorities, and scheduling screens that feel built for real week-to-week ministry instead of back-office data entry.
 
+<p align="center">
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.42.26%E2%80%AFPM.png" alt="Latest look screenshot 1" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.42.36%E2%80%AFPM.png" alt="Latest look screenshot 2" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.42.46%E2%80%AFPM.png" alt="Latest look screenshot 3" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.42.51%E2%80%AFPM.png" alt="Latest look screenshot 4" width="24%" />
+</p>
+
 Client and counselor records now read like story-rich working spaces rather than flat database rows. Detail views surface clinical context, faith-aware care details, diagnoses, legal and insurance context, employment and credentialing data, and practical next actions without making the user dig through disconnected tabs. The result is a product that feels organized, confident, and deeply operational at the same time.
 
+<p align="center">
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.01%E2%80%AFPM.png" alt="Latest look screenshot 5" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.10%E2%80%AFPM.png" alt="Latest look screenshot 6" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.14%E2%80%AFPM.png" alt="Latest look screenshot 7" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.17%E2%80%AFPM.png" alt="Latest look screenshot 8" width="24%" />
+</p>
+
 Workspace Studio gives the platform its control-room energy. Practice settings, locations, staff, lifecycle management, documents, offerings, appointments, and portal administration all sit inside a single administration hub that feels intentional instead of crowded. It looks like the kind of system that can run an actual counseling practice on Monday morning, not just survive a demo.
+
+<p align="center">
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.27%E2%80%AFPM.png" alt="Latest look screenshot 9" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.39%E2%80%AFPM.png" alt="Latest look screenshot 10" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.43%E2%80%AFPM.png" alt="Latest look screenshot 11" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.51%E2%80%AFPM.png" alt="Latest look screenshot 12" width="24%" />
+</p>
 
 The portal, charting, and monitoring views complete the picture. The client-facing side feels warm and guided, the charting side feels focused and usable, and the monitoring surfaces make the whole platform feel observable and production-minded. Put together, the current product has range: part ministry operations center, part clinical workspace, part modern practice platform, and much closer to something people would want to use every day.
 

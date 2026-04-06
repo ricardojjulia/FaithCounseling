@@ -11,6 +11,8 @@
 
 Added a new narrative `LATEST LOOK` section immediately after `Core Capabilities` so the README reflects the current product presentation more vividly across dashboard, Faithful Workflows, scheduling, records, Workspace Studio, portal, charting, and monitoring surfaces.
 
+The section now also embeds compact screenshot grids between the narrative paragraphs so the README shows the current product surfaces inline without overwhelming the page width.
+
 ## April 5, 2026 — Demo Dataset SQL Generation
 
 ### feat: generate and apply SQL artifacts for the canonical demo dataset
