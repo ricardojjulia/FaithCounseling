@@ -4,9 +4,12 @@
  * - Assessment overdue (no scored instrument in > 90 days)
  * - PHQ-9 stable at low level → schedule routine monitoring
  * - All treatment goals met → discharge planning
+ * - Long-term engagement review (active > 18 months)
  */
 
 import { getLatestAssessment, daysSince } from '../utils.js';
+
+const LONG_TERM_ENGAGEMENT_DAYS = 548; // ~18 months
 
 /**
  * Rule: No clinical assessment in > 90 days for an active client
@@ -116,5 +119,52 @@ export function ruleStableProgress(data, clientId) {
     status: 'pending',
     orderedAfter: `rule_monitoring_discharge:${clientId}`,
     docNote: 'Document assessment results and any step-down or discharge discussion.',
+  };
+}
+
+/**
+ * Rule: Active client has been in treatment for > 18 months without a formal
+ * medical necessity / continuation-of-care review
+ */
+export function ruleLongTermEngagement(data, clientId) {
+  if (data.client?.status !== 'active') return null;
+
+  const intakeDate = data.client?.intakeDate ?? data.client?.createdAt;
+  if (!intakeDate) return null;
+
+  const days = daysSince(intakeDate);
+  if (days < LONG_TERM_ENGAGEMENT_DAYS) return null;
+
+  // Suppress if a formal review note exists
+  const hasContinuationReview = (data.progressNotes ?? []).some(
+    (n) => n.noteType === 'continuation_review' || (n.tags ?? []).includes('continuation_review'),
+  );
+  if (hasContinuationReview) return null;
+
+  const months = Math.floor(days / 30);
+
+  return {
+    id: `rule_monitoring_long_term:${clientId}`,
+    ruleId: 'rule_monitoring_long_term',
+    category: 'monitoring',
+    title: `Long-Term Engagement Review Recommended (${months} months)`,
+    summary: `Client has been in active treatment for approximately ${months} months. A formal continuation-of-care review is recommended to confirm ongoing clinical necessity and re-evaluate goals.`,
+    rationale: `Clients in active treatment beyond 18 months benefit from a structured review of treatment necessity and trajectory. This review affirms that continued counseling remains the most appropriate level of care, re-aligns goals with the client's current situation, and documents the clinical rationale for ongoing services. It also provides a natural opportunity to reassess relationship dynamics, celebrate gains, and consider step-down or adjusted frequency.`,
+    evidence: [
+      `Active since: ${new Date(intakeDate).toLocaleDateString()}`,
+      `Duration: ~${months} months`,
+      'No continuation-of-care review note found',
+    ],
+    priority: 4,
+    confidence: 0.85,
+    cautions: [
+      'Long-term therapy can be clinically appropriate — this is a documentation and review prompt, not a discharge directive.',
+      'Confirm with client that ongoing treatment frequency aligns with current goals.',
+    ],
+    actions: ['generate_session_agenda', 'create_treatment_plan_update', 'add_reminder_task'],
+    faithNote: 'A review session can also be a meaningful milestone to celebrate spiritual and personal growth over the course of care.',
+    status: 'pending',
+    orderedAfter: null,
+    docNote: 'Document continuation-of-care review: clinical necessity, current goals, treatment response, and plan for next phase.',
   };
 }

@@ -2005,7 +2005,14 @@ export default function SchedulingPage({
                     label="Month"
                     value={toMonthPickerValue(selectedMonth)}
                     onChange={(value) => {
-                      const nextMonth = toMonthKey(value);
+                      // Mantine v8 passes a "YYYY-MM-DD" string (not a Date object).
+                      // Slicing directly avoids timezone bugs from new Date("YYYY-MM-DD")
+                      // which parses as UTC and shifts the month in negative-offset timezones.
+                      const nextMonth = typeof value === 'string'
+                        ? value.slice(0, 7)
+                        : value instanceof Date
+                          ? `${value.getFullYear()}-${padDatePart(value.getMonth() + 1)}`
+                          : toMonthKey(value);
                       if (!nextMonth) return;
                       setSelectedMonth(nextMonth);
                       setScheduleScope('month');

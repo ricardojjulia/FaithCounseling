@@ -2,6 +2,28 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 5, 2026 — Faith Workflows Evaluation Dimension Expansion
+
+### feat(workflows): add 5 new evaluation dimensions; replace insurance rule with gift arrangement
+
+**Date:** April 5, 2026
+**Affected area:** `apps/web/src/components/FaithWorkflows/engine/rules/`
+
+Expanded the Faith Workflows evaluation engine with 5 new rule dimensions and removed the practice-incompatible insurance check:
+
+**Removed:**
+- `ruleNoInsurance` — removed because the practice operates by gift-giving only and has no insurance billing model.
+
+**Added:**
+- `ruleGiftArrangementNote` (coordination, priority 3) — fires when an active client has no documented gift or financial arrangement. Replaces the insurance rule with one aligned to the gift-giving practice model. Surfaces a reminder to document the stewardship arrangement.
+- `rulePcl5Worsening` (clinical_caution, priority 8) — fires when PCL-5 scores show a worsening trend across 2 or more assessments. Prompts session agenda prep and treatment plan review.
+- `ruleGad7Worsening` (clinical_caution, priority 7) — fires when GAD-7 scores show a worsening trend across 2 or more assessments.
+- `ruleAuditHigh` (clinical_caution, priority 6–7) — fires when AUDIT score ≥ 8 (hazardous), ≥ 16 (harmful), or ≥ 20 (probable dependence). Includes a faith note on stewardship and body as a temple.
+- `ruleLongTermEngagement` (monitoring, priority 4) — fires after 18 months of active engagement with no formal continuation-of-care review note. Celebrates long-term growth and prompts formal review.
+- `ruleSpiritualAssessmentOverdue` (spiritual, priority 2) — fires when a client has faith integration opted in and has not completed a Spiritual Wellness Inventory in 90+ days (or never). Optional; surfaces as a gentle reminder only.
+
+---
+
 ## April 5, 2026
 
 ### feat: appointment composer — DateTimePicker with 55-minute auto-fill
@@ -12,6 +34,17 @@
 The Start and End fields in the New/Edit Appointment modal now use Mantine `DateTimePicker` instead of a raw `datetime-local` text input. Picking a date opens a calendar popover; the time is set via a spinner. Format displayed: `MM/DD/YYYY hh:mm A`.
 
 When a start time is selected, the end time is automatically suggested as 55 minutes later. The auto-fill only overrides end if the user has not manually set it. Once the user edits the end time directly, subsequent start changes no longer override it.
+
+---
+
+## April 5, 2026 — Month Picker Bug Fix (root cause)
+
+### fix(scheduling): month picker off-by-one due to Mantine v8 string format + UTC parsing
+
+**Date:** April 5, 2026
+**Affected area:** `apps/web/src/components/SchedulingPage.jsx` — month picker
+
+Fixed the root cause of the month picker off-by-one error. Mantine v8 `MonthPickerInput` passes `onChange` a `"YYYY-MM-DD"` string (not a `Date` object). The previous handler fell through to `toMonthKey()`, which called `new Date("YYYY-MM-DD")` — a date-only ISO string that JavaScript parses as UTC midnight. In negative-offset timezones (US Eastern, etc.) this shifts the local date to the previous month, causing picking May to store April. Fixed by slicing the string directly (`value.slice(0, 7)`) to extract `"YYYY-MM"` without any Date construction.
 
 ---
 
@@ -1116,7 +1149,7 @@ Replaces the billing model with a faith-based voluntary offering system througho
 
 ### Changed
 
-- `apps/api/data/i18n/en.json` — renamed `nav.billing` → `nav.offerings`, `studio.tab.billing` → `studio.tab.offerings`, `portal.tab.financials` → `portal.tab.giving`; replaced `portal.financials.*` block with `portal.giving.*`; removed `client.tab.insurance`; added `offerings.*` and `topbar.offerings.*` key blocks
+- `apps/api/data/i18n/en.json` — renamed `nav.billing` → `nav.offerings`, `studio.tab.billing` → `studio.tab.offerings`, `portal.tab.financials` → `portal.tab.giving`; replaced `portal finanicals.*` block with `portal.giving.*`; removed `client.tab.insurance`; added `offerings.*` and `topbar.offerings.*` key blocks
 - `packages/telemetry/src/surfaces.js` — `billing` → `offerings`, `portal.financials` → `portal.giving`, removed `client.insurance`, `studio.billing` → `studio.offerings`
 - `apps/web/src/components/Sidebar.jsx` — `billing` → `offerings`
 - `apps/web/src/components/TopBar.jsx` — `billing` → `offerings` in viewKeyMap

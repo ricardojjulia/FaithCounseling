@@ -1,7 +1,7 @@
 /**
  * Coordination / Admin Rules
  *
- * - Insurance not on file for an active client
+ * - Gift giving arrangement not documented (this practice operates by gift/donation only)
  * - Open referral with no follow-up note
  * - Church/faith referral coordination available (if faith profile)
  */
@@ -9,33 +9,42 @@
 import { daysSince } from '../utils.js';
 
 /**
- * Rule: No insurance on file for an active client
+ * Rule: No gift/financial arrangement note on file for an active client
+ *
+ * This practice operates on a gift-giving model (no insurance billing).
+ * A documented gift arrangement or financial understanding should be on file
+ * for each active client to ensure transparency and appropriate expectations.
  */
-export function ruleNoInsurance(data, clientId) {
+export function ruleGiftArrangementNote(data, clientId) {
   if (data.client?.status !== 'active') return null;
-  // insurance field may be null, empty array, or missing
-  const hasInsurance = data.insurance && (Array.isArray(data.insurance) ? data.insurance.length > 0 : true);
-  if (hasInsurance) return null;
+  // Check for a documented gift/financial arrangement note or flag
+  const hasGiftNote = data.client?.giftArrangementNoted
+    || data.client?.financialArrangementNoted
+    || (data.progressNotes ?? []).some((n) => n.noteType === 'financial_arrangement' || (n.tags ?? []).includes('gift_arrangement'));
+  if (hasGiftNote) return null;
 
   return {
-    id: `rule_coordination_no_insurance:${clientId}`,
-    ruleId: 'rule_coordination_no_insurance',
+    id: `rule_coordination_gift_arrangement:${clientId}`,
+    ruleId: 'rule_coordination_gift_arrangement',
     category: 'coordination',
-    title: 'Insurance Not on File',
-    summary: 'No insurance information is on file for this active client. Update billing records to ensure accurate claims and coverage verification.',
-    rationale: 'Active clients receiving ongoing treatment should have current insurance information on file for billing, prior authorization, and benefits verification purposes. Missing insurance data may delay claims or indicate a private-pay arrangement that should be documented.',
+    title: 'Gift Arrangement Not Documented',
+    summary: 'This practice operates on a gift-giving model. No gift or financial arrangement note has been documented for this active client.',
+    rationale: 'As a gift-giving practice, the financial understanding between counselor and client should be clearly documented to maintain transparency, appropriate expectations, and compliance with the practice\'s operating model. A brief note confirming the gift arrangement or any giving discussion ensures the record is complete.',
     evidence: [
-      'No insurance record found',
+      'No gift arrangement or financial note found in client record',
       `Client status: active`,
     ],
     priority: 3,
     confidence: 1.0,
-    cautions: [],
+    cautions: [
+      'This practice does not bill insurance. Gift giving is voluntary and should never be coerced.',
+      'Document the nature of the arrangement, not any specific amounts.',
+    ],
     actions: ['add_reminder_task'],
-    faithNote: null,
+    faithNote: 'Stewardship and generosity are biblical values. A brief, grace-filled conversation about the giving model honors both parties.',
     status: 'pending',
     orderedAfter: null,
-    docNote: 'Update insurance information or document private-pay arrangement.',
+    docNote: 'Add a coordination note confirming the gift-giving arrangement was discussed and understood.',
   };
 }
 
