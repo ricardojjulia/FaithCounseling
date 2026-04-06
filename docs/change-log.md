@@ -2,6 +2,16 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 5, 2026 — Local DB Staff-Only Startup Guard
+
+### fix(api): add env guard to keep startup migration from recreating the seeded portal client
+
+**Date:** April 5, 2026
+**Affected area:** `apps/api/src/db/migrate.js`, `.env.example`, `README.md`, `docs/DATABASE-IMPLEMENTATION.md`
+
+Local startup was re-creating the seeded `c-001` portal client on every `pnpm start` because migration always ran the dev portal backfill after schema setup. Added `SEED_DEV_PORTAL_DATA` so local environments can opt out of that behavior and keep the database staff-only across repeated startup and migration runs.
+
+
 ## April 5, 2026 — Faith Workflows Evaluation Dimension Expansion
 
 ### feat(workflows): add 5 new evaluation dimensions; replace insurance rule with gift arrangement

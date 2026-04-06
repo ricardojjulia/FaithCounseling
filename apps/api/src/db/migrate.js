@@ -57,9 +57,17 @@ try {
 
   // Seed a default tenant + system practice for local dev
   await seedDevData(connection);
-  await ensureDevPortalClient(connection);
+  if (shouldSeedDevPortalData()) {
+    await ensureDevPortalClient(connection);
+  } else {
+    console.log('Skipping dev portal client/resource seed (SEED_DEV_PORTAL_DATA=false).');
+  }
 } finally {
   await connection.end();
+}
+
+function shouldSeedDevPortalData() {
+  return process.env.NODE_ENV !== 'production' && process.env.SEED_DEV_PORTAL_DATA !== 'false';
 }
 
 async function applyColumnMigrations(conn) {
@@ -374,6 +382,16 @@ async function seedDevData(conn) {
     ],
   );
 
+  console.log('Dev seed complete.');
+  console.log('  Tenant:   system');
+  console.log('  Email:    admin@faithcounseling.local');
+  console.log('  Password: ChangeMe!Dev2024#  (change immediately)');
+
+  if (!shouldSeedDevPortalData()) {
+    console.log('  Dev portal seed skipped (SEED_DEV_PORTAL_DATA=false).');
+    return;
+  }
+
   await conn.query(
     `INSERT INTO clients
        (id, tenant_id, first_name_enc, last_name_enc, status, faith_background, high_touchpoint, primary_counselor_id)
@@ -412,17 +430,12 @@ async function seedDevData(conn) {
       0,
     ],
   );
-
-  console.log('Dev seed complete.');
-  console.log('  Tenant:   system');
-  console.log('  Email:    admin@faithcounseling.local');
-  console.log('  Password: ChangeMe!Dev2024#  (change immediately)');
   console.log('  Client portal email:    sarah.kim@example.test');
   console.log('  Client portal password: ChangeMe!Client2026#  (change immediately)');
 }
 
 async function ensureDevPortalClient(conn) {
-  if (process.env.NODE_ENV === 'production') return;
+  if (!shouldSeedDevPortalData()) return;
 
   const [[tenant]] = await conn.query(
     'SELECT id FROM tenants WHERE id = ? LIMIT 1',

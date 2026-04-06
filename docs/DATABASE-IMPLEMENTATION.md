@@ -25,9 +25,12 @@ DB_USER=faith_app
 DB_PASSWORD=changeme-strong-password
 DB_SSL=false
 DB_ENCRYPTION_KEY=<generate with: openssl rand -hex 32>
+SEED_DEV_PORTAL_DATA=true
 ```
 
 `DB_ENCRYPTION_KEY` must be a 64-character hex string (32 bytes). Keep it secret — it is the AES-256-GCM key for all PHI columns.
+
+`SEED_DEV_PORTAL_DATA` is optional. Leave it as `true` to keep the seeded local portal client/resource, or set it to `false` to keep the local database staff-only across repeated migrations and `pnpm start` runs.
 
 ---
 
@@ -51,6 +54,7 @@ cp .env.example .env
 #   DB_PASSWORD=<your faith_app password>
 #   DB_ENCRYPTION_KEY=$(openssl rand -hex 32)
 #   SESSION_SECRET=$(openssl rand -base64 32)
+#   SEED_DEV_PORTAL_DATA=false   # optional; keeps local DB staff-only
 ```
 
 ### 3. Run the migration
@@ -59,7 +63,7 @@ cp .env.example .env
 node --env-file=.env apps/api/src/db/migrate.js
 ```
 
-This executes `apps/api/src/db/schema.sql` against the configured database and creates all 43 tables. It is safe to run multiple times (`CREATE TABLE IF NOT EXISTS`). On first run it also seeds a dev admin account:
+This executes `apps/api/src/db/schema.sql` against the configured database and creates all 43 tables. It is safe to run multiple times (`CREATE TABLE IF NOT EXISTS`). On first run it seeds a dev admin account, and optionally seeds the local portal client/resource when `SEED_DEV_PORTAL_DATA` is not `false`:
 
 ```text
 Email:    admin@faithcounseling.local
