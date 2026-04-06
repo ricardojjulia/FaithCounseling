@@ -63,7 +63,7 @@ export default function ClientForm({ onSubmit, onCancel, initialClient = null })
         <Select    label="Status" data={STATUS_OPTIONS} {...form.getInputProps('status')} />
         <Checkbox
           label="High touchpoint"
-          description="Include this client in the Operations Dashboard Priority Queue."
+          description="Flag this client for closer follow-up — they'll appear in the Needs Attention panel on the dashboard."
           checked={Boolean(form.values.highTouchpoint)}
           onChange={(event) => form.setFieldValue('highTouchpoint', event.currentTarget.checked)}
         />
