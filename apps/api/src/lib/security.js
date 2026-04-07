@@ -52,12 +52,30 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:5173',
 ];
 
+function isValidAllowedOrigin(origin) {
+  const value = origin.trim();
+  if (!value) {
+    return false;
+  }
+  // Never allow the special "null" origin when credentials are enabled
+  if (value.toLowerCase() === 'null') {
+    return false;
+  }
+  try {
+    const url = new URL(value);
+    // Restrict to http(s) schemes for browser origins
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 const ALLOWED_ORIGINS = new Set([
   ...DEFAULT_ALLOWED_ORIGINS,
   ...(process.env.ALLOWED_ORIGINS ?? '')
     .split(',')
     .map((origin) => origin.trim())
-    .filter(Boolean),
+    .filter(isValidAllowedOrigin),
 ]);
 
 export function handleCors(request, response) {
