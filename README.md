@@ -66,6 +66,7 @@ Behind that presentation, the recent work has made the platform easier to trust 
 
 The platform has moved quickly over the last few iterations, and the most recent work is aimed at making Faith Counseling easier to explore, easier to operate, and easier to present with confidence.
 
+- **Browser error sweep is now clean:** a Playwright-driven UI scan now walks public, admin, and client surfaces against the local app, and the latest pass cleared public CSP script violations, signed-out auth noise, protected-monitoring 401s, and the Scheduling recurring-series runtime loop so the sweep finishes at `0` public, `0` admin, and `0` client errors.
 - **The platform speaks like a counseling practice:** every screen title, nav label, dashboard panel, and key empty state was audited and rewritten — `My Day`, `My Tasks`, `Needs Attention`, `Caseload`, `Forms & Documents`, `Privacy & Data`, and `Welcome to Faith Counseling` at sign-in, among others.
 - **A full User Manual is now live:** `docs/User Manual/README.md` walks every major role and product surface, from onboarding and scheduling to charting, monitoring, and security.
 - **Demo data is now reproducible in SQL:** `pnpm demo:sql:generate`, `pnpm demo:sql:apply`, and `pnpm demo:sql:refresh` create and load the canonical dataset under `ops/demo-dataset/generated/`, which makes local demos and reset workflows much more predictable.
@@ -335,7 +336,10 @@ pnpm test
 pnpm test:security
 pnpm test:e2e
 pnpm test:launch-readiness
+node tests/e2e/ui-error-scan.mjs
 ```
+
+`node tests/e2e/ui-error-scan.mjs` drives Chromium against `http://127.0.0.1:3002` by default, signs in with the local admin and client demo accounts, and writes a page-by-page error report to `test-results/ui-error-scan.json`. Override the target with `UI_SCAN_BASE_URL` when needed.
 
 ### Demo dataset workflows
 
@@ -393,6 +397,14 @@ If `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is unset, trace export is skipped and te
 ## Recent Updates
 
 Only the latest entries are listed here. Full release history is in `docs/change-log.md`.
+
+### Browser Error Sweep (April 7, 2026)
+
+Public, admin, and client surfaces now complete a local browser error sweep without console, page, or unexpected network failures. The fix pass moved CSP-sensitive public-page startup code out of inline scripts, added an auth-aware public status check so signed-out app loads and monitoring loads stop emitting avoidable `401` noise, and repaired the Scheduling recurring-series modal so admin navigation no longer trips missing-state or max-update-depth runtime warnings.
+
+- Scan command: `node tests/e2e/ui-error-scan.mjs`
+- Output: `test-results/ui-error-scan.json`
+- Latest local result: `0` public errors, `0` admin errors, `0` client errors
 
 ### Humanized UI Language (April 6, 2026)
 

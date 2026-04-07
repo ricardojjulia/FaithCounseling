@@ -226,6 +226,7 @@ export function enforceRbac(request, response, route, session = null) {
 
   // Auth endpoints are public (no session needed to log in)
   if (route === '/v1/auth/login' || route === '/v1/auth/logout') return false;
+  if (route === '/v1/auth/status') return false;
   if (route === '/v1/auth/me') return false;
   if (route === '/v1/auth/portal-password-reset-request') return false;
   if (route === '/v1/auth/portal-password-reset') return false;

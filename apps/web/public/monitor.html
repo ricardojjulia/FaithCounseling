@@ -535,15 +535,7 @@
       background: var(--card);
     }
   </style>
-  <script>
-    (function () {
-      var stored = localStorage.getItem('faith.colorScheme');
-      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (stored === 'dark' || ((!stored || stored === 'auto') && prefersDark)) {
-        document.documentElement.setAttribute('data-color-scheme', 'dark');
-      }
-    })();
-  </script>
+  <script src="/page-theme.js"></script>
 </head>
 <body>
 
@@ -562,19 +554,10 @@
     </div>
     <span class="countdown" id="countdown"></span>
     <button class="btn-sm primary" id="refreshBtn">↺ Refresh</button>
-    <button class="btn-sm" id="colorToggleBtn" onclick="(function(){var d=document.documentElement;var isDark=d.getAttribute('data-color-scheme')==='dark';d.setAttribute('data-color-scheme',isDark?'light':'dark');localStorage.setItem('faith.colorScheme',isDark?'light':'dark');document.getElementById('colorToggleBtn').textContent=isDark?'☾':'☀';})()">☾</button>
+    <button class="btn-sm" id="colorToggleBtn" type="button">☾</button>
     <a class="btn-sm" href="/">← App</a>
   </div>
 </header>
-<script>
-  (function() {
-    var stored = localStorage.getItem('faith.colorScheme');
-    var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    var isDark = stored === 'dark' || ((!stored || stored === 'auto') && prefersDark);
-    var btn = document.getElementById('colorToggleBtn');
-    if (btn) btn.textContent = isDark ? '☀' : '☾';
-  })();
-</script>
 
 <!-- ── Main ─────────────────────────────────────────────────────────────── -->
 <main class="main">

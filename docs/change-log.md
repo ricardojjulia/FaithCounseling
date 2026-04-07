@@ -2,6 +2,28 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 7, 2026 — Browser Error Sweep
+
+### fix: clear browser-reported errors across public, admin, and client surfaces
+
+**Date:** April 7, 2026
+**Affected area:** `apps/web/public/about.html`, `apps/web/public/about.js`, `apps/web/public/monitor.html`, `apps/web/public/monitor.js`, `apps/web/public/operations.html`, `apps/web/public/page-theme.js`, `apps/web/src/App.jsx`, `apps/web/src/components/SchedulingPage.jsx`, `apps/api/src/index.js`, `apps/api/src/lib/security.js`, `apps/api/test/security-authz.test.mjs`, `tests/e2e/ui-error-scan.mjs`
+
+Added a Playwright-driven browser sweep that signs into the local app, walks public pages plus admin and client navigation, and records console, page, and unexpected network failures to `test-results/ui-error-scan.json`. Used that scan to identify and clear the browser-reported issues below.
+
+**Fix index:**
+
+- Public standalone pages (`/about.html`, `/monitor.html`, `/operations.html`) no longer rely on inline color-scheme bootstrap code. Theme startup moved to `apps/web/public/page-theme.js`, and the About page telemetry bootstrap moved to `apps/web/public/about.js`, clearing CSP inline-script violations.
+- App bootstrap no longer calls `/api/v1/auth/me` for anonymous visitors. Added public `GET /v1/auth/status` and switched the React shell to fetch the full session profile only when an authenticated session exists, removing signed-out `401` console noise on `/`.
+- The monitoring page now checks auth state first and renders restricted placeholders for protected observability and DB panels when the viewer is not a practice admin. Public health and local monitoring remain visible without anonymous probes hitting protected endpoints.
+- The Scheduling recurring-series surface now defines the missing series-view modal state and fetch handler, eliminating the `ReferenceError: viewingSeries is not defined` failure.
+- The recurring-rule synchronization effect in `SchedulingPage.jsx` now avoids writing the same rule value back into the form on every render, eliminating the repeated `Maximum update depth exceeded` warning.
+
+**Validation:**
+
+- `node --test apps/api/test/security-authz.test.mjs`
+- `node tests/e2e/ui-error-scan.mjs` → `publicErrors: 0`, `adminErrors: 0`, `clientErrors: 0`
+
 ## April 6, 2026 — Humanized UI Language Pass
 
 ### feat(ux): replace cold/operational language with counseling-practice-appropriate copy

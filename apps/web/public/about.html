@@ -610,15 +610,7 @@
         color: var(--about-ink);
       }
     </style>
-    <script>
-      (function () {
-        var stored = localStorage.getItem('faith.colorScheme');
-        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (stored === 'dark' || ((!stored || stored === 'auto') && prefersDark)) {
-          document.documentElement.setAttribute('data-color-scheme', 'dark');
-        }
-      })();
-    </script>
+    <script src="/page-theme.js"></script>
   </head>
   <body class="content-page about-page">
     <a class="skip-link" href="#mainContent">Skip to main content</a>
@@ -809,7 +801,5 @@
     </main>
   </body>
   <script src="/telemetry.js"></script>
-  <script>
-    window.faithTelemetry?.start({ surfaceId: 'about', surfaceKind: 'page' });
-  </script>
+  <script src="/about.js"></script>
 </html>
