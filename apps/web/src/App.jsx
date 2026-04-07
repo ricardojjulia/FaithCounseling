@@ -181,9 +181,21 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/v1/auth/me', { credentials: 'include' })
-      .then(async (res) => { if (!res.ok) throw new Error(); return res.json(); })
+    fetch('/api/v1/auth/status', { credentials: 'include' })
+      .then(async (res) => (res.ok ? res.json() : { authenticated: false }))
+      .then(async (status) => {
+        if (!status?.authenticated) return null;
+        const res = await fetch('/api/v1/auth/me', { credentials: 'include' });
+        if (!res.ok) throw new Error();
+        return res.json();
+      })
       .then((profile) => {
+        if (!profile) {
+          if (cancelled) return;
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+          return;
+        }
         if (cancelled) return;
         const normalized = normalizeSessionUser(profile);
         setCurrentUser(normalized);
