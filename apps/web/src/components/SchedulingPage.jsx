@@ -1104,22 +1104,6 @@ function SeriesPanel({ staff, clients }) {
   const [viewingSeries, setViewingSeries] = useState(null);
   const [seriesApptsLoading, setSeriesApptsLoading] = useState(false);
   const [seriesAppts, setSeriesAppts] = useState([]);
-
-  // Show series details modal
-  const handleViewSeries = async (series) => {
-    setViewingSeries(series);
-    setSeriesAppts([]);
-    setSeriesApptsLoading(true);
-    try {
-      const appts = await fetchSeriesAppointments(series.id);
-      setSeriesAppts(Array.isArray(appts?.items) ? appts.items : []);
-    } catch (err) {
-      setSeriesAppts([]);
-    } finally {
-      setSeriesApptsLoading(false);
-    }
-  };
-
   const form = useForm({
     initialValues: {
       counselorId: '',
@@ -1151,8 +1135,10 @@ function SeriesPanel({ staff, clients }) {
 
   useEffect(() => {
     if (recurrenceMode !== 'guided') return;
-    form.setFieldValue('recurrenceRule', buildSeriesRecurrenceRule(recurrencePattern, recurrenceDays, form.values.startDate));
-  }, [form, recurrenceDays, recurrenceMode, recurrencePattern, form.values.startDate]);
+    const nextRule = buildSeriesRecurrenceRule(recurrencePattern, recurrenceDays, form.values.startDate);
+    if (form.values.recurrenceRule === nextRule) return;
+    form.setFieldValue('recurrenceRule', nextRule);
+  }, [form.values.recurrenceRule, form.values.startDate, recurrenceDays, recurrenceMode, recurrencePattern]);
 
   const resetCreator = () => {
     form.reset();
@@ -1210,6 +1196,20 @@ function SeriesPanel({ staff, clients }) {
       await load();
     } catch (err) {
       notifications.show({ title: 'Cancel failed', message: err.message, color: 'red' });
+    }
+  };
+
+  const handleViewSeries = async (series) => {
+    setViewingSeries(series);
+    setSeriesAppts([]);
+    setSeriesApptsLoading(true);
+    try {
+      const appts = await fetchSeriesAppointments(series.id);
+      setSeriesAppts(Array.isArray(appts?.items) ? appts.items : []);
+    } catch {
+      setSeriesAppts([]);
+    } finally {
+      setSeriesApptsLoading(false);
     }
   };
 

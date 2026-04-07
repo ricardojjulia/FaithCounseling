@@ -66,6 +66,10 @@ Behind that presentation, the recent work has made the platform easier to trust 
 
 The platform has moved quickly over the last few iterations, and the most recent work is aimed at making Faith Counseling easier to explore, easier to operate, and easier to present with confidence.
 
+- **Full API documentation is live (v6.0.0):** The OpenAPI spec has been fully regenerated from the actual implementation — growing from 12 documented endpoints to 150+, fixing the security scheme from Bearer JWT to the correct HttpOnly session cookie, removing phantom paths, and adding every surface: auth, clients and all sub-resources, scheduling, billing, portal, faith features, audit intelligence (including the new AI observations endpoint), platform admin, i18n, telemetry, and monitoring. Browsable at `http://localhost:3002/api/docs`.
+- **AI-powered Audit Intelligence observations:** The Audit Intelligence tab in Practice Operations now generates AI-powered insights after every query. Claude analyzes the time window, top actions, activity breakdown, and event log and returns 4–6 specific, data-driven observations for the practice administrator. Requires `ANTHROPIC_API_KEY` in `.env`.
+- **3-minute browser idle session timeout:** Any open browser tab now automatically invalidates the session after 3 minutes of inactivity. A dismissible warning appears at 30 seconds remaining. The server-side idle timeout has been tightened to match, providing defense in depth for PHI protection.
+- **Browser error sweep is now clean:** a Playwright-driven UI scan now walks public, admin, and client surfaces against the local app, and the latest pass cleared public CSP script violations, signed-out auth noise, protected-monitoring 401s, and the Scheduling recurring-series runtime loop so the sweep finishes at `0` public, `0` admin, and `0` client errors.
 - **The platform speaks like a counseling practice:** every screen title, nav label, dashboard panel, and key empty state was audited and rewritten — `My Day`, `My Tasks`, `Needs Attention`, `Caseload`, `Forms & Documents`, `Privacy & Data`, and `Welcome to Faith Counseling` at sign-in, among others.
 - **A full User Manual is now live:** `docs/User Manual/README.md` walks every major role and product surface, from onboarding and scheduling to charting, monitoring, and security.
 - **Demo data is now reproducible in SQL:** `pnpm demo:sql:generate`, `pnpm demo:sql:apply`, and `pnpm demo:sql:refresh` create and load the canonical dataset under `ops/demo-dataset/generated/`, which makes local demos and reset workflows much more predictable.
@@ -88,7 +92,7 @@ Reports are stored in [`docs/SecurityChecks/`](./docs/SecurityChecks/) as timest
 
 **Current status:** AppSec `MEDIUM` (12 medium — `Math.random()` in UI key generation, deferred), DB Security `CLEAN` (0 critical/high/medium/low, PHI coverage 100%).
 
-## API Security And Compliance Baseline (v5.7.0)
+## API Security And Compliance Baseline (v6.0.0)
 
 This repository now includes a versioned API security and compliance engineering baseline for high-trust environments where sensitive data may exist. v5.7.0 additionally ships a full Jaeger + Prometheus observability stack.
 
@@ -107,6 +111,56 @@ Canonical reference:
 - `PLANS/JAEGER-PROMETHEUS-OBSERVABILITY.md` (Jaeger 2.17 + Prometheus observability stack architecture and configuration)
 
 This baseline supports HIPAA-oriented safeguards, GDPR-aligned privacy principles, SOC 2 control expectations, and PCI-conscious engineering practices.
+
+## API Documentation
+
+The full REST API is documented as an OpenAPI 3.1 specification and is browsable interactively via Swagger UI.
+
+| Surface | URL | Notes |
+| --- | --- | --- |
+| **Swagger UI** | `http://localhost:3002/api/docs` | Interactive explorer — try every endpoint in the browser |
+| **OpenAPI spec (YAML)** | `http://localhost:3002/api/openapi.yaml` | Machine-readable, import into Postman, Insomnia, or any OpenAPI toolchain |
+| **Source spec** | `docs/api/openapi.yaml` | Version-controlled alongside the implementation |
+
+### What's documented
+
+The v2.0.0 spec covers all 150+ implemented endpoints across every surface of the platform:
+
+- **Authentication** — login, logout, session status, password change, and portal password reset
+- **Clients** — full CRUD plus 11 sub-resource groups: addresses, phones, contacts, insurance, referring providers, diagnoses, medications, allergies, clinical history, faith profile, legal record, lifecycle, consents, intake packets, treatment plan, and progress notes
+- **Appointments & Scheduling** — appointments, calendar, recurring series, availability overrides, utilization reports, reminders, and waitlist
+- **Staff** — roster, credentials (licenses, certifications), specialty profile, employment, faith profile, and account actions
+- **Practices & Locations** — practice profile and multi-location management
+- **Documents** — templates and assignments
+- **Forms** — catalog, assignments, submissions, and client overview
+- **Inventories** — definitions and assignments
+- **Billing** — invoices, payments, superbills, claims, fee schedules, service codes, and aging reports
+- **Client Portal** — profile, intake packets, documents, uploads, appointment requests, messaging, resources, data rights (GDPR/CCPA), and public intake requests
+- **Faith Features** — note templates, treatment goals, consent variants, resources, inventories, referral coordination, and language preferences
+- **Offerings** — service offering catalog and summary
+- **Workflows** — clinical recommendation state management
+- **Audit Intelligence** — event query with statistical breakdown, and AI-powered observations (requires `ANTHROPIC_API_KEY`)
+- **Reporting** — operations summary and reporting overview
+- **Platform Administration** — tenant provisioning, impersonation sessions, data exports, and retention policies *(platform_admin only)*
+- **Reference** — DSM-5-TR diagnosis code search
+- **Internationalization** — locales, translation catalogs, settings, and auto-translate
+- **Telemetry** — Web Vitals and frontend event submission
+- **Monitoring** — database health and observability stack status
+- **System** — health probes, Prometheus metrics, bootstrap metadata
+
+### Security scheme
+
+Authentication uses **HttpOnly session cookies**, not Bearer JWT tokens. Sign in via `POST /v1/auth/login` and the session cookie is set automatically. All subsequent requests include it automatically in the browser or via `credentials: 'include'` in fetch. The idle timeout is 3 minutes; absolute max session is 8 hours (4 hours for `platform_admin`).
+
+### Adding `ANTHROPIC_API_KEY` for AI observations
+
+The Audit Intelligence AI observations endpoint (`POST /v1/audit/intelligence/observations`) requires an Anthropic API key. Add it to `.env`:
+
+```env
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Restart the API server after adding the key. The AI Observations card will appear automatically in the Audit Intelligence tab after every successful query.
 
 ## Date Picker Behavior
 
@@ -130,9 +184,12 @@ Workspace Studio is the practice administration hub, accessible from the main na
 Client Detail now includes a direct header action to open documents for the active client. The action routes staff into the Client Portal Documents tab with that client preselected, so records can be viewed and document tasks can be assigned without manually switching surfaces or reselecting the client.
 The checked-in public web bundle includes this shortcut so environments serving `apps/web/public` render the button without requiring local source recompilation.
 
+
 ## Public Web Build Artifacts
 
 The `apps/web/public/assets` bundle files may be refreshed and committed when shipping UI workflow updates so the checked-in public web surface stays aligned with the latest source behavior.
+
+**Note:** After UI or workflow changes (such as the SchedulingPage recurring series modal fix in v4.7.0), always rebuild the public assets with `pnpm --filter @faith/web build` and commit the updated bundle. This ensures that all users receive the latest code and prevents stale JavaScript errors from cached or outdated bundles.
 
 ## Standalone Product Pages
 
@@ -335,7 +392,10 @@ pnpm test
 pnpm test:security
 pnpm test:e2e
 pnpm test:launch-readiness
+node tests/e2e/ui-error-scan.mjs
 ```
+
+`node tests/e2e/ui-error-scan.mjs` drives Chromium against `http://127.0.0.1:3002` by default, signs in with the local admin and client demo accounts, and writes a page-by-page error report to `test-results/ui-error-scan.json`. Override the target with `UI_SCAN_BASE_URL` when needed.
 
 ### Demo dataset workflows
 
@@ -393,6 +453,14 @@ If `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is unset, trace export is skipped and te
 ## Recent Updates
 
 Only the latest entries are listed here. Full release history is in `docs/change-log.md`.
+
+### Browser Error Sweep (April 7, 2026)
+
+Public, admin, and client surfaces now complete a local browser error sweep without console, page, or unexpected network failures. The fix pass moved CSP-sensitive public-page startup code out of inline scripts, added an auth-aware public status check so signed-out app loads and monitoring loads stop emitting avoidable `401` noise, and repaired the Scheduling recurring-series modal so admin navigation no longer trips missing-state or max-update-depth runtime warnings.
+
+- Scan command: `node tests/e2e/ui-error-scan.mjs`
+- Output: `test-results/ui-error-scan.json`
+- Latest local result: `0` public errors, `0` admin errors, `0` client errors
 
 ### Humanized UI Language (April 6, 2026)
 
@@ -458,6 +526,7 @@ The change log summarizes completed work across releases and documents the detai
 
 ## Documentation Index
 
+- **API Documentation:** `docs/api/openapi.yaml` — OpenAPI 3.1 spec (v2.0.0), 150+ endpoints; interactive via `http://localhost:3002/api/docs`
 - **User Manual:** `docs/User Manual/README.md` — full end-user guide covering all roles and platform surfaces
 - Product and planning overview: `docs/PRODUCT-PLANS-OVERVIEW.md`
 - Domain model: `docs/domain-model.md`

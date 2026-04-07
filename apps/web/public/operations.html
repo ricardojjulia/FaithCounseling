@@ -511,15 +511,7 @@
       [data-color-scheme='dark'] .status-badge.failed  { background: #2a1a1a; color: #fca5a5; }
       [data-color-scheme='dark'] .status-badge.pending { background: #3d2e0a; color: #fcd34d; }
     </style>
-    <script>
-      (function () {
-        var stored = localStorage.getItem('faith.colorScheme');
-        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (stored === 'dark' || ((!stored || stored === 'auto') && prefersDark)) {
-          document.documentElement.setAttribute('data-color-scheme', 'dark');
-        }
-      })();
-    </script>
+    <script src="/page-theme.js"></script>
   </head>
   <body>
 
