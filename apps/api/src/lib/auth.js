@@ -12,7 +12,7 @@
  *  - Stored in DB as SHA-256(token) — the raw token never touches the DB
  *  - Delivered as HttpOnly; Secure; SameSite=Strict cookie named "session"
  *
- * Idle timeout:  30 min for staff, 15 min for platform_admin
+ * Idle timeout:  3 min for all roles (matches frontend idle policy)
  * Absolute max:  8 hr  for staff, 4 hr  for platform_admin
  */
 
@@ -36,8 +36,8 @@ const SESSION_MAX_AGE_MS = {
 };
 
 const IDLE_TIMEOUT_MS = {
-  platform_admin: 15 * 60 * 1000,        // 15 min
-  default:        30 * 60 * 1000,        // 30 min
+  platform_admin: 3 * 60 * 1000,         // 3 min (matches frontend idle policy)
+  default:        3 * 60 * 1000,         // 3 min (matches frontend idle policy)
 };
 
 const MAX_FAILED_ATTEMPTS = 10;
