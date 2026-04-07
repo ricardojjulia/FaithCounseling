@@ -2,6 +2,66 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 7, 2026 — v6.0.0: Full API Documentation, AI Audit Observations, Idle Session Timeout
+
+### feat(docs): regenerate OpenAPI spec to full implementation coverage (v2.0.0)
+
+**Date:** April 7, 2026
+**Affected area:** `docs/api/openapi.yaml`
+
+The OpenAPI 3.1 specification has been fully regenerated from the actual API implementation. The previous spec (v1.6.0) documented only 12 of 150+ implemented endpoints and used an incorrect Bearer JWT security scheme. The new spec (v2.0.0) corrects all of this.
+
+**What changed:**
+
+- Security scheme corrected from `bearerAuth` (JWT) to `cookieAuth` (HttpOnly session cookie), which is what the API actually uses
+- Removed two phantom paths that were documented but never implemented: `GET /v1/audit-events` and `GET /v1/documents/templates`
+- All 150+ endpoints now documented across every surface: auth, clients and 16 sub-resource groups, appointments and scheduling, staff and credentials, practices and locations, documents, forms, inventories, billing (invoices, payments, superbills, claims, fee schedules, aging), client portal (profile, intake, documents, messages, data rights, public requests), faith features, offerings, workflows, audit intelligence, reporting, platform administration, DSM-5-TR reference, i18n, telemetry, and monitoring
+- Full request bodies, query parameters, and response schemas for all endpoints
+- Reusable component schemas: `Client`, `Appointment`, `StaffMember`, `AuditEvent`, `AuditSummary`, `SessionProfile`, `HealthResponse`, `OkResponse`, `ErrorResponse`, and more
+- Version bumped from 1.6.0 → 2.0.0
+
+**Access:**
+
+- Swagger UI: `http://localhost:3002/api/docs`
+- Raw YAML: `http://localhost:3002/api/openapi.yaml`
+- Source: `docs/api/openapi.yaml`
+
+---
+
+### feat(audit): AI-powered observations in Audit Intelligence
+
+**Date:** April 7, 2026
+**Affected area:** `apps/api/src/index.js`, `apps/web/public/operations.html`, `apps/web/public/operations.js`, `.env`
+
+After a successful Audit Intelligence query, the page now automatically requests AI-generated observations from Claude. The backend sends the full audit summary (time window, totals, top actions, activity by role, activity by target type, notable denied/error events) to the Claude API and returns 4–6 concise, data-driven observations for the practice administrator.
+
+**Implementation:**
+
+- New `POST /v1/audit/intelligence/observations` endpoint — requires `practice_admin` or higher; protected by CSRF; emits `audit.intelligence.observations.read` to the audit trail
+- Prompt includes: time window, success/denied/error breakdown with percentages, top 8 actions, role and target type distribution, and a sample of up to 20 denied/error events
+- Uses `claude-sonnet-4-6` via direct Anthropic Messages API fetch (no SDK dependency)
+- Frontend: numbered observation list with loading spinner and graceful error messaging (503 when `ANTHROPIC_API_KEY` is not configured)
+- Requires `ANTHROPIC_API_KEY=sk-ant-...` in `.env`
+
+---
+
+### feat(security): 3-minute browser idle session timeout
+
+**Date:** April 7, 2026
+**Affected area:** `apps/web/src/lib/useIdleTimeout.js` (new), `apps/web/src/App.jsx`, `apps/api/src/lib/auth.js`
+
+Any authenticated browser session now expires after 3 minutes of inactivity, with a 30-second countdown warning before logout.
+
+**Implementation:**
+
+- New `useIdleTimeout` hook tracks `mousemove`, `keydown`, `mousedown`, `touchstart`, and `scroll` events on `window`; any activity resets the timer
+- Warning modal appears at 2:30 elapsed with "Stay Signed In" / "Sign Out" actions; clicking "Stay Signed In" dismisses the modal and resets the timer
+- On timeout: best-effort server logout call, then all auth state cleared and user returned to login screen
+- Server-side `IDLE_TIMEOUT_MS` tightened from 30/15 min to 3 min for all roles, providing defense-in-depth enforcement independent of the frontend
+- Hook is only active when `isAuthenticated = true`; cleans up fully on sign-out or unmount
+
+---
+
 ## April 7, 2026 — Browser Error Sweep
 
 ### fix: clear browser-reported errors across public, admin, and client surfaces
@@ -1603,7 +1663,30 @@ Updated package versions from `4.6.0` to `4.7.0`:
 - `packages/i18n/package.json`
 - `packages/telemetry/package.json`
 
-## v4.6.0 — CRITICAL FIX: Complete Logout Session Invalidation
+
+## v4.7.0 — SchedulingPage Recurring Series Modal Fix
+
+**Date:** April 6, 2026
+**Type:** Bug fix
+
+### Summary
+
+Fixes a ReferenceError (`seriesApptsLoading is not defined`) in the SchedulingPage recurring series modal. The SeriesPanel now correctly manages loading state and fetches series appointments asynchronously when the modal opens. This resolves modal crashes and ensures recurring appointment series are displayed reliably.
+
+### Fixed
+
+- Added missing `seriesApptsLoading` and `seriesAppts` state to SeriesPanel in SchedulingPage.jsx
+- Updated recurring series modal logic to load appointments asynchronously and show loading state
+- Rebuilt public assets to ensure latest code is served
+
+### Validation
+
+- `pnpm --filter @faith/web build` — passed
+- `pnpm lint` — passed
+- `pnpm test:e2e` — passed
+
+---
+
 
 **Date:** March 29, 2026
 **Type:** Critical fix
