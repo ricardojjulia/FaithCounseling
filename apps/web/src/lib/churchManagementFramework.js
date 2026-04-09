@@ -1,0 +1,136 @@
+export function getChurchManagementFramework(t) {
+  return {
+    posture: [
+      { key: 'multiTenant', label: t('churchFramework.posture.multiTenant'), color: 'blue' },
+      { key: 'ministryHubs', label: t('churchFramework.posture.ministryHubs'), color: 'violet' },
+      { key: 'aiAssistive', label: t('churchFramework.posture.aiAssistive'), color: 'teal' },
+      { key: 'causalAnalytics', label: t('churchFramework.posture.causalAnalytics'), color: 'orange' },
+      { key: 'futureIntegrations', label: t('churchFramework.posture.futureIntegrations'), color: 'grape' },
+    ],
+    rolePortals: [
+      {
+        key: 'superAdmin',
+        title: t('churchFramework.role.superAdmin.title'),
+        summary: t('churchFramework.role.superAdmin.summary'),
+        badge: t('churchFramework.badge.platform'),
+        color: 'blue',
+      },
+      {
+        key: 'churchAdmin',
+        title: t('churchFramework.role.churchAdmin.title'),
+        summary: t('churchFramework.role.churchAdmin.summary'),
+        badge: t('churchFramework.badge.operations'),
+        color: 'teal',
+      },
+      {
+        key: 'pastorElder',
+        title: t('churchFramework.role.pastorElder.title'),
+        summary: t('churchFramework.role.pastorElder.summary'),
+        badge: t('churchFramework.badge.leadership'),
+        color: 'grape',
+      },
+      {
+        key: 'ministryLeader',
+        title: t('churchFramework.role.ministryLeader.title'),
+        summary: t('churchFramework.role.ministryLeader.summary'),
+        badge: t('churchFramework.badge.ministryHub'),
+        color: 'violet',
+      },
+      {
+        key: 'memberPortal',
+        title: t('churchFramework.role.memberPortal.title'),
+        summary: t('churchFramework.role.memberPortal.summary'),
+        badge: t('churchFramework.badge.selfService'),
+        color: 'cyan',
+      },
+    ],
+    coreModules: [
+      {
+        key: 'members',
+        title: t('churchFramework.module.members.title'),
+        summary: t('churchFramework.module.members.summary'),
+        status: t('churchFramework.status.foundation'),
+        color: 'blue',
+      },
+      {
+        key: 'giving',
+        title: t('churchFramework.module.giving.title'),
+        summary: t('churchFramework.module.giving.summary'),
+        status: t('churchFramework.status.foundation'),
+        color: 'green',
+      },
+      {
+        key: 'hubs',
+        title: t('churchFramework.module.hubs.title'),
+        summary: t('churchFramework.module.hubs.summary'),
+        status: t('churchFramework.status.nextSlice'),
+        color: 'violet',
+      },
+      {
+        key: 'calendar',
+        title: t('churchFramework.module.calendar.title'),
+        summary: t('churchFramework.module.calendar.summary'),
+        status: t('churchFramework.status.foundation'),
+        color: 'orange',
+      },
+      {
+        key: 'volunteers',
+        title: t('churchFramework.module.volunteers.title'),
+        summary: t('churchFramework.module.volunteers.summary'),
+        status: t('churchFramework.status.nextSlice'),
+        color: 'teal',
+      },
+      {
+        key: 'communications',
+        title: t('churchFramework.module.communications.title'),
+        summary: t('churchFramework.module.communications.summary'),
+        status: t('churchFramework.status.nextSlice'),
+        color: 'indigo',
+      },
+      {
+        key: 'analytics',
+        title: t('churchFramework.module.analytics.title'),
+        summary: t('churchFramework.module.analytics.summary'),
+        status: t('churchFramework.status.guardrail'),
+        color: 'pink',
+      },
+      {
+        key: 'integrations',
+        title: t('churchFramework.module.integrations.title'),
+        summary: t('churchFramework.module.integrations.summary'),
+        status: t('churchFramework.status.protected'),
+        color: 'grape',
+      },
+    ],
+    aiSuite: [
+      {
+        key: 'sermon',
+        title: t('churchFramework.ai.sermon.title'),
+        summary: t('churchFramework.ai.sermon.summary'),
+      },
+      {
+        key: 'bibleStudy',
+        title: t('churchFramework.ai.bibleStudy.title'),
+        summary: t('churchFramework.ai.bibleStudy.summary'),
+      },
+      {
+        key: 'prayer',
+        title: t('churchFramework.ai.prayer.title'),
+        summary: t('churchFramework.ai.prayer.summary'),
+      },
+      {
+        key: 'ministryAgent',
+        title: t('churchFramework.ai.ministryAgent.title'),
+        summary: t('churchFramework.ai.ministryAgent.summary'),
+      },
+    ],
+    deliveryRails: [
+      t('churchFramework.rail.assistiveAi'),
+      t('churchFramework.rail.consentFirst'),
+      t('churchFramework.rail.roleGated'),
+      t('churchFramework.rail.auditReady'),
+      t('churchFramework.rail.monitoring'),
+      t('churchFramework.rail.docs'),
+    ],
+  };
+}

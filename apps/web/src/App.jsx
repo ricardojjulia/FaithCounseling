@@ -31,6 +31,7 @@ const ClientPortalPage = lazy(() => import('./components/Portal/ClientPortalPage
 const OfferingsPage = lazy(() => import('./components/Offerings/OfferingsPage.jsx'));
 const ClinicalChartPage = lazy(() => import('./components/ClinicalChart/ClinicalChartPage.jsx'));
 const FaithWorkflowsPage = lazy(() => import('./components/FaithWorkflows/FaithWorkflowsPage.jsx'));
+const ChurchForgeFrameworkOverview = lazy(() => import('./components/ChurchForgeFrameworkOverview.jsx'));
 
 function firstString(...values) {
   for (const value of values) {
@@ -703,6 +704,13 @@ export default function App() {
                   onTodaySessions={handleViewTodaySessions}
                   onFutureAppointments={handleViewFutureAppointments}
                   onFaithWorkflows={() => setCurrentView('faith')}
+                />
+              ) : null}
+              {showDashboard ? (
+                <ChurchForgeFrameworkOverview
+                  onOpenScheduling={() => handleOpenScheduling({ initialView: defaultCalendarView(userRole) })}
+                  onOpenDocuments={handleOpenDocuments}
+                  onOpenPortal={() => handleOpenPortal({ initialTab: 'dashboard' })}
                 />
               ) : null}
               {showFallbackWorkspace || showDashboard ? (

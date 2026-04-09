@@ -2,6 +2,24 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 9, 2026 — ChurchForge Framework Dashboard Foundation
+
+### feat(ui): add a code-backed ChurchForge application framework overview to the admin dashboard
+
+**Date:** April 9, 2026
+**Affected area:** `apps/web/src/App.jsx`, `apps/web/src/components/ChurchForgeFrameworkOverview.jsx`, `apps/web/src/lib/churchManagementFramework.js`, `packages/i18n/src/index.js`, `README.md`, `apps/web/README.md`
+
+Added the first in-code ChurchForge framework layer to the existing admin dashboard so future Church Management work has a visible, reusable foundation instead of living only in planning documents.
+
+**What changed:**
+
+- Added a reusable `churchManagementFramework` definition with role portals, core product pillars, AI ministry tools, posture tags, and delivery guardrails
+- Added `ChurchForgeFrameworkOverview` to the admin dashboard with a structured overview of roles, modules, AI tools, and future ministry integration boundaries
+- Added dashboard call-to-action buttons that hand off into existing scheduling, documents, and portal surfaces as practical implementation anchors
+- Instrumented framework exposure and CTA clicks through the existing frontend telemetry helper using low-cardinality workflow/action labels
+- Added the necessary UI copy to `packages/i18n`
+- Updated the root README and web README to document the new framework layer
+
 ## April 7, 2026 — v6.0.0: Full API Documentation, AI Audit Observations, Idle Session Timeout
 
 ### feat(docs): regenerate OpenAPI spec to full implementation coverage (v2.0.0)
