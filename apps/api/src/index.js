@@ -1455,6 +1455,11 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/auth/status' && request.method === 'GET') {
+      await handleAuthStatus(request, response, session);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/auth/me' && request.method === 'GET') {
       await handleAuthMe(request, response, session);
       return;
@@ -2082,6 +2087,14 @@ async function handleAuthLogout(request, response, session) {
   const targetId = session?.portal_account_id ?? session?.staff_account_id ?? session?.client_id ?? 'anonymous';
   await emitAudit(request, 'session.logout', session?.role === 'client' ? 'portal_account' : 'staff_account', targetId, session);
   writeJson(response, 200, { ok: true });
+}
+
+async function handleAuthStatus(request, response, session) {
+  writeJson(response, 200, {
+    authenticated: Boolean(session),
+    role: session?.role ?? null,
+    actorType: session?.actor_type ?? (session ? 'user' : 'anonymous'),
+  });
 }
 
 async function handleAuthMe(request, response, session) {
@@ -14030,6 +14043,7 @@ function resolveRoute(pathname) {
   if (pathname === '/docs' || pathname === '/docs/') return '/docs';
   if (pathname === '/v1/auth/login') return '/v1/auth/login';
   if (pathname === '/v1/auth/logout') return '/v1/auth/logout';
+  if (pathname === '/v1/auth/status') return '/v1/auth/status';
   if (pathname === '/v1/auth/me') return '/v1/auth/me';
   if (pathname === '/v1/auth/change-password') return '/v1/auth/change-password';
   if (pathname === '/v1/auth/portal-password-reset-request') return '/v1/auth/portal-password-reset-request';

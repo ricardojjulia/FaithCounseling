@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { AppShell, Center, Paper, Text, Loader } from '@mantine/core';
+import { AppShell, Button, Center, Group, Modal, Paper, Stack, Text, Loader } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import AuthGate from './components/AuthGate';
 import Sidebar from './components/Sidebar';
@@ -13,6 +13,7 @@ import { useSurfaceTelemetry } from './lib/useSurfaceTelemetry.js';
 import { useI18n } from './lib/i18nContext.jsx';
 import { buildCounselorWorkspaceData } from './lib/counselorWorkspace.js';
 import { isClientRole, isCounselorRole } from './lib/roles.js';
+import { useIdleTimeout } from './lib/useIdleTimeout.js';
 import './App.css';
 
 const CounselorHomePage = lazy(() => import('./components/CounselorHomePage.jsx'));
@@ -133,6 +134,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [authBootstrapping, setAuthBootstrapping] = useState(true);
+  const [idleWarning, setIdleWarning] = useState(false);
   const [metricsData, setMetricsData] = useState({
     sessions: 0,
     sessionsMeta: t('metrics.scheduledToday'),
@@ -181,9 +183,21 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/v1/auth/me', { credentials: 'include' })
-      .then(async (res) => { if (!res.ok) throw new Error(); return res.json(); })
+    fetch('/api/v1/auth/status', { credentials: 'include' })
+      .then(async (res) => (res.ok ? res.json() : { authenticated: false }))
+      .then(async (status) => {
+        if (!status?.authenticated) return null;
+        const res = await fetch('/api/v1/auth/me', { credentials: 'include' });
+        if (!res.ok) throw new Error();
+        return res.json();
+      })
       .then((profile) => {
+        if (!profile) {
+          if (cancelled) return;
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+          return;
+        }
         if (cancelled) return;
         const normalized = normalizeSessionUser(profile);
         setCurrentUser(normalized);
@@ -324,6 +338,30 @@ export default function App() {
     setClinicalChartState(createDefaultClinicalChartState());
     setOperationsSummaryData({ summary: null, loading: true, error: null });
   };
+
+  const handleIdleTimeout = async () => {
+    setIdleWarning(false);
+    try {
+      await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include', headers: csrfHeaders() });
+    } catch { /* best-effort */ }
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    closeNav();
+    setSelectedClientRequest(null);
+    setSelectedCounselorId(null);
+    setCurrentView('dashboard');
+    setClinicalChartState(createDefaultClinicalChartState());
+    setOperationsSummaryData({ summary: null, loading: true, error: null });
+  };
+
+  useIdleTimeout({
+    enabled: isAuthenticated,
+    timeoutMs: 3 * 60 * 1000,
+    warningMs: 30 * 1000,
+    onWarning: () => setIdleWarning(true),
+    onActivity: () => setIdleWarning(false),
+    onTimeout: handleIdleTimeout,
+  });
 
   const handleNavigate = (view) => {
     setCurrentView(view);
@@ -691,6 +729,24 @@ export default function App() {
           )}
         </Suspense>
       </AppShell.Main>
+
+      <Modal
+        opened={idleWarning}
+        onClose={() => setIdleWarning(false)}
+        title="Session Expiring Soon"
+        centered
+        withCloseButton={false}
+        closeOnClickOutside={false}
+        closeOnEscape={false}
+      >
+        <Stack gap="md">
+          <Text>Your session will expire in 30 seconds due to inactivity. Would you like to stay signed in?</Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={handleIdleTimeout}>Sign Out</Button>
+            <Button onClick={() => setIdleWarning(false)}>Stay Signed In</Button>
+          </Group>
+        </Stack>
+      </Modal>
     </AppShell>
   );
 }

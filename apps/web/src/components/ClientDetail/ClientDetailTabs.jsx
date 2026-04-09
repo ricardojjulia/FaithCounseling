@@ -44,7 +44,7 @@ export default function ClientDetailTabs({ client, clientId, currentUser, initia
       <Tabs.List style={{ borderBottom: '1px solid var(--mantine-color-default-border)', flexShrink: 0, overflowX: 'auto', flexWrap: 'nowrap' }}>
         {TABS.map((tab) => <Tabs.Tab key={tab.id} value={tab.id} style={{ whiteSpace: 'nowrap' }}>{t(tab.labelKey)}</Tabs.Tab>)}
       </Tabs.List>
-      <Box style={{ flex: 1, overflowY: 'auto', background: '#f9fafb' }}>
+      <Box style={{ flex: 1, overflowY: 'auto', background: 'var(--surface-muted)' }}>
         <Tabs.Panel value="demographics" p="md"><DemographicsTab    client={client} clientId={clientId} currentUser={currentUser} /></Tabs.Panel>
         <Tabs.Panel value="contacts"     p="md"><ContactsTab        client={client} clientId={clientId} currentUser={currentUser} /></Tabs.Panel>
         <Tabs.Panel value="clinical"     p="md"><ClinicalHistoryTab client={client} clientId={clientId} currentUser={currentUser} /></Tabs.Panel>

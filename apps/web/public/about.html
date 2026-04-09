@@ -589,7 +589,28 @@
           justify-content: center;
         }
       }
+
+      /* ── Dark mode ──────────────────────────────────────────────── */
+      [data-color-scheme='dark'] .about-page {
+        --about-bg: #0f1521;
+        --about-paper: rgba(26, 34, 54, 0.95);
+        --about-panel: rgba(15, 21, 33, 0.95);
+        --about-panel-soft: rgba(20, 28, 45, 0.9);
+        --about-ink: #e8edf5;
+        --about-soft: #8a9ab5;
+        --about-line: rgba(99, 102, 241, 0.18);
+        --about-line-strong: rgba(129, 140, 248, 0.28);
+        --about-accent: #818cf8;
+        --about-accent-deep: #c7d2fe;
+        --about-accent-soft: #a5b4fc;
+        --about-shadow: 0 26px 70px rgba(0, 0, 0, 0.45);
+        background: radial-gradient(circle at top left, rgba(30, 35, 80, 0.5), transparent 34%),
+          radial-gradient(circle at top right, rgba(20, 30, 60, 0.4), transparent 28%),
+          linear-gradient(180deg, #0f1521 0%, #111827 100%);
+        color: var(--about-ink);
+      }
     </style>
+    <script src="/page-theme.js"></script>
   </head>
   <body class="content-page about-page">
     <a class="skip-link" href="#mainContent">Skip to main content</a>
@@ -780,7 +801,5 @@
     </main>
   </body>
   <script src="/telemetry.js"></script>
-  <script>
-    window.faithTelemetry?.start({ surfaceId: 'about', surfaceKind: 'page' });
-  </script>
+  <script src="/about.js"></script>
 </html>

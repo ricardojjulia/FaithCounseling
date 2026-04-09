@@ -67,6 +67,14 @@ test('enforceRbac: unknown role → 401', () => {
   assert.equal(res.statusCode, 401);
 });
 
+test('enforceRbac: /v1/auth/status is public → no rejection', () => {
+  const req = mockRequest({ role: '', method: 'GET' });
+  const res = mockResponse();
+  const rejected = enforceRbac(req, res, '/v1/auth/status');
+  assert.equal(rejected, false);
+  assert.equal(res.statusCode, undefined);
+});
+
 // ─── enforceRbac — role escalation (client accessing staff route) ─────────────
 
 test('enforceRbac: client role accessing staff-only route → 403', () => {

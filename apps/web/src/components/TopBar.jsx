@@ -1,4 +1,5 @@
-import { Burger, Group, Select, Text, Box, Button } from '@mantine/core';
+import { Burger, Group, Select, Text, Box, Button, ActionIcon, Tooltip } from '@mantine/core';
+import { useMantineColorScheme, useComputedColorScheme } from '@mantine/core';
 import { useI18n } from '../lib/i18nContext.jsx';
 
 function resolveTopBarCopy(currentView, isClient, t) {
@@ -39,6 +40,24 @@ function resolveTopBarCopy(currentView, isClient, t) {
   };
 }
 
+function ColorSchemeToggle() {
+  const { setColorScheme } = useMantineColorScheme();
+  const computed = useComputedColorScheme('light', { getInitialValueInEffect: true });
+  const isDark = computed === 'dark';
+  return (
+    <Tooltip label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} withArrow>
+      <ActionIcon
+        variant="default"
+        size="sm"
+        aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        onClick={() => setColorScheme(isDark ? 'light' : 'dark')}
+      >
+        {isDark ? '☀' : '☾'}
+      </ActionIcon>
+    </Tooltip>
+  );
+}
+
 export default function TopBar({ opened, onMenuToggle, onSignOut, currentUser, currentView }) {
   const { locale, locales, setLocale, t, loading } = useI18n();
   const isClient = currentUser?.role === 'client';
@@ -70,6 +89,7 @@ export default function TopBar({ opened, onMenuToggle, onSignOut, currentUser, c
       </Group>
 
       <Group gap="sm" wrap="nowrap" className="workspace-topbar-actions">
+        <ColorSchemeToggle />
         <Select
           data={locales}
           value={locale}

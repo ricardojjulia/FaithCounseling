@@ -40,7 +40,7 @@ export default function CounselorDetailTabs({ counselor, staffId, currentUser })
       <Tabs.List style={{ borderBottom: '1px solid var(--mantine-color-default-border)', flexShrink: 0, overflowX: 'auto', flexWrap: 'nowrap' }}>
         {TABS.map((tab) => <Tabs.Tab key={tab.id} value={tab.id} style={{ whiteSpace: 'nowrap' }}>{t(tab.labelKey)}</Tabs.Tab>)}
       </Tabs.List>
-      <Box style={{ flex: 1, overflowY: 'auto', background: '#f9fafb' }}>
+      <Box style={{ flex: 1, overflowY: 'auto', background: 'var(--surface-muted)' }}>
         <Tabs.Panel value="profile"        p="md"><ProfileTab               counselor={counselor} staffId={staffId} currentUser={currentUser} /></Tabs.Panel>
         <Tabs.Panel value="licenses"       p="md"><LicensesTab              staffId={staffId} currentUser={currentUser} /></Tabs.Panel>
         <Tabs.Panel value="specialties"    p="md"><SpecialtiesTab           staffId={staffId} currentUser={currentUser} /></Tabs.Panel>

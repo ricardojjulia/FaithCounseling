@@ -8,12 +8,48 @@
   --text-soft: #62708b;
   --brand: #4f46e5;
   --brand-soft: #e2e3ff;
+  --brand-active-text: #2f2ca8;
   --success: #08926a;
   --danger: #b42318;
   --warning: #b26a00;
   --radius: 16px;
   --radius-sm: 12px;
   --shadow: 0 12px 30px rgba(29, 43, 83, 0.08);
+  --surface-opaque: rgba(255, 255, 255, 0.88);
+  --body-gradient: radial-gradient(circle at top right, #eef2ff, var(--bg) 32%);
+  --progress-track: #eef2fb;
+  --input-bg: #f9fafb;
+  --readonly-bg: #f8faff;
+  --status-default-bg: #f7f9fd;
+  --status-success-bg: #eefbf5;
+  --status-error-bg: #fff3f1;
+  --skip-link-bg: #111827;
+}
+
+[data-mantine-color-scheme='dark'] {
+  color-scheme: dark;
+  --bg: #0f1521;
+  --surface: #1a2236;
+  --surface-muted: #1e2a3d;
+  --line: #2a3a52;
+  --text: #e8edf5;
+  --text-soft: #8a9ab5;
+  --brand: #818cf8;
+  --brand-soft: rgba(99, 102, 241, 0.18);
+  --brand-active-text: #a5b4fc;
+  --success: #10b981;
+  --danger: #f87171;
+  --warning: #fbbf24;
+  --shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  --surface-opaque: rgba(26, 34, 54, 0.92);
+  --body-gradient: radial-gradient(circle at top right, #1a1f3a, var(--bg) 40%);
+  --progress-track: #1e2a3d;
+  --input-bg: #1e2a3d;
+  --readonly-bg: #192030;
+  --status-default-bg: #1e2a3d;
+  --status-success-bg: #0d2620;
+  --status-error-bg: #2a1a1a;
+  --skip-link-bg: #e8edf5;
 }
 
 * {
@@ -24,7 +60,7 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background: radial-gradient(circle at top right, #eef2ff, var(--bg) 32%);
+  background: var(--body-gradient);
   color: var(--text);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
 }
@@ -49,8 +85,8 @@ textarea:focus-visible {
   left: -9999px;
   top: 8px;
   z-index: 60;
-  background: #111827;
-  color: #ffffff;
+  background: var(--skip-link-bg);
+  color: var(--surface);
   border-radius: 8px;
   padding: 8px 12px;
   text-decoration: none;
@@ -135,7 +171,7 @@ textarea:focus-visible {
   position: relative;
   margin: 72px auto 0;
   width: min(640px, 92vw);
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 14px;
   box-shadow: var(--shadow);
@@ -192,7 +228,7 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   padding: 16px 12px;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--surface-opaque);
   backdrop-filter: blur(10px);
   border-right: 1px solid var(--line);
   z-index: 30;
@@ -307,7 +343,7 @@ textarea:focus-visible {
 
 .nav-item.active {
   background: var(--brand-soft);
-  color: #2f2ca8;
+  color: var(--brand-active-text);
   font-weight: 600;
 }
 
@@ -412,7 +448,8 @@ textarea:focus-visible {
 .language-switcher select {
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #f9fafb;
+  background: var(--input-bg);
+  color: var(--text);
   padding: 8px 10px;
   font-size: 0.9rem;
   cursor: pointer;
@@ -425,7 +462,8 @@ textarea:focus-visible {
 .search-wrap input {
   width: 200px;
   border: 1px solid var(--line);
-  background: #f9fafb;
+  background: var(--input-bg);
+  color: var(--text);
   border-radius: 6px;
   padding: 7px 10px;
   outline: none;
@@ -591,7 +629,7 @@ a.action-btn {
 
 .tab-button.active {
   background: var(--brand-soft);
-  color: #2f2ca8;
+  color: var(--brand-active-text);
   border-color: #cfd3ff;
 }
 
@@ -618,7 +656,7 @@ a.action-btn {
 .compliance-list li {
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fff;
+  background: var(--surface);
   padding: 12px;
 }
 
@@ -658,7 +696,7 @@ a.action-btn {
 .progress-track {
   width: 100%;
   border-radius: 999px;
-  background: #eef2fb;
+  background: var(--progress-track);
   overflow: hidden;
   height: 9px;
 }
@@ -741,7 +779,7 @@ a.action-btn {
 .translation-config {
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fff;
+  background: var(--surface);
   padding: 12px;
   display: grid;
   gap: 10px;
@@ -770,7 +808,7 @@ a.action-btn {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 12px;
-  background: #fff;
+  background: var(--surface);
 }
 
 .translation-row strong {
@@ -800,7 +838,7 @@ textarea[readonly] {
 }
 
 textarea[readonly] {
-  background: #f8faff;
+  background: var(--readonly-bg);
 }
 
 .field-error {
@@ -818,7 +856,7 @@ textarea[readonly] {
 .telemetry-card {
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fff;
+  background: var(--surface);
   padding: 12px;
 }
 
@@ -863,17 +901,17 @@ textarea[readonly] {
   color: var(--text-soft);
   border-radius: 10px;
   padding: 8px 10px;
-  background: #f7f9fd;
+  background: var(--status-default-bg);
 }
 
 .manage-status[data-tone='success'] {
   color: var(--success);
-  background: #eefbf5;
+  background: var(--status-success-bg);
 }
 
 .manage-status[data-tone='error'] {
   color: var(--danger);
-  background: #fff3f1;
+  background: var(--status-error-bg);
 }
 
 @media (max-width: 1200px) {

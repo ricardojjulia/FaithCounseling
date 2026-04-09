@@ -42,7 +42,7 @@ export default function ClientDetailPage({ clientId, initialTab = null, onBack, 
           alignItems: 'center',
           justifyContent: 'center',
           height: '100%',
-          color: '#62708b',
+          color: 'var(--text-soft)',
           fontSize: '15px',
           padding: '40px',
         }}
@@ -54,7 +54,7 @@ export default function ClientDetailPage({ clientId, initialTab = null, onBack, 
 
   if (error) {
     return (
-      <div style={{ padding: '40px', color: '#b42318', fontSize: '15px' }}>
+      <div style={{ padding: '40px', color: 'var(--danger)', fontSize: '15px' }}>
         <p>{t('clientDetail.errorLoad', { error })}</p>
         <button
           type="button"
@@ -64,7 +64,7 @@ export default function ClientDetailPage({ clientId, initialTab = null, onBack, 
             padding: '8px 16px',
             border: '1px solid #e1e8ed',
             borderRadius: '4px',
-            background: '#fff',
+            background: 'var(--surface)',
             cursor: 'pointer',
             fontSize: '14px',
           }}

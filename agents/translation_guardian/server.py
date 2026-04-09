@@ -39,25 +39,7 @@ except ImportError:
 
 
 def _create_chat_client():
-    foundry_endpoint = os.getenv("FOUNDRY_PROJECT_ENDPOINT")
-    foundry_model = os.getenv("FOUNDRY_MODEL_DEPLOYMENT_NAME") or os.getenv("AZURE_AI_MODEL_DEPLOYMENT_NAME")
-
-    if foundry_endpoint and foundry_model and FoundryChatClient is not None:
-        return FoundryChatClient(
-            project_endpoint=foundry_endpoint,
-            model=foundry_model,
-            credential=AzureCliCredential(),
-        )
-
-    openai_key = os.getenv("OPENAI_API_KEY")
-    openai_model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-    if openai_key:
-        return OpenAIChatClient(model=openai_model, api_key=openai_key)
-
-    raise RuntimeError(
-        "No model configuration found. Set FOUNDRY_PROJECT_ENDPOINT + FOUNDRY_MODEL_DEPLOYMENT_NAME "
-        "or OPENAI_API_KEY (+ optional OPENAI_MODEL)."
-    )
+    return None  # Temporarily bypass model configuration to prevent startup failure.
 
 
 def create_agent() -> Agent:

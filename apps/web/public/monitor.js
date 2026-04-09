@@ -9,6 +9,11 @@ let drillOpen = false;
 let countdown = REFRESH_INTERVAL / 1000;
 let refreshTimer = null;
 let countdownTimer = null;
+let authStatus = {
+  authenticated: false,
+  role: null,
+  canViewAdminMonitoring: false,
+};
 
 window.faithTelemetry?.start({ surfaceId: 'monitor', surfaceKind: 'page' });
 
@@ -92,6 +97,48 @@ function healthLabel(status) {
 function healthBadge(status) {
   const label = healthLabel(status);
   return `<span class="health-badge ${label}">${label}</span>`;
+}
+
+async function loadAuthStatus() {
+  try {
+    const response = await fetch('/api/v1/auth/status', {
+      credentials: 'include',
+      headers: { accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error('Unable to read auth status');
+    const payload = await response.json();
+    authStatus = {
+      authenticated: Boolean(payload?.authenticated),
+      role: payload?.role ?? null,
+      canViewAdminMonitoring: ['platform_admin', 'practice_owner', 'practice_admin'].includes(payload?.role),
+    };
+  } catch {
+    authStatus = {
+      authenticated: false,
+      role: null,
+      canViewAdminMonitoring: false,
+    };
+  }
+  return authStatus;
+}
+
+function initColorSchemeToggle() {
+  const button = $('colorToggleBtn');
+  if (!button) return;
+
+  const syncLabel = () => {
+    const isDark = document.documentElement.getAttribute('data-color-scheme') === 'dark';
+    button.textContent = isDark ? '☀' : '☾';
+  };
+
+  button.addEventListener('click', () => {
+    const isDark = document.documentElement.getAttribute('data-color-scheme') === 'dark';
+    document.documentElement.setAttribute('data-color-scheme', isDark ? 'light' : 'dark');
+    localStorage.setItem('faith.colorScheme', isDark ? 'light' : 'dark');
+    syncLabel();
+  });
+
+  syncLabel();
 }
 
 // ─── Sparkline ───────────────────────────────────────────────────────────────
@@ -313,6 +360,29 @@ function updateUiSummary(overall, frontend, surfaces, exportedViaOtel) {
   );
 }
 
+function updateUiSummaryRestricted() {
+  setText('uiViews', '—');
+  setText('uiErrors', '—');
+  setText('uiFetchErrors', '—');
+  setText('uiValidationErrors', '—');
+  setText('uiActionSuccess', '—');
+  setText('uiActionSuccessSub', 'Sign in as a practice admin to view shared telemetry');
+  setText('uiSlowSurfaces', '—');
+  setText('uiSummaryLastSeen', 'Sign in as a practice admin to view shared telemetry');
+
+  setText('uiActiveSurfaces', '—');
+  setText('uiTrackedSurfaces', '—');
+  setText('uiLastEvent', '—');
+  setText('uiOtelExport', 'Sign in required');
+  setText('uiExportState', 'Admin session required for API monitoring data');
+  setText('surfaceSummaryCount', 'Admin session required');
+  setText('surfaceTableNote', 'Shared API and surface telemetry is available after practice-admin sign-in');
+
+  renderIssueList('topSurfaceIssues', [], 'Sign in as a practice admin to view shared surface failures.', '');
+  renderIssueList('topWorkflowIssues', [], 'Sign in as a practice admin to view workflow failures.', 'errors');
+  renderSurfaceTable([]);
+}
+
 function updateHealthChecks(health) {
   const checks = Object.entries(health?.checks ?? {});
   const dependencies = Object.entries(health?.dependencies ?? {});
@@ -346,6 +416,14 @@ function updateHealthChecks(health) {
   `);
 
   list.innerHTML = [...checkMarkup, ...dependencyMarkup].join('');
+}
+
+function updateHealthChecksRestricted() {
+  const list = $('healthChecksList');
+  setText('healthSummaryStatus', 'restricted');
+  if (list) {
+    list.innerHTML = '<div class="empty-state">Sign in as a practice admin to view protected dependency checks.</div>';
+  }
 }
 
 function renderSurfaceTable(surfaces) {
@@ -461,8 +539,14 @@ async function probeEndpoint(url, cors = true) {
 function setObsBadge(id, state) {
   const el = $(id);
   if (!el) return;
-  el.className = `obs-badge ${state}`;
-  el.textContent = state === 'up' ? 'Online' : state === 'down' ? 'Offline' : 'Checking…';
+  el.className = `obs-badge ${state === 'restricted' ? 'checking' : state}`;
+  el.textContent = state === 'up'
+    ? 'Online'
+    : state === 'down'
+      ? 'Offline'
+      : state === 'restricted'
+        ? 'Sign in'
+        : 'Checking…';
 }
 
 async function checkObsStack() {
@@ -484,24 +568,26 @@ async function checkObsStack() {
   // Cross-origin probes (Jaeger :16686, Prometheus :9090, worker :9465) are
   // blocked by connect-src 'self' CSP, so we ask the API server to probe them.
   let jaeger = false, prom = false, workerM = false;
-  try {
-    const obsRes = await fetch('/api/v1/monitoring/observability-stack', {
-      credentials: 'include',
-      signal: AbortSignal.timeout(8000),
-    });
-    if (obsRes.ok) {
-      const data = await obsRes.json();
-      jaeger  = data.jaeger?.up        ?? false;
-      prom    = data.prometheus?.up    ?? false;
-      workerM = data.workerMetrics?.up ?? false;
-    }
-  } catch { /* API unreachable — leave all false */ }
+  if (authStatus.canViewAdminMonitoring) {
+    try {
+      const obsRes = await fetch('/api/v1/monitoring/observability-stack', {
+        credentials: 'include',
+        signal: AbortSignal.timeout(8000),
+      });
+      if (obsRes.ok) {
+        const data = await obsRes.json();
+        jaeger  = data.jaeger?.up        ?? false;
+        prom    = data.prometheus?.up    ?? false;
+        workerM = data.workerMetrics?.up ?? false;
+      }
+    } catch { /* API unreachable — leave all false */ }
+  }
 
-  setObsBadge('jaegerBadge',        jaeger  ? 'up' : 'down');
-  setObsBadge('promBadge',          prom    ? 'up' : 'down');
+  setObsBadge('jaegerBadge',        authStatus.canViewAdminMonitoring ? (jaeger ? 'up' : 'down') : 'restricted');
+  setObsBadge('promBadge',          authStatus.canViewAdminMonitoring ? (prom ? 'up' : 'down') : 'restricted');
   setObsBadge('apiMetricsBadge',    apiM    ? 'up' : 'down');
   setObsBadge('webMetricsBadge',    webM    ? 'up' : 'down');
-  setObsBadge('workerMetricsBadge', workerM ? 'up' : 'down');
+  setObsBadge('workerMetricsBadge', authStatus.canViewAdminMonitoring ? (workerM ? 'up' : 'down') : 'restricted');
 
   const stackUp   = jaeger && prom;
   const metricsUp = apiM && webM;
@@ -511,7 +597,14 @@ async function checkObsStack() {
   const instructions = $('obsInstructions');
   const shutdownHint = $('obsShutdownHint');
 
-  if (stackUp && metricsUp) {
+  if (!authStatus.canViewAdminMonitoring) {
+    banner.className = 'otel-status-banner inactive';
+    setText('obsStackIcon',  '🔒');
+    setText('obsStackTitle', 'Admin Sign-In Required');
+    setText('obsStackSub',   'API metrics stay visible publicly. Sign in as a practice admin to probe Jaeger, Prometheus, worker metrics, and protected monitoring details.');
+    if (instructions) instructions.style.display = 'block';
+    if (shutdownHint) shutdownHint.style.display = 'none';
+  } else if (stackUp && metricsUp) {
     banner.className = 'otel-status-banner active';
     setText('obsStackIcon',  '🟢');
     setText('obsStackTitle', 'Observability Stack Active');
@@ -543,7 +636,12 @@ async function checkObsStack() {
 // ─── OTEL trace export banner (driven by API summary) ────────────────────────
 function updateOtelBanner(isActive) {
   const banner = $('otelBanner');
-  if (isActive) {
+  if (isActive === 'restricted') {
+    banner.className = 'otel-status-banner inactive';
+    setText('otelBannerTitle', 'Admin Sign-In Required');
+    setText('otelBannerSub',   'Sign in as a practice admin to view OTLP trace-export configuration and protected API monitoring details.');
+    $('otelCurrentStatus').value = 'Restricted — practice-admin session required';
+  } else if (isActive) {
     banner.className = 'otel-status-banner active';
     setText('otelBannerTitle', 'Trace Export Active — sending to Jaeger');
     setText('otelBannerSub',   'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is configured. Traces are flowing to Jaeger.');
@@ -630,6 +728,23 @@ function initOtelSettings() {
 
 // ─── DB panel ─────────────────────────────────────────────────────────────────
 function updateDbPanel(data) {
+  if (data?.mode === 'restricted') {
+    const label = $('dbEngineLabel');
+    if (label) label.textContent = 'MySQL 8 · SIGN-IN REQUIRED';
+    setText('dbUptime', '—');
+    setText('dbConns',  '—');
+    setText('dbBufHit', '—');
+    setText('dbQryTotal', '—');
+    setText('dbSlowQry', '—');
+    setText('dbThroughput', '—');
+    setText('dbConnsSub', 'Practice-admin sign-in required');
+    setText('dbBufSub', 'Practice-admin sign-in required');
+    setText('dbQrySub', 'Practice-admin sign-in required');
+    const grid = $('dbTableGrid');
+    if (grid) grid.innerHTML = '<div class="empty-state">Sign in as a practice admin to inspect database monitoring details.</div>';
+    return;
+  }
+
   if (!data || data.mode === 'unavailable') {
     const label = $('dbEngineLabel');
     if (label) label.textContent = 'MySQL 8 · NOT CONFIGURED';
@@ -701,17 +816,25 @@ async function doRefresh() {
   const startedAt = performance.now();
 
   try {
-    const [apiHealth, apiSummaryResp, webSummaryResp, dbStatsResp] = await Promise.allSettled([
+    const requests = [
       fetch('/api/health', { credentials: 'include' }).then((r) => r.json()),
-      fetch('/api/v1/telemetry/summary', { credentials: 'include' }).then((r) => r.json()),
       fetch('/telemetry/summary', { credentials: 'include' }).then((r) => r.json()).catch(() => ({})),
-      fetch('/api/v1/monitoring/db', { credentials: 'include' }).then((r) => r.json()).catch(() => null),
-    ]);
+    ];
+
+    if (authStatus.canViewAdminMonitoring) {
+      requests.push(
+        fetch('/api/v1/telemetry/summary', { credentials: 'include' }).then((r) => r.json()),
+        fetch('/api/v1/monitoring/db', { credentials: 'include' }).then((r) => r.json()).catch(() => null),
+      );
+    }
+
+    const settled = await Promise.allSettled(requests);
+    const [apiHealth, webSummaryResp, apiSummaryResp, dbStatsResp] = settled;
 
     const health = apiHealth.status === 'fulfilled' ? apiHealth.value : null;
-    const apiData = apiSummaryResp.status === 'fulfilled' ? apiSummaryResp.value : null;
     const webData = webSummaryResp.status === 'fulfilled' ? webSummaryResp.value : null;
-    const dbStats = dbStatsResp.status === 'fulfilled' ? dbStatsResp.value : null;
+    const apiData = authStatus.canViewAdminMonitoring && apiSummaryResp?.status === 'fulfilled' ? apiSummaryResp.value : null;
+    const dbStats = authStatus.canViewAdminMonitoring && dbStatsResp?.status === 'fulfilled' ? dbStatsResp.value : null;
     const sum = apiData?.summary ?? {};
 
     // Health chip
@@ -753,18 +876,24 @@ async function doRefresh() {
     updateVitals(vitals);
 
     // UI / surface monitoring
-    updateUiSummary(sum.overall ?? {}, sum.frontend ?? {}, sum.surfaces ?? [], apiData?.exportedViaOtel ?? false);
-    updateHealthChecks(sum.health ?? {});
-    renderSurfaceTable(sum.surfaces ?? []);
-    updateDbPanel(dbStats);
-
-    // Errors drill-down
-    lastErrors = sum.recentErrors ?? [];
-    setText('errorCount', lastErrors.length);
-    if (drillOpen) renderErrorTable();
-
-    // OTEL
-    updateOtelBanner(apiData?.exportedViaOtel ?? false);
+    if (authStatus.canViewAdminMonitoring) {
+      updateUiSummary(sum.overall ?? {}, sum.frontend ?? {}, sum.surfaces ?? [], apiData?.exportedViaOtel ?? false);
+      updateHealthChecks(sum.health ?? {});
+      renderSurfaceTable(sum.surfaces ?? []);
+      updateDbPanel(dbStats);
+      updateOtelBanner(apiData?.exportedViaOtel ?? false);
+      lastErrors = sum.recentErrors ?? [];
+      setText('errorCount', lastErrors.length);
+      if (drillOpen) renderErrorTable();
+    } else {
+      updateUiSummaryRestricted();
+      updateHealthChecksRestricted();
+      updateDbPanel({ mode: 'restricted' });
+      updateOtelBanner('restricted');
+      lastErrors = [];
+      setText('errorCount', '—');
+      if (drillOpen) renderErrorTable();
+    }
 
     if (!Object.keys(vitals).length) {
       window.faithTelemetry?.trackEmptyState('no_vitals', { workflow: 'monitor' });
@@ -836,6 +965,9 @@ $('refreshBtn').addEventListener('click', async () => {
 });
 
 initDrillToggle();
+initColorSchemeToggle();
 initOtelSettings();
-checkObsStack();
-doRefresh().then(() => { resetCountdown(); scheduleRefresh(); });
+loadAuthStatus()
+  .then(() => checkObsStack())
+  .then(() => doRefresh())
+  .then(() => { resetCountdown(); scheduleRefresh(); });

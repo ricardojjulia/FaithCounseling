@@ -1,35 +1,1909 @@
 openapi: 3.1.0
 info:
   title: Faith Counseling API
-  version: 1.6.0
-  summary: Production-ready API for practice and client lifecycle management with full CRUD operations, audit logging, and HIPAA compliance.
+  version: 2.0.0
+  summary: >
+    Full-surface API for faith-based counseling practice management — client lifecycle,
+    scheduling, billing, portal, audit intelligence, and platform administration.
+    All protected endpoints require an active HttpOnly session cookie obtained via
+    POST /v1/auth/login. No Bearer tokens are used.
+  contact:
+    name: Faith Counseling Engineering
 servers:
+  - url: http://localhost:3001
+    description: Local development
   - url: https://api.example.com
-    description: Placeholder production URL
+    description: Production (replace with actual URL)
+
+# Sessions are delivered as HttpOnly cookies, not Authorization headers.
 security:
-  - bearerAuth: []
+  - cookieAuth: []
+
 tags:
-  - name: Practices
-  - name: Staff
+  - name: Auth
+    description: Session authentication and password management
   - name: Clients
+    description: Client profiles and clinical records
   - name: Appointments
+    description: Scheduling, calendar, reminders, and waitlist
+  - name: Staff
+    description: Staff members, credentials, and account management
+  - name: Practices
+    description: Practice profiles and locations
   - name: Documents
+    description: Document templates and assignments
+  - name: Forms
+    description: Clinical forms catalog, assignments, and submissions
+  - name: Inventories
+    description: Screening inventory definitions and assignments
+  - name: Billing
+    description: Invoices, payments, superbills, claims, and fee schedules
+  - name: Portal
+    description: Client-facing portal — profile, documents, requests, messaging
+  - name: Faith
+    description: Faith-integrated features — templates, goals, resources
+  - name: Offerings
+    description: Practice service offerings
+  - name: Workflows
+    description: Clinical workflow recommendations
   - name: Audit
+    description: Audit intelligence and compliance
+  - name: Reporting
+    description: Practice reporting overview
+  - name: Platform
+    description: Platform-level administration (platform_admin only)
+  - name: Reference
+    description: Lookup / reference data (DSM-5-TR, appointment types)
+  - name: i18n
+    description: Internationalization — locales, catalogs, translation
+  - name: Telemetry
+    description: Frontend telemetry — vitals and events
+  - name: Monitoring
+    description: Infrastructure health checks
+  - name: System
+    description: Health probes, metrics, and bootstrap
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PATHS
+# ─────────────────────────────────────────────────────────────────────────────
 paths:
-  /v1/practices/{practiceId}:
+
+  # ── System ──────────────────────────────────────────────────────────────────
+
+  /health:
     get:
-      tags: [Practices]
-      summary: Get a practice profile
-      operationId: getPractice
-      parameters:
-        - $ref: '#/components/parameters/PracticeId'
+      tags: [System]
+      summary: Liveness probe
+      operationId: healthLive
+      security: []
       responses:
         '200':
-          description: Practice profile
+          description: Service is alive
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Practice'
+                $ref: '#/components/schemas/HealthResponse'
+
+  /health/live:
+    get:
+      tags: [System]
+      summary: Liveness probe (alias)
+      operationId: healthLiveAlias
+      security: []
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /health/ready:
+    get:
+      tags: [System]
+      summary: Readiness probe — includes database connectivity check
+      operationId: healthReady
+      security: []
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+        '503':
+          description: Service not ready
+
+  /bootstrap-metadata:
+    get:
+      tags: [System]
+      summary: Initial metadata required for frontend bootstrap
+      operationId: bootstrapMetadata
+      security: []
+      responses:
+        '200':
+          description: Bootstrap metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  roles:
+                    type: array
+                    items:
+                      type: string
+                  appointmentStatuses:
+                    type: array
+                    items:
+                      type: string
+                  appointmentTypes:
+                    type: array
+                    items:
+                      type: string
+                  clientStatuses:
+                    type: array
+                    items:
+                      type: string
+
+  /metrics:
+    get:
+      tags: [System]
+      summary: Prometheus metrics export
+      operationId: prometheusMetrics
+      security: []
+      responses:
+        '200':
+          description: Prometheus text exposition format
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /openapi.yaml:
+    get:
+      tags: [System]
+      summary: OpenAPI specification (this document)
+      operationId: getOpenApiSpec
+      security: []
+      responses:
+        '200':
+          description: OpenAPI YAML
+          content:
+            application/yaml:
+              schema:
+                type: string
+
+  /docs:
+    get:
+      tags: [System]
+      summary: Swagger UI — interactive API explorer
+      operationId: swaggerUi
+      security: []
+      responses:
+        '200':
+          description: Swagger UI HTML
+          content:
+            text/html:
+              schema:
+                type: string
+
+  # ── Auth ─────────────────────────────────────────────────────────────────────
+
+  /v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in and receive a session cookie
+      operationId: authLogin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Authenticated — session cookie set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/SessionProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '423':
+          description: Account locked after too many failed attempts
+
+  /v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke the current session
+      operationId: authLogout
+      responses:
+        '200':
+          description: Session revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /v1/auth/status:
+    get:
+      tags: [Auth]
+      summary: Check whether the current cookie represents an active session
+      operationId: authStatus
+      security: []
+      responses:
+        '200':
+          description: Authentication status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authenticated:
+                    type: boolean
+                  role:
+                    type: string
+                    nullable: true
+                  actorType:
+                    type: string
+
+  /v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Return the profile for the currently authenticated user
+      operationId: authMe
+      responses:
+        '200':
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/auth/change-password:
+    post:
+      tags: [Auth]
+      summary: Change password (requires current password for re-authentication)
+      operationId: authChangePassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 14
+      responses:
+        '200':
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/auth/portal-password-reset-request:
+    post:
+      tags: [Auth]
+      summary: Request a portal password reset link (public)
+      operationId: authPortalPasswordResetRequest
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '202':
+          description: Reset link dispatched (response is identical whether the account exists or not)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  notice:
+                    type: string
+
+  /v1/auth/portal-password-reset:
+    post:
+      tags: [Auth]
+      summary: Complete a portal password reset using the token from the email link
+      operationId: authPortalPasswordReset
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, token, newPassword]
+              properties:
+                email:
+                  type: string
+                  format: email
+                token:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 14
+      responses:
+        '200':
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ── Clients ──────────────────────────────────────────────────────────────────
+
+  /v1/clients:
+    get:
+      tags: [Clients]
+      summary: List clients visible to the current user (scoped by tenant and counselor role)
+      operationId: listClients
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [active, waitlist, inactive, discharged]
+        - in: query
+          name: counselorId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Client list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientListResponse'
+    post:
+      tags: [Clients]
+      summary: Create a client profile
+      operationId: createClient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClientRequest'
+      responses:
+        '201':
+          description: Client created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientItemResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /v1/clients/{clientId}:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: Get a single client by ID
+      operationId: getClient
+      responses:
+        '200':
+          description: Client profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientItemResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Clients]
+      summary: Partially update a client profile
+      operationId: updateClient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateClientRequest'
+      responses:
+        '200':
+          description: Client updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientItemResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Clients]
+      summary: Archive a client (sets status to inactive)
+      operationId: deleteClient
+      responses:
+        '200':
+          description: Client archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientItemResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/clients/{clientId}/addresses:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: List addresses for a client
+      operationId: listClientAddresses
+      responses:
+        '200':
+          description: Address list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Clients]
+      summary: Add an address to a client
+      operationId: createClientAddress
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                addressType:
+                  type: string
+                  enum: [home, work, mailing, other]
+                line1:
+                  type: string
+                line2:
+                  type: string
+                city:
+                  type: string
+                state:
+                  type: string
+                postalCode:
+                  type: string
+                country:
+                  type: string
+      responses:
+        '201':
+          description: Address created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/clients/{clientId}/addresses/{addressId}:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - in: path
+        name: addressId
+        required: true
+        schema:
+          type: string
+    patch:
+      tags: [Clients]
+      summary: Update a client address
+      operationId: updateClientAddress
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Address updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    delete:
+      tags: [Clients]
+      summary: Delete a client address
+      operationId: deleteClientAddress
+      responses:
+        '200':
+          description: Address deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /v1/clients/{clientId}/phones:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: List phone numbers for a client
+      operationId: listClientPhones
+      responses:
+        '200':
+          description: Phone list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Clients]
+      summary: Add a phone number to a client
+      operationId: createClientPhone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phoneType:
+                  type: string
+                  enum: [mobile, home, work, other]
+                number:
+                  type: string
+                isPrimary:
+                  type: boolean
+      responses:
+        '201':
+          description: Phone created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/clients/{clientId}/phones/{phoneId}:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - in: path
+        name: phoneId
+        required: true
+        schema:
+          type: string
+    patch:
+      tags: [Clients]
+      summary: Update a client phone number
+      operationId: updateClientPhone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Phone updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    delete:
+      tags: [Clients]
+      summary: Delete a client phone number
+      operationId: deleteClientPhone
+      responses:
+        '200':
+          description: Phone deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /v1/clients/{clientId}/contacts:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: List emergency/family contacts for a client
+      operationId: listClientContacts
+      responses:
+        '200':
+          description: Contact list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Clients]
+      summary: Add a contact to a client
+      operationId: createClientContact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Contact created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/clients/{clientId}/contacts/{contactId}:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - in: path
+        name: contactId
+        required: true
+        schema:
+          type: string
+    patch:
+      tags: [Clients]
+      summary: Update a client contact
+      operationId: updateClientContact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Contact updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    delete:
+      tags: [Clients]
+      summary: Delete a client contact
+      operationId: deleteClientContact
+      responses:
+        '200':
+          description: Contact deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /v1/clients/{clientId}/insurance:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: List insurance policies for a client
+      operationId: listClientInsurance
+      responses:
+        '200':
+          description: Insurance policy list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Clients]
+      summary: Add an insurance policy to a client
+      operationId: createClientInsurance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Insurance created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/clients/{clientId}/insurance/{insuranceId}:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - in: path
+        name: insuranceId
+        required: true
+        schema:
+          type: string
+    patch:
+      tags: [Clients]
+      summary: Update an insurance policy
+      operationId: updateClientInsurance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Insurance updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    delete:
+      tags: [Clients]
+      summary: Delete an insurance policy
+      operationId: deleteClientInsurance
+      responses:
+        '200':
+          description: Insurance deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /v1/clients/{clientId}/referring-providers:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: List referring providers for a client
+      operationId: listClientReferringProviders
+      responses:
+        '200':
+          description: Referring provider list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Clients]
+      summary: Add a referring provider to a client
+      operationId: createClientReferringProvider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Referring provider created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/clients/{clientId}/referring-providers/{rpId}:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - in: path
+        name: rpId
+        required: true
+        schema:
+          type: string
+    patch:
+      tags: [Clients]
+      summary: Update a referring provider
+      operationId: updateClientReferringProvider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Referring provider updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    delete:
+      tags: [Clients]
+      summary: Delete a referring provider
+      operationId: deleteClientReferringProvider
+      responses:
+        '200':
+          description: Referring provider deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /v1/clients/{clientId}/diagnoses:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: List DSM-5-TR diagnoses for a client
+      operationId: listClientDiagnoses
+      responses:
+        '200':
+          description: Diagnosis list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Clients]
+      summary: Add a diagnosis to a client
+      operationId: createClientDiagnosis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                icdCode:
+                  type: string
+                diagnosisType:
+                  type: string
+                  enum: [primary, secondary, provisional, rule-out]
+                onsetDate:
+                  type: string
+                  format: date
+                notes:
+                  type: string
+      responses:
+        '201':
+          description: Diagnosis created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/clients/{clientId}/diagnoses/{diagnosisId}:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - in: path
+        name: diagnosisId
+        required: true
+        schema:
+          type: string
+    patch:
+      tags: [Clients]
+      summary: Update a diagnosis
+      operationId: updateClientDiagnosis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Diagnosis updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    delete:
+      tags: [Clients]
+      summary: Delete a diagnosis
+      operationId: deleteClientDiagnosis
+      responses:
+        '200':
+          description: Diagnosis deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /v1/clients/{clientId}/medications:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: List medications for a client
+      operationId: listClientMedications
+      responses:
+        '200':
+          description: Medication list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Clients]
+      summary: Add a medication to a client
+      operationId: createClientMedication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Medication created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/clients/{clientId}/medications/{medicationId}:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - in: path
+        name: medicationId
+        required: true
+        schema:
+          type: string
+    patch:
+      tags: [Clients]
+      summary: Update a medication
+      operationId: updateClientMedication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Medication updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    delete:
+      tags: [Clients]
+      summary: Delete a medication
+      operationId: deleteClientMedication
+      responses:
+        '200':
+          description: Medication deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /v1/clients/{clientId}/allergies:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: List allergies for a client
+      operationId: listClientAllergies
+      responses:
+        '200':
+          description: Allergy list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Clients]
+      summary: Add an allergy to a client
+      operationId: createClientAllergy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Allergy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/clients/{clientId}/allergies/{allergyId}:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - in: path
+        name: allergyId
+        required: true
+        schema:
+          type: string
+    patch:
+      tags: [Clients]
+      summary: Update an allergy
+      operationId: updateClientAllergy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Allergy updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    delete:
+      tags: [Clients]
+      summary: Delete an allergy
+      operationId: deleteClientAllergy
+      responses:
+        '200':
+          description: Allergy deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /v1/clients/{clientId}/clinical-history:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: Get the clinical history record for a client
+      operationId: getClientClinicalHistory
+      responses:
+        '200':
+          description: Clinical history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Clients]
+      summary: Update the clinical history record
+      operationId: updateClientClinicalHistory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Clinical history updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/clients/{clientId}/intake-preview:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: Preview the intake packet data for a client
+      operationId: getClientIntakePreview
+      responses:
+        '200':
+          description: Intake preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/clients/{clientId}/faith-profile:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: Get the faith profile for a client
+      operationId: getClientFaithProfile
+      responses:
+        '200':
+          description: Faith profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Clients]
+      summary: Update the faith profile
+      operationId: updateClientFaithProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Faith profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/clients/{clientId}/legal:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: Get the legal record for a client
+      operationId: getClientLegal
+      responses:
+        '200':
+          description: Legal record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Clients]
+      summary: Update the legal record
+      operationId: updateClientLegal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Legal record updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/clients/{clientId}/lifecycle:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: Get the lifecycle record for a client
+      operationId: getClientLifecycle
+      responses:
+        '200':
+          description: Lifecycle record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Clients]
+      summary: Update the lifecycle record (referral, counselor assignment, discharge)
+      operationId: updateClientLifecycle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [active, waitlist, inactive, discharged]
+                referralSource:
+                  type: string
+                assignedCounselorId:
+                  type: string
+                dischargeReason:
+                  type: string
+                dischargedAt:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Lifecycle updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/clients/{clientId}/consents:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: List consent records for a client
+      operationId: listClientConsents
+      responses:
+        '200':
+          description: Consent list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Clients]
+      summary: Record a new consent
+      operationId: createClientConsent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [consentType, consentState]
+              properties:
+                consentType:
+                  type: string
+                consentState:
+                  type: string
+                  enum: [given, withdrawn, pending]
+                signedBy:
+                  type: string
+                consentedAt:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: Consent recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/clients/{clientId}/intake-packets:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: List intake packets for a client
+      operationId: listClientIntakePackets
+      responses:
+        '200':
+          description: Intake packet list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Clients]
+      summary: Create an intake packet for a client
+      operationId: createClientIntakePacket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                intakeType:
+                  type: string
+      responses:
+        '201':
+          description: Intake packet created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/clients/{clientId}/treatment-plan:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: Get the treatment plan for a client
+      operationId: getClientTreatmentPlan
+      responses:
+        '200':
+          description: Treatment plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Clients]
+      summary: Update the treatment plan
+      operationId: updateClientTreatmentPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                goals:
+                  type: array
+                  items:
+                    type: string
+                interventions:
+                  type: array
+                  items:
+                    type: string
+                status:
+                  type: string
+      responses:
+        '200':
+          description: Treatment plan updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/clients/{clientId}/progress-notes:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      summary: List progress notes for a client
+      operationId: listClientProgressNotes
+      responses:
+        '200':
+          description: Progress note list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Clients]
+      summary: Create a progress note
+      operationId: createClientProgressNote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [noteType, content]
+              properties:
+                noteType:
+                  type: string
+                content:
+                  type: string
+                supervisedBy:
+                  type: string
+                locked:
+                  type: boolean
+      responses:
+        '201':
+          description: Progress note created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/clients/{clientId}/progress-notes/{noteId}:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - in: path
+        name: noteId
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Clients]
+      summary: Get a single progress note
+      operationId: getClientProgressNote
+      responses:
+        '200':
+          description: Progress note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Clients]
+      summary: Update a progress note
+      operationId: updateClientProgressNote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Progress note updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    delete:
+      tags: [Clients]
+      summary: Delete a progress note
+      operationId: deleteClientProgressNote
+      responses:
+        '200':
+          description: Progress note deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  # ── Appointments ─────────────────────────────────────────────────────────────
+
+  /v1/appointments:
+    get:
+      tags: [Appointments]
+      summary: List appointments (optionally filtered)
+      operationId: listAppointments
+      parameters:
+        - in: query
+          name: clientId
+          schema:
+            type: string
+        - in: query
+          name: counselorId
+          schema:
+            type: string
+        - in: query
+          name: seriesId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Appointment list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Appointment'
+    post:
+      tags: [Appointments]
+      summary: Schedule an appointment
+      operationId: createAppointment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAppointmentRequest'
+      responses:
+        '201':
+          description: Appointment scheduled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentItemResponse'
+        '409':
+          description: Scheduling conflict detected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  conflicts:
+                    type: array
+                    items:
+                      type: object
+
+  /v1/appointments/{appointmentId}:
+    parameters:
+      - $ref: '#/components/parameters/AppointmentId'
+    get:
+      tags: [Appointments]
+      summary: Get a single appointment
+      operationId: getAppointment
+      responses:
+        '200':
+          description: Appointment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentItemResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Appointments]
+      summary: Update an appointment
+      operationId: updateAppointment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Appointment updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentItemResponse'
+    delete:
+      tags: [Appointments]
+      summary: Cancel/delete an appointment
+      operationId: deleteAppointment
+      responses:
+        '200':
+          description: Appointment deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /v1/appointment-types:
+    get:
+      tags: [Appointments]
+      summary: List supported appointment types
+      operationId: listAppointmentTypes
+      security: []
+      responses:
+        '200':
+          description: Appointment type list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AppointmentType'
+
+  /v1/scheduling/calendar:
+    get:
+      tags: [Appointments]
+      summary: Get the scheduling calendar for a given day
+      operationId: getSchedulingCalendar
+      parameters:
+        - in: query
+          name: timezone
+          required: true
+          schema:
+            type: string
+            description: IANA timezone (e.g. America/New_York)
+        - in: query
+          name: day
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: counselorId
+          schema:
+            type: string
+        - in: query
+          name: counselorName
+          schema:
+            type: string
+        - in: query
+          name: locationName
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Calendar data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  counselorCalendars:
+                    type: array
+                    items:
+                      type: object
+                  locationCalendars:
+                    type: array
+                    items:
+                      type: object
+
+  /v1/scheduling/availability-overrides:
+    get:
+      tags: [Appointments]
+      summary: List availability overrides
+      operationId: listAvailabilityOverrides
+      parameters:
+        - in: query
+          name: staffId
+          schema:
+            type: string
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Availability override list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Appointments]
+      summary: Create an availability override
+      operationId: createAvailabilityOverride
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Override created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Appointments]
+      summary: Update an availability override
+      operationId: updateAvailabilityOverride
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Override updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    delete:
+      tags: [Appointments]
+      summary: Delete an availability override
+      operationId: deleteAvailabilityOverride
+      parameters:
+        - in: query
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Override deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /v1/scheduling/series:
+    get:
+      tags: [Appointments]
+      summary: List recurring appointment series
+      operationId: listSeries
+      parameters:
+        - in: query
+          name: counselorId
+          schema:
+            type: string
+        - in: query
+          name: clientId
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Series list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Appointments]
+      summary: Create a recurring appointment series
+      operationId: createSeries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [startDate, endDate, rrule]
+              properties:
+                startDate:
+                  type: string
+                  format: date
+                endDate:
+                  type: string
+                  format: date
+                rrule:
+                  type: string
+                counselorId:
+                  type: string
+                clientId:
+                  type: string
+                appointmentType:
+                  type: string
+      responses:
+        '201':
+          description: Series created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Appointments]
+      summary: Update a recurring series
+      operationId: updateSeries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Series updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/scheduling/utilization:
+    get:
+      tags: [Appointments]
+      summary: Get scheduling utilization report
+      operationId: getSchedulingUtilization
+      parameters:
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: counselorId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Utilization report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  period:
+                    type: object
+                  totalAppointments:
+                    type: integer
+                  byStatus:
+                    type: object
+                  byCounselor:
+                    type: array
+                    items:
+                      type: object
+
+  /v1/reminders:
+    get:
+      tags: [Appointments]
+      summary: List appointment reminders
+      operationId: listReminders
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, sent, failed]
+        - in: query
+          name: appointmentId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Reminder list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Appointments]
+      summary: Create a reminder
+      operationId: createReminder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [appointmentId]
+              properties:
+                appointmentId:
+                  type: string
+                reminderType:
+                  type: string
+                deliveryChannel:
+                  type: string
+                reminderAt:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: Reminder created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Appointments]
+      summary: Update a reminder
+      operationId: updateReminder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reminderId]
+              properties:
+                reminderId:
+                  type: string
+                status:
+                  type: string
+                reminderAt:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Reminder updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/waitlist:
+    get:
+      tags: [Appointments]
+      summary: Get the waitlist
+      operationId: listWaitlist
+      responses:
+        '200':
+          description: Waitlist entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    patch:
+      tags: [Appointments]
+      summary: Update a waitlist entry
+      operationId: updateWaitlistEntry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId]
+              properties:
+                clientId:
+                  type: string
+                priorityRank:
+                  type: integer
+                requestedService:
+                  type: string
+                preferredSessionType:
+                  type: string
+                notes:
+                  type: string
+      responses:
+        '200':
+          description: Waitlist entry updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  # ── Staff ────────────────────────────────────────────────────────────────────
+
   /v1/staff:
     get:
       tags: [Staff]
@@ -49,7 +1923,7 @@ paths:
                       $ref: '#/components/schemas/StaffMember'
     post:
       tags: [Staff]
-      summary: Create a staff member
+      summary: Create a staff member (and optionally provision an account)
       operationId: createStaff
       requestBody:
         required: true
@@ -63,149 +1937,351 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StaffMember'
-  /v1/clients:
-    get:
-      tags: [Clients]
-      summary: List clients visible to the current staff member
-      operationId: listClients
-      parameters:
-        - in: query
-          name: status
-          schema:
-            type: string
-            enum: [active, waitlist, inactive, discharged]
-      responses:
-        '200':
-          description: Client list
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Client'
-    post:
-      tags: [Clients]
-      summary: Create a client profile
-      operationId: createClient
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateClientRequest'
-      responses:
-        '201':
-          description: Client created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Client'
-  /v1/clients/{id}:
-    get:
-      tags: [Clients]
-      summary: Get a single client by ID
-      operationId: getClient
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Client retrieved
-          content:
-            application/json:
-              schema:
                 type: object
                 properties:
                   item:
-                    $ref: '#/components/schemas/Client'
+                    $ref: '#/components/schemas/StaffMember'
+                  accountProvisioning:
+                    type: object
+                    properties:
+                      email:
+                        type: string
+                      temporaryPassword:
+                        type: string
+
+  /v1/staff/{staffId}:
+    parameters:
+      - $ref: '#/components/parameters/StaffId'
+    get:
+      tags: [Staff]
+      summary: Get a staff member by ID
+      operationId: getStaff
+      responses:
+        '200':
+          description: Staff member
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
         '404':
-          description: Client not found
+          $ref: '#/components/responses/NotFound'
     patch:
-      tags: [Clients]
-      summary: Update a client (partial update)
-      operationId: updateClient
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-            format: uuid
+      tags: [Staff]
+      summary: Update a staff member
+      operationId: updateStaff
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateClientRequest'
+              type: object
       responses:
         '200':
-          description: Client updated
+          description: Staff member updated
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  item:
-                    $ref: '#/components/schemas/Client'
-        '404':
-          description: Client not found
-    delete:
-      tags: [Clients]
-      summary: Delete (archive) a client
-      operationId: deleteClient
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-            format: uuid
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/staff/{staffId}/availability:
+    parameters:
+      - $ref: '#/components/parameters/StaffId'
+    get:
+      tags: [Staff]
+      summary: Get a staff member's availability schedule
+      operationId: getStaffAvailability
       responses:
         '200':
-          description: Client archived (status set to inactive)
+          description: Availability schedule
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  item:
-                    $ref: '#/components/schemas/Client'
-        '404':
-          description: Client not found
-  /v1/appointments:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/staff/{staffId}/account-actions:
+    parameters:
+      - $ref: '#/components/parameters/StaffId'
     post:
-      tags: [Appointments]
-      summary: Schedule an appointment
-      operationId: createAppointment
+      tags: [Staff]
+      summary: Perform an account action (unlock, reset-password, deactivate)
+      operationId: runStaffAccountAction
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateAppointmentRequest'
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [unlock, reset-password, deactivate]
+      responses:
+        '200':
+          description: Action performed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /v1/staff/{staffId}/licenses:
+    parameters:
+      - $ref: '#/components/parameters/StaffId'
+    get:
+      tags: [Staff]
+      summary: List licenses for a staff member
+      operationId: listStaffLicenses
+      responses:
+        '200':
+          description: License list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Staff]
+      summary: Add a license to a staff member
+      operationId: createStaffLicense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [licenseType, licenseNumber]
+              properties:
+                licenseType:
+                  type: string
+                licenseNumber:
+                  type: string
+                issuedState:
+                  type: string
+                issuedAt:
+                  type: string
+                  format: date
+                expiresAt:
+                  type: string
+                  format: date
       responses:
         '201':
-          description: Appointment scheduled
+          description: License created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Appointment'
-  /v1/appointment-types:
-    get:
-      tags: [Appointments]
-      summary: List supported appointment types
-      operationId: listAppointmentTypes
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/staff/{staffId}/licenses/{licenseId}:
+    parameters:
+      - $ref: '#/components/parameters/StaffId'
+      - in: path
+        name: licenseId
+        required: true
+        schema:
+          type: string
+    patch:
+      tags: [Staff]
+      summary: Update a staff license
+      operationId: updateStaffLicense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
       responses:
         '200':
-          description: Appointment type list
+          description: License updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    delete:
+      tags: [Staff]
+      summary: Delete a staff license
+      operationId: deleteStaffLicense
+      responses:
+        '200':
+          description: License deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /v1/staff/{staffId}/certifications:
+    parameters:
+      - $ref: '#/components/parameters/StaffId'
+    get:
+      tags: [Staff]
+      summary: List certifications for a staff member
+      operationId: listStaffCertifications
+      responses:
+        '200':
+          description: Certification list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Staff]
+      summary: Add a certification to a staff member
+      operationId: createStaffCertification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Certification created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/staff/{staffId}/certifications/{certId}:
+    parameters:
+      - $ref: '#/components/parameters/StaffId'
+      - in: path
+        name: certId
+        required: true
+        schema:
+          type: string
+    patch:
+      tags: [Staff]
+      summary: Update a certification
+      operationId: updateStaffCertification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Certification updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    delete:
+      tags: [Staff]
+      summary: Delete a certification
+      operationId: deleteStaffCertification
+      responses:
+        '200':
+          description: Certification deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /v1/staff/{staffId}/specialty-profile:
+    parameters:
+      - $ref: '#/components/parameters/StaffId'
+    get:
+      tags: [Staff]
+      summary: Get the specialty profile for a staff member
+      operationId: getStaffSpecialtyProfile
+      responses:
+        '200':
+          description: Specialty profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Staff]
+      summary: Update the specialty profile
+      operationId: updateStaffSpecialtyProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Specialty profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/staff/{staffId}/employment:
+    parameters:
+      - $ref: '#/components/parameters/StaffId'
+    get:
+      tags: [Staff]
+      summary: Get employment record for a staff member
+      operationId: getStaffEmployment
+      responses:
+        '200':
+          description: Employment record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Staff]
+      summary: Update the employment record
+      operationId: updateStaffEmployment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Employment record updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/staff/{staffId}/faith-profile:
+    parameters:
+      - $ref: '#/components/parameters/StaffId'
+    get:
+      tags: [Staff]
+      summary: Get the faith profile for a staff member
+      operationId: getStaffFaithProfile
+      responses:
+        '200':
+          description: Faith profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Staff]
+      summary: Update the faith profile
+      operationId: updateStaffFaithProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Faith profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  # ── Practices ────────────────────────────────────────────────────────────────
+
+  /v1/practices:
+    get:
+      tags: [Practices]
+      summary: List practices for the current tenant
+      operationId: listPractices
+      responses:
+        '200':
+          description: Practice list
           content:
             application/json:
               schema:
@@ -214,11 +2290,168 @@ paths:
                   items:
                     type: array
                     items:
-                      $ref: '#/components/schemas/AppointmentType'
-  /v1/documents/templates:
+                      $ref: '#/components/schemas/Practice'
+    post:
+      tags: [Practices]
+      summary: Create a practice
+      operationId: createPractice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name:
+                  type: string
+                type:
+                  type: string
+                timezone:
+                  type: string
+                faithTradition:
+                  type: string
+                contactEmail:
+                  type: string
+                  format: email
+                contactPhone:
+                  type: string
+      responses:
+        '201':
+          description: Practice created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/practices/{practiceId}:
+    parameters:
+      - $ref: '#/components/parameters/PracticeId'
+    get:
+      tags: [Practices]
+      summary: Get a practice by ID
+      operationId: getPractice
+      responses:
+        '200':
+          description: Practice profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    $ref: '#/components/schemas/Practice'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Practices]
+      summary: Update a practice
+      operationId: updatePractice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Practice updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/locations:
+    get:
+      tags: [Practices]
+      summary: List practice locations
+      operationId: listLocations
+      responses:
+        '200':
+          description: Location list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Practices]
+      summary: Create a practice location
+      operationId: createLocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                address:
+                  type: string
+                timezone:
+                  type: string
+      responses:
+        '201':
+          description: Location created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/locations/{locationId}:
+    parameters:
+      - in: path
+        name: locationId
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Practices]
+      summary: Get a location by ID
+      operationId: getLocation
+      responses:
+        '200':
+          description: Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Practices]
+      summary: Update a location
+      operationId: updateLocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Location updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    delete:
+      tags: [Practices]
+      summary: Delete a location
+      operationId: deleteLocation
+      responses:
+        '200':
+          description: Location deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  # ── Documents ────────────────────────────────────────────────────────────────
+
+  /v1/document-templates:
     get:
       tags: [Documents]
-      summary: List published document templates
+      summary: List document templates
       operationId: listDocumentTemplates
       responses:
         '200':
@@ -226,30 +2459,1945 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/DocumentTemplate'
-  /v1/audit-events:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Documents]
+      summary: Create a document template
+      operationId: createDocumentTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, templateType, audience]
+              properties:
+                title:
+                  type: string
+                templateType:
+                  type: string
+                audience:
+                  type: string
+                  enum: [client, staff, both]
+                templateKey:
+                  type: string
+                versionNumber:
+                  type: integer
+      responses:
+        '201':
+          description: Template created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/document-templates/{templateId}:
+    parameters:
+      - in: path
+        name: templateId
+        required: true
+        schema:
+          type: string
     get:
-      tags: [Audit]
-      summary: List audit events visible to the caller
-      operationId: listAuditEvents
+      tags: [Documents]
+      summary: Get a document template
+      operationId: getDocumentTemplate
+      responses:
+        '200':
+          description: Template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Documents]
+      summary: Update a document template
+      operationId: updateDocumentTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Template updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    delete:
+      tags: [Documents]
+      summary: Delete a document template
+      operationId: deleteDocumentTemplate
+      responses:
+        '200':
+          description: Template deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /v1/document-assignments:
+    get:
+      tags: [Documents]
+      summary: List document assignments
+      operationId: listDocumentAssignments
       parameters:
         - in: query
-          name: actorId
+          name: clientId
           schema:
             type: string
-            format: uuid
         - in: query
-          name: targetType
+          name: assigneeId
+          schema:
+            type: string
+        - in: query
+          name: templateId
           schema:
             type: string
       responses:
         '200':
-          description: Audit event list
+          description: Assignment list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Documents]
+      summary: Assign a document to a client or staff member
+      operationId: createDocumentAssignment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId, templateId]
+              properties:
+                clientId:
+                  type: string
+                templateId:
+                  type: string
+                assigneeId:
+                  type: string
+                assignedAt:
+                  type: string
+                  format: date-time
+                dueAt:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: Assignment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  # ── Forms ────────────────────────────────────────────────────────────────────
+
+  /v1/forms/catalog:
+    get:
+      tags: [Forms]
+      summary: List the clinical forms catalog
+      operationId: listFormsCatalog
+      parameters:
+        - in: query
+          name: includeInactive
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Forms catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Forms]
+      summary: Add a form to the catalog
+      operationId: createFormCatalogItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [formKey, title, category]
+              properties:
+                formKey:
+                  type: string
+                title:
+                  type: string
+                category:
+                  type: string
+                isStandardOnSignup:
+                  type: boolean
+                isActive:
+                  type: boolean
+      responses:
+        '201':
+          description: Form added to catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Forms]
+      summary: Update a catalog form (by id or formKey)
+      operationId: updateFormCatalogItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Form updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/forms/assignments:
+    get:
+      tags: [Forms]
+      summary: List form assignments
+      operationId: listFormAssignments
+      parameters:
+        - in: query
+          name: clientId
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Assignment list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Forms]
+      summary: Assign a form to a client
+      operationId: createFormAssignment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId, formKey]
+              properties:
+                clientId:
+                  type: string
+                formKey:
+                  type: string
+                assignedAt:
+                  type: string
+                  format: date-time
+                dueAt:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: Form assigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/forms/submissions:
+    get:
+      tags: [Forms]
+      summary: List form submissions
+      operationId: listFormSubmissions
+      parameters:
+        - in: query
+          name: clientId
+          schema:
+            type: string
+        - in: query
+          name: formKey
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Submission list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Forms]
+      summary: Submit a completed form
+      operationId: createFormSubmission
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assignmentId, responses]
+              properties:
+                assignmentId:
+                  type: string
+                responses:
+                  type: object
+                submittedAt:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: Form submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/forms/client-overview:
+    get:
+      tags: [Forms]
+      summary: Get an aggregated forms overview for a client
+      operationId: getFormsClientOverview
+      parameters:
+        - in: query
+          name: clientId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Client forms overview
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ── Inventories ──────────────────────────────────────────────────────────────
+
+  /v1/inventory-definitions:
+    get:
+      tags: [Inventories]
+      summary: List inventory definitions
+      operationId: listInventoryDefinitions
+      responses:
+        '200':
+          description: Inventory definition list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Inventories]
+      summary: Create an inventory definition
+      operationId: createInventoryDefinition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, category]
+              properties:
+                name:
+                  type: string
+                category:
+                  type: string
+                description:
+                  type: string
+                scoringMethod:
+                  type: string
+      responses:
+        '201':
+          description: Definition created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/inventory-definitions/{definitionId}:
+    parameters:
+      - in: path
+        name: definitionId
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Inventories]
+      summary: Get an inventory definition
+      operationId: getInventoryDefinition
+      responses:
+        '200':
+          description: Inventory definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Inventories]
+      summary: Update an inventory definition
+      operationId: updateInventoryDefinition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Definition updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    delete:
+      tags: [Inventories]
+      summary: Delete an inventory definition
+      operationId: deleteInventoryDefinition
+      responses:
+        '200':
+          description: Definition deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /v1/inventory-assignments:
+    get:
+      tags: [Inventories]
+      summary: List inventory assignments
+      operationId: listInventoryAssignments
+      responses:
+        '200':
+          description: Assignment list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Inventories]
+      summary: Assign an inventory to a client
+      operationId: createInventoryAssignment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Assignment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Inventories]
+      summary: Update an inventory assignment
+      operationId: updateInventoryAssignment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Assignment updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  # ── Billing ──────────────────────────────────────────────────────────────────
+
+  /v1/billing/service-codes:
+    get:
+      tags: [Billing]
+      summary: List billing service codes
+      operationId: listServiceCodes
+      responses:
+        '200':
+          description: Service code list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Billing]
+      summary: Create a service code
+      operationId: createServiceCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, name]
+              properties:
+                code:
+                  type: string
+                name:
+                  type: string
+                category:
+                  type: string
+                defaultDurationMinutes:
+                  type: integer
+                status:
+                  type: string
+                  enum: [active, inactive]
+      responses:
+        '201':
+          description: Service code created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/billing/fee-schedules:
+    get:
+      tags: [Billing]
+      summary: List fee schedules
+      operationId: listFeeSchedules
+      responses:
+        '200':
+          description: Fee schedule list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Billing]
+      summary: Create a fee schedule
+      operationId: createFeeSchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                effective:
+                  type: string
+                  format: date
+                entries:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        '201':
+          description: Fee schedule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/billing/invoices:
+    get:
+      tags: [Billing]
+      summary: List invoices
+      operationId: listInvoices
+      parameters:
+        - in: query
+          name: clientId
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Invoice list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Billing]
+      summary: Create an invoice
+      operationId: createInvoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId, lineItems]
+              properties:
+                clientId:
+                  type: string
+                lineItems:
+                  type: array
+                  items:
+                    type: object
+                dueDate:
+                  type: string
+                  format: date
+      responses:
+        '201':
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/billing/invoices/{invoiceId}:
+    parameters:
+      - in: path
+        name: invoiceId
+        required: true
+        schema:
+          type: string
+    patch:
+      tags: [Billing]
+      summary: Update an invoice
+      operationId: updateInvoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Invoice updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/billing/payments:
+    get:
+      tags: [Billing]
+      summary: List payments
+      operationId: listPayments
+      parameters:
+        - in: query
+          name: invoiceId
+          schema:
+            type: string
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Payment list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Billing]
+      summary: Record a payment
+      operationId: createPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invoiceId, amount]
+              properties:
+                invoiceId:
+                  type: string
+                amount:
+                  type: number
+                method:
+                  type: string
+                  enum: [cash, check, credit_card, ach, insurance, other]
+                processedAt:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: Payment recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/billing/superbills:
+    get:
+      tags: [Billing]
+      summary: List superbills
+      operationId: listSuperbills
+      responses:
+        '200':
+          description: Superbill list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Billing]
+      summary: Generate a superbill
+      operationId: createSuperbill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId, appointments]
+              properties:
+                clientId:
+                  type: string
+                appointments:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Superbill created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/billing/superbills/{superbillId}:
+    parameters:
+      - in: path
+        name: superbillId
+        required: true
+        schema:
+          type: string
+    patch:
+      tags: [Billing]
+      summary: Update a superbill
+      operationId: updateSuperbill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Superbill updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/billing/claims:
+    get:
+      tags: [Billing]
+      summary: List insurance claims
+      operationId: listClaims
+      responses:
+        '200':
+          description: Claim list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Billing]
+      summary: Submit an insurance claim
+      operationId: createClaim
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Claim submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/billing/claims/{claimId}:
+    parameters:
+      - in: path
+        name: claimId
+        required: true
+        schema:
+          type: string
+    patch:
+      tags: [Billing]
+      summary: Update a claim
+      operationId: updateClaim
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Claim updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/billing/reports/aging:
+    get:
+      tags: [Billing]
+      summary: Accounts receivable aging report
+      operationId: getBillingAgingReport
+      parameters:
+        - in: query
+          name: days
+          schema:
+            type: integer
+            default: 30
+        - in: query
+          name: minAmount
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Aging report
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ── Portal ───────────────────────────────────────────────────────────────────
+
+  /v1/portal/overview:
+    get:
+      tags: [Portal]
+      summary: Client portal dashboard summary
+      operationId: getPortalOverview
+      responses:
+        '200':
+          description: Portal overview
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/portal/public-config:
+    get:
+      tags: [Portal]
+      summary: Public portal configuration (no authentication required)
+      operationId: getPortalPublicConfig
+      security: []
+      responses:
+        '200':
+          description: Public config
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/portal/settings:
+    get:
+      tags: [Portal]
+      summary: Get portal settings
+      operationId: getPortalSettings
+      responses:
+        '200':
+          description: Portal settings
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/portal/accounts:
+    get:
+      tags: [Portal]
+      summary: Get a portal account
+      operationId: getPortalAccount
+      parameters:
+        - in: query
+          name: clientId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Portal account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    post:
+      tags: [Portal]
+      summary: Create a portal account for a client
+      operationId: createPortalAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId, email]
+              properties:
+                clientId:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                temporaryPassword:
+                  type: string
+      responses:
+        '201':
+          description: Portal account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Portal]
+      summary: Update a portal account
+      operationId: updatePortalAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Portal account updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/portal/profile:
+    get:
+      tags: [Portal]
+      summary: Get the client's portal profile
+      operationId: getPortalProfile
+      responses:
+        '200':
+          description: Portal profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Portal]
+      summary: Update the client's portal profile
+      operationId: updatePortalProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preferredName:
+                  type: string
+                contactEmail:
+                  type: string
+                  format: email
+                contactPhone:
+                  type: string
+                contactPreferences:
+                  type: object
+      responses:
+        '200':
+          description: Portal profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/portal/intake-packets:
+    get:
+      tags: [Portal]
+      summary: List intake packets assigned to the client
+      operationId: getPortalIntakePackets
+      responses:
+        '200':
+          description: Intake packet list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    patch:
+      tags: [Portal]
+      summary: Update a portal intake packet (client-side)
+      operationId: updatePortalIntakePacket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Intake packet updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/portal/documents:
+    get:
+      tags: [Portal]
+      summary: List documents assigned to the client in the portal
+      operationId: getPortalDocuments
+      responses:
+        '200':
+          description: Document list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    patch:
+      tags: [Portal]
+      summary: Update a portal document record
+      operationId: updatePortalDocument
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Document updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/portal/uploads:
+    post:
+      tags: [Portal]
+      summary: Upload a file to the portal
+      operationId: createPortalUpload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Upload recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/portal/appointment-requests:
+    get:
+      tags: [Portal]
+      summary: List appointment requests from the client portal
+      operationId: listPortalAppointmentRequests
+      responses:
+        '200':
+          description: Appointment request list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Portal]
+      summary: Submit an appointment request
+      operationId: createPortalAppointmentRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preferredDates:
+                  type: array
+                  items:
+                    type: string
+                    format: date-time
+                appointmentType:
+                  type: string
+                notes:
+                  type: string
+      responses:
+        '201':
+          description: Appointment request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Portal]
+      summary: Update an appointment request
+      operationId: updatePortalAppointmentRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Appointment request updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/portal/messages:
+    get:
+      tags: [Portal]
+      summary: List portal messages
+      operationId: listPortalMessages
+      responses:
+        '200':
+          description: Message list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Portal]
+      summary: Send a portal message
+      operationId: createPortalMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/portal/resources:
+    get:
+      tags: [Portal]
+      summary: List educational resources available to the client
+      operationId: listPortalResources
+      responses:
+        '200':
+          description: Resource list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+
+  /v1/portal/data-rights:
+    get:
+      tags: [Portal]
+      summary: List data rights requests (GDPR/CCPA)
+      operationId: listPortalDataRights
+      responses:
+        '200':
+          description: Data rights request list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Portal]
+      summary: Submit a data rights request
+      operationId: createPortalDataRightsRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestType]
+              properties:
+                requestType:
+                  type: string
+                  enum: [access, delete, portability, correction]
+                reason:
+                  type: string
+      responses:
+        '201':
+          description: Data rights request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/portal/data-rights/review:
+    get:
+      tags: [Portal]
+      summary: Review pending data rights requests (practice_admin+)
+      operationId: reviewPortalDataRights
+      responses:
+        '200':
+          description: Pending requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+
+  /v1/portal/public-requests:
+    get:
+      tags: [Portal]
+      summary: List public intake requests
+      operationId: listPortalPublicRequests
+      responses:
+        '200':
+          description: Public request list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Portal]
+      summary: Submit a public intake request (no authentication required)
+      operationId: createPortalPublicRequest
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [firstName, lastName, email]
+              properties:
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                phoneNumber:
+                  type: string
+                preferredAppointmentType:
+                  type: string
+                notes:
+                  type: string
+      responses:
+        '201':
+          description: Public request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/portal/public-requests/convert:
+    post:
+      tags: [Portal]
+      summary: Convert a public intake request into an authenticated client account
+      operationId: convertPortalPublicRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Request converted to client
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  # ── Faith ────────────────────────────────────────────────────────────────────
+
+  /v1/faith/overview:
+    get:
+      tags: [Faith]
+      summary: Faith integration metrics and usage overview
+      operationId: getFaithOverview
+      responses:
+        '200':
+          description: Faith overview
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/faith/note-templates:
+    get:
+      tags: [Faith]
+      summary: List pre-built faith-integrated progress note templates
+      operationId: listFaithNoteTemplates
+      security: []
+      responses:
+        '200':
+          description: Note template list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+
+  /v1/faith/treatment-goals:
+    get:
+      tags: [Faith]
+      summary: List example faith-integrated treatment goals
+      operationId: listFaithTreatmentGoals
+      security: []
+      responses:
+        '200':
+          description: Treatment goal list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+
+  /v1/faith/consent-variants:
+    get:
+      tags: [Faith]
+      summary: List consent form variants for different faith traditions
+      operationId: listFaithConsentVariants
+      security: []
+      responses:
+        '200':
+          description: Consent variant list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+
+  /v1/faith/resources:
+    get:
+      tags: [Faith]
+      summary: List faith-based counseling resources and scripture references
+      operationId: listFaithResources
+      responses:
+        '200':
+          description: Faith resource list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+
+  /v1/faith/inventories:
+    get:
+      tags: [Faith]
+      summary: List faith-based assessment inventories
+      operationId: listFaithInventories
+      responses:
+        '200':
+          description: Faith inventory list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+
+  /v1/faith/referral-coordination:
+    get:
+      tags: [Faith]
+      summary: Clergy and faith leader referral coordination data
+      operationId: getFaithReferralCoordination
+      responses:
+        '200':
+          description: Referral coordination data
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/faith/language-preferences:
+    get:
+      tags: [Faith]
+      summary: Get localized faith and theological terminology
+      operationId: getFaithLanguagePreferences
+      parameters:
+        - in: query
+          name: locale
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Language preferences
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ── Offerings ────────────────────────────────────────────────────────────────
+
+  /v1/offerings/summary:
+    get:
+      tags: [Offerings]
+      summary: Get a summary of practice offerings
+      operationId: getOfferingsSummary
+      responses:
+        '200':
+          description: Offerings summary
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/offerings:
+    get:
+      tags: [Offerings]
+      summary: List service offerings
+      operationId: listOfferings
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [active, archived]
+        - in: query
+          name: category
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Offering list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Offerings]
+      summary: Create a service offering
+      operationId: createOffering
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                serviceCode:
+                  type: string
+                pricing:
+                  type: object
+      responses:
+        '201':
+          description: Offering created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/offerings/{offeringId}:
+    parameters:
+      - in: path
+        name: offeringId
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Offerings]
+      summary: Get an offering by ID
+      operationId: getOffering
+      responses:
+        '200':
+          description: Offering
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Offerings]
+      summary: Update an offering
+      operationId: updateOffering
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Offering updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    delete:
+      tags: [Offerings]
+      summary: Delete an offering
+      operationId: deleteOffering
+      responses:
+        '200':
+          description: Offering deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  # ── Workflows ────────────────────────────────────────────────────────────────
+
+  /v1/workflows/recommendations/state:
+    get:
+      tags: [Workflows]
+      summary: Get the current workflow recommendation state for a client
+      operationId: getWorkflowRecommendationsState
+      parameters:
+        - in: query
+          name: clientId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Recommendation state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    patch:
+      tags: [Workflows]
+      summary: Update a workflow recommendation state
+      operationId: updateWorkflowRecommendationState
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recommendationId, state]
+              properties:
+                recommendationId:
+                  type: string
+                state:
+                  type: string
+                metadata:
+                  type: object
+      responses:
+        '200':
+          description: Recommendation state updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/workflows/recommendations/state/{recommendationId}:
+    parameters:
+      - in: path
+        name: recommendationId
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Workflows]
+      summary: Get a single workflow recommendation by ID
+      operationId: getWorkflowRecommendation
+      responses:
+        '200':
+          description: Recommendation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    delete:
+      tags: [Workflows]
+      summary: Delete a workflow recommendation
+      operationId: deleteWorkflowRecommendation
+      responses:
+        '200':
+          description: Recommendation deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  # ── Audit ────────────────────────────────────────────────────────────────────
+
+  /v1/audit/intelligence:
+    get:
+      tags: [Audit]
+      summary: Query audit events with statistical breakdown (practice_admin+)
+      operationId: getAuditIntelligence
+      parameters:
+        - in: query
+          name: days
+          schema:
+            type: integer
+            default: 7
+            enum: [7, 30, 90]
+          description: Time window in days
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 100
+            maximum: 200
+          description: Maximum number of events to return
+        - in: query
+          name: action
+          schema:
+            type: string
+          description: Filter by action name (partial match)
+        - in: query
+          name: actorRole
+          schema:
+            type: string
+            enum: [platform_admin, practice_owner, practice_admin, counselor, scheduler_biller, system]
+        - in: query
+          name: result
+          schema:
+            type: string
+            enum: [success, denied, error]
+        - in: query
+          name: tenantId
+          schema:
+            type: string
+          description: Filter by tenant — only available to platform_admin
+      responses:
+        '200':
+          description: Audit intelligence response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditIntelligenceResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /v1/audit/intelligence/observations:
+    post:
+      tags: [Audit]
+      summary: Generate AI-powered observations from an audit intelligence result (requires ANTHROPIC_API_KEY)
+      operationId: generateAuditObservations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [summary, events]
+              properties:
+                summary:
+                  $ref: '#/components/schemas/AuditSummary'
+                events:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/AuditEvent'
+                filters:
+                  type: object
+      responses:
+        '200':
+          description: AI observations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  observations:
+                    type: array
+                    items:
+                      type: string
+        '503':
+          description: AI service not configured (ANTHROPIC_API_KEY missing)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Reporting ────────────────────────────────────────────────────────────────
+
+  /v1/reporting/overview:
+    get:
+      tags: [Reporting]
+      summary: Practice reporting overview (practice_admin+)
+      operationId: getReportingOverview
+      parameters:
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Reporting overview
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/operations/summary:
+    get:
+      tags: [Reporting]
+      summary: Daily operations summary
+      operationId: getOperationsSummary
+      parameters:
+        - in: query
+          name: timezone
+          schema:
+            type: string
+          description: IANA timezone
+        - in: query
+          name: counselorId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Operations summary
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ── Platform ─────────────────────────────────────────────────────────────────
+
+  /v1/platform/overview:
+    get:
+      tags: [Platform]
+      summary: Platform-wide metrics and health (platform_admin only)
+      operationId: getPlatformOverview
+      responses:
+        '200':
+          description: Platform overview
+          content:
+            application/json:
+              schema:
+                type: object
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /v1/platform/tenant-provisioning:
+    get:
+      tags: [Platform]
+      summary: List tenant provisioning requests
+      operationId: listTenantProvisioning
+      responses:
+        '200':
+          description: Provisioning request list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Platform]
+      summary: Create a tenant provisioning request
+      operationId: createTenantProvisioning
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestedTenantId, requestedPracticeName, ownerEmail]
+              properties:
+                requestedTenantId:
+                  type: string
+                requestedPracticeName:
+                  type: string
+                ownerEmail:
+                  type: string
+                  format: email
+                status:
+                  type: string
+      responses:
+        '201':
+          description: Provisioning request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/platform/impersonation-sessions:
+    get:
+      tags: [Platform]
+      summary: List platform impersonation sessions
+      operationId: listImpersonationSessions
+      responses:
+        '200':
+          description: Impersonation session list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Platform]
+      summary: Start an impersonation session
+      operationId: createImpersonationSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantId, targetUserId]
+              properties:
+                tenantId:
+                  type: string
+                targetUserId:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        '201':
+          description: Impersonation session started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/platform/impersonation-sessions/{sessionId}:
+    parameters:
+      - in: path
+        name: sessionId
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Platform]
+      summary: Get an impersonation session
+      operationId: getImpersonationSession
+      responses:
+        '200':
+          description: Impersonation session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Platform]
+      summary: End an impersonation session
+      operationId: endImpersonationSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Session ended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/platform/data-exports:
+    get:
+      tags: [Platform]
+      summary: List data export jobs
+      operationId: listDataExports
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [queued, processing, completed, failed]
+      responses:
+        '200':
+          description: Data export job list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Platform]
+      summary: Create a data export job
+      operationId: createDataExport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantId, exportType]
+              properties:
+                tenantId:
+                  type: string
+                exportType:
+                  type: string
+                format:
+                  type: string
+                  enum: [json, csv]
+      responses:
+        '201':
+          description: Export job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  /v1/platform/retention-policies:
+    get:
+      tags: [Platform]
+      summary: List data retention policies
+      operationId: listRetentionPolicies
+      responses:
+        '200':
+          description: Retention policy list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemsResponse'
+    post:
+      tags: [Platform]
+      summary: Create or update a retention policy
+      operationId: createRetentionPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Retention policy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+
+  # ── Reference ────────────────────────────────────────────────────────────────
+
+  /v1/reference/dsm5-tr:
+    get:
+      tags: [Reference]
+      summary: Search DSM-5-TR diagnosis codes
+      operationId: searchDsm5Tr
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+            minLength: 2
+          description: Search query
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: DSM-5-TR results
           content:
             application/json:
               schema:
@@ -258,14 +4406,286 @@ paths:
                   items:
                     type: array
                     items:
-                      $ref: '#/components/schemas/AuditEvent'
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                        title:
+                          type: string
+                        description:
+                          type: string
+
+  # ── i18n ─────────────────────────────────────────────────────────────────────
+
+  /v1/i18n/locales:
+    get:
+      tags: [i18n]
+      summary: List supported locales
+      operationId: listLocales
+      security: []
+      responses:
+        '200':
+          description: Locale list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                        label:
+                          type: string
+                        nativeName:
+                          type: string
+
+  /v1/i18n/catalog:
+    get:
+      tags: [i18n]
+      summary: Get the full translation catalog for a locale
+      operationId: getI18nCatalog
+      security: []
+      parameters:
+        - in: query
+          name: locale
+          schema:
+            type: string
+            default: en
+      responses:
+        '200':
+          description: Translation catalog
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/i18n/catalog/{locale}:
+    parameters:
+      - in: path
+        name: locale
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [i18n]
+      summary: Get translation catalog for a specific locale
+      operationId: getI18nCatalogForLocale
+      security: []
+      responses:
+        '200':
+          description: Translation catalog
+          content:
+            application/json:
+              schema:
+                type: object
+    patch:
+      tags: [i18n]
+      summary: Update translation entries for a locale
+      operationId: updateI18nCatalog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Catalog updated
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/i18n/settings/{locale}:
+    parameters:
+      - in: path
+        name: locale
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [i18n]
+      summary: Get locale-specific settings (date format, currency, etc.)
+      operationId: getI18nSettings
+      security: []
+      responses:
+        '200':
+          description: Locale settings
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/i18n/translate:
+    post:
+      tags: [i18n]
+      summary: Auto-translate a string to a target language
+      operationId: autoTranslate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text, targetLanguage]
+              properties:
+                text:
+                  type: string
+                targetLanguage:
+                  type: string
+                context:
+                  type: string
+      responses:
+        '200':
+          description: Translation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  translated:
+                    type: string
+                  targetLanguage:
+                    type: string
+
+  # ── Telemetry ────────────────────────────────────────────────────────────────
+
+  /v1/telemetry/vitals:
+    post:
+      tags: [Telemetry]
+      summary: Submit frontend Web Vitals metrics
+      operationId: submitTelemetryVitals
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                metrics:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      value:
+                        type: number
+                      unit:
+                        type: string
+                pageUrl:
+                  type: string
+      responses:
+        '200':
+          description: Vitals recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /v1/telemetry/events:
+    post:
+      tags: [Telemetry]
+      summary: Submit frontend interaction events
+      operationId: submitTelemetryEvents
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                events:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      timestamp:
+                        type: string
+                        format: date-time
+                      metadata:
+                        type: object
+      responses:
+        '200':
+          description: Events recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  # ── Monitoring ───────────────────────────────────────────────────────────────
+
+  /v1/monitoring/db:
+    get:
+      tags: [Monitoring]
+      summary: Database connection health
+      operationId: monitoringDb
+      responses:
+        '200':
+          description: Database health status
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/monitoring/observability-stack:
+    get:
+      tags: [Monitoring]
+      summary: Observability stack health (OpenTelemetry, Prometheus)
+      operationId: monitoringObservabilityStack
+      responses:
+        '200':
+          description: Observability stack status
+          content:
+            application/json:
+              schema:
+                type: object
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COMPONENTS
+# ─────────────────────────────────────────────────────────────────────────────
 components:
+
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: session
+      description: >
+        HttpOnly session cookie obtained via POST /v1/auth/login.
+        Staff sessions use the "session" cookie; portal client sessions use "portal_session".
+        Idle timeout: 3 minutes. Absolute max: 8 hours (4 hours for platform_admin).
+
   parameters:
+    ClientId:
+      in: path
+      name: clientId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    StaffId:
+      in: path
+      name: staffId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AppointmentId:
+      in: path
+      name: appointmentId
+      required: true
+      schema:
+        type: string
+        format: uuid
     PracticeId:
       in: path
       name: practiceId
@@ -273,10 +4693,128 @@ components:
       schema:
         type: string
         format: uuid
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters or body
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: No active session — authenticate via POST /v1/auth/login
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Authenticated but insufficient role for this operation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
   schemas:
+
+    # ── Primitives ──────────────────────────────────────────────────────────────
+
+    OkResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    ItemResponse:
+      type: object
+      properties:
+        item:
+          type: object
+
+    ItemsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+
+    # ── Auth ────────────────────────────────────────────────────────────────────
+
+    SessionProfile:
+      type: object
+      properties:
+        staffId:
+          type: string
+        staffAccountId:
+          type: string
+        clientId:
+          type: string
+          nullable: true
+        portalAccountId:
+          type: string
+          nullable: true
+        tenantId:
+          type: string
+        role:
+          type: string
+          enum: [platform_admin, practice_owner, practice_admin, scheduler_biller, supervisor, counselor, intern, client]
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+
+    # ── System ──────────────────────────────────────────────────────────────────
+
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        version:
+          type: string
+        service:
+          type: string
+
+    ReadinessResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ready, degraded, not_ready]
+        httpStatus:
+          type: integer
+        checks:
+          type: object
+          properties:
+            database:
+              type: object
+              properties:
+                status:
+                  type: string
+
+    # ── Core domain ─────────────────────────────────────────────────────────────
+
     Practice:
       type: object
-      required: [id, tenantId, name, timezone]
+      required: [id, tenantId, name]
       properties:
         id:
           type: string
@@ -286,8 +4824,24 @@ components:
           format: uuid
         name:
           type: string
+        type:
+          type: string
         timezone:
           type: string
+        faithTradition:
+          type: string
+        contactEmail:
+          type: string
+          format: email
+        contactPhone:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
     StaffMember:
       type: object
       required: [id, tenantId, firstName, lastName, role]
@@ -304,6 +4858,63 @@ components:
           type: string
         role:
           type: string
+          enum: [platform_admin, practice_owner, practice_admin, scheduler_biller, supervisor, counselor, intern]
+        licenseType:
+          type: string
+        licenseNumber:
+          type: string
+        supervisionStatus:
+          type: string
+        supervisingStaffId:
+          type: string
+        locationIds:
+          type: array
+          items:
+            type: string
+        email:
+          type: string
+          format: email
+        hasAccount:
+          type: boolean
+        accountLocked:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateStaffMemberRequest:
+      type: object
+      required: [firstName, lastName, role]
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+          enum: [practice_owner, practice_admin, scheduler_biller, supervisor, counselor, intern]
+        licenseType:
+          type: string
+        licenseNumber:
+          type: string
+        supervisionStatus:
+          type: string
+        supervisingStaffId:
+          type: string
+        locationIds:
+          type: array
+          items:
+            type: string
+        email:
+          type: string
+          format: email
+        initialPassword:
+          type: string
+          minLength: 14
+
     Client:
       type: object
       required: [id, tenantId, firstName, lastName, status]
@@ -318,14 +4929,72 @@ components:
           type: string
         lastName:
           type: string
+        preferredName:
+          type: string
         status:
           type: string
           enum: [active, waitlist, inactive, discharged]
         faithBackground:
           type: string
+        highTouchpoint:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateClientRequest:
+      type: object
+      required: [firstName, lastName, status]
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        preferredName:
+          type: string
+        status:
+          type: string
+          enum: [active, waitlist, inactive, discharged]
+        faithBackground:
+          type: string
+        highTouchpoint:
+          type: boolean
+
+    UpdateClientRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        preferredName:
+          type: string
+        faithBackground:
+          type: string
+        status:
+          type: string
+          enum: [active, waitlist, inactive, discharged]
+
+    ClientItemResponse:
+      type: object
+      properties:
+        item:
+          $ref: '#/components/schemas/Client'
+
+    ClientListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Client'
+
     Appointment:
       type: object
-      required: [id, tenantId, clientId, startsAt, endsAt, status, appointmentType]
+      required: [id, tenantId, startsAt, endsAt, status, appointmentType]
       properties:
         id:
           type: string
@@ -351,102 +5020,25 @@ components:
         appointmentType:
           type: string
           enum: [intake_assessment, individual_therapy, couples_therapy, family_therapy, group_therapy]
+        timezone:
+          type: string
+        locationName:
+          type: string
         remoteSession:
           type: boolean
-    AppointmentType:
-      type: object
-      required: [code, label]
-      properties:
-        code:
-          type: string
-          enum: [intake_assessment, individual_therapy, couples_therapy, family_therapy, group_therapy]
-        label:
-          type: string
-    DocumentTemplate:
-      type: object
-      required: [id, tenantId, name, version, status]
-      properties:
-        id:
-          type: string
-          format: uuid
-        tenantId:
-          type: string
-          format: uuid
-        name:
-          type: string
-        version:
-          type: integer
-        status:
-          type: string
-          enum: [draft, published, archived]
-    AuditEvent:
-      type: object
-      required: [id, tenantId, action, targetType, targetId, occurredAt]
-      properties:
-        id:
-          type: string
-          format: uuid
-        tenantId:
-          type: string
-          format: uuid
-        actorId:
-          type: string
-          format: uuid
-        action:
-          type: string
-        targetType:
-          type: string
-        targetId:
-          type: string
-        occurredAt:
+        createdAt:
           type: string
           format: date-time
-        outcome:
+        updatedAt:
           type: string
-    CreateStaffMemberRequest:
-      type: object
-      required: [firstName, lastName, role]
-      properties:
-        firstName:
-          type: string
-        lastName:
-          type: string
-        role:
-          type: string
-        locationIds:
-          type: array
-          items:
-            type: string
-            format: uuid
-    CreateClientRequest:
-      type: object
-      required: [firstName, lastName]
-      properties:
-        firstName:
-          type: string
-        lastName:
-          type: string
-        preferredName:
-          type: string
-        faithBackground:
-          type: string
-        referralSourceId:
-          type: string
-          format: uuid
-    UpdateClientRequest:
+          format: date-time
+
+    AppointmentItemResponse:
       type: object
       properties:
-        firstName:
-          type: string
-        lastName:
-          type: string
-        preferredName:
-          type: string
-        faithBackground:
-          type: string
-        status:
-          type: string
-          enum: [active, waitlist, inactive, discharged]
+        item:
+          $ref: '#/components/schemas/Appointment'
+
     CreateAppointmentRequest:
       type: object
       required: [clientId, startsAt, endsAt]
@@ -457,17 +5049,154 @@ components:
         counselorId:
           type: string
           format: uuid
-        locationId:
-          type: string
-          format: uuid
-        appointmentType:
-          type: string
-          enum: [intake_assessment, individual_therapy, couples_therapy, family_therapy, group_therapy]
         startsAt:
           type: string
           format: date-time
         endsAt:
           type: string
           format: date-time
+        appointmentType:
+          type: string
+          enum: [intake_assessment, individual_therapy, couples_therapy, family_therapy, group_therapy]
+        status:
+          type: string
+          enum: [scheduled, checked-in, completed, cancelled, no-show]
+        timezone:
+          type: string
+        locationName:
+          type: string
         remoteSession:
           type: boolean
+        counselorName:
+          type: string
+
+    AppointmentType:
+      type: object
+      required: [code, label]
+      properties:
+        code:
+          type: string
+          enum: [intake_assessment, individual_therapy, couples_therapy, family_therapy, group_therapy]
+        label:
+          type: string
+
+    # ── Audit ───────────────────────────────────────────────────────────────────
+
+    AuditEvent:
+      type: object
+      required: [id, tenantId, action, targetType, targetId, occurredAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+        actorId:
+          type: string
+        actorRole:
+          type: string
+        actorType:
+          type: string
+          enum: [user, system, anonymous]
+        action:
+          type: string
+          description: Dot-notation action code, e.g. client.create
+        targetType:
+          type: string
+        targetId:
+          type: string
+        result:
+          type: string
+          enum: [success, denied, error, unknown]
+        reasonCode:
+          type: string
+          enum: [ok, rbac_denied, operation_failed, operation_error]
+        occurredAt:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+        sourceSurface:
+          type: string
+        sourceWorkflow:
+          type: string
+        systemComponent:
+          type: string
+
+    AuditSummary:
+      type: object
+      properties:
+        window:
+          type: object
+          properties:
+            days:
+              type: integer
+            from:
+              type: string
+              format: date-time
+            to:
+              type: string
+              format: date-time
+        total:
+          type: integer
+        byResult:
+          type: array
+          items:
+            type: object
+            properties:
+              result:
+                type: string
+              total:
+                type: integer
+        byAction:
+          type: array
+          items:
+            type: object
+            properties:
+              action:
+                type: string
+              total:
+                type: integer
+        byActorRole:
+          type: array
+          items:
+            type: object
+            properties:
+              actorRole:
+                type: string
+              total:
+                type: integer
+        byTargetType:
+          type: array
+          items:
+            type: object
+            properties:
+              targetType:
+                type: string
+              total:
+                type: integer
+
+    AuditIntelligenceResponse:
+      type: object
+      properties:
+        summary:
+          $ref: '#/components/schemas/AuditSummary'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        filters:
+          type: object
+          properties:
+            days:
+              type: integer
+            limit:
+              type: integer
+            action:
+              type: string
+            actorRole:
+              type: string
+            result:
+              type: string
+            tenantId:
+              type: string
