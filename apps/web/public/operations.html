@@ -376,6 +376,29 @@
       .audit-time-abs { font-size: 11px; color: #94a3b8; margin-top: 1px; white-space: nowrap; }
 
       .audit-empty { text-align: center; color: #94a3b8; padding: 40px; font-size: 13px; }
+
+      .audit-obs-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+      .audit-obs-item {
+        display: flex; gap: 10px; align-items: flex-start;
+        background: rgba(245,243,255,0.7); border: 1px solid rgba(109,40,217,0.1);
+        border-radius: 10px; padding: 12px 14px; font-size: 13.5px; line-height: 1.6; color: #1e293b;
+      }
+      .audit-obs-bullet {
+        flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+        background: #6d28d9; color: #fff; font-size: 11px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center; margin-top: 1px;
+      }
+      .audit-obs-loading {
+        display: flex; align-items: center; gap: 10px;
+        color: #7c3aed; font-size: 13px; padding: 8px 0;
+      }
+      .audit-obs-spinner {
+        width: 16px; height: 16px; border: 2px solid rgba(109,40,217,0.25);
+        border-top-color: #6d28d9; border-radius: 50%; animation: obs-spin .7s linear infinite;
+      }
+      @keyframes obs-spin { to { transform: rotate(360deg); } }
+      .audit-obs-error { font-size: 13px; color: #b91c1c; padding: 4px 0; }
+
       .audit-zero-state { text-align: center; padding: 60px 20px; }
       .audit-zero-icon  { font-size: 36px; margin-bottom: 12px; }
       .audit-zero-title { font-size: 16px; font-weight: 700; color: #334155; margin-bottom: 6px; }
@@ -1004,6 +1027,15 @@
           <div class="card-subtitle">By Target Type</div>
           <div id="auditByTarget" class="audit-bar-list"></div>
         </div>
+      </div>
+
+      <!-- ── Audit Observations ─────────────────────────────────────── -->
+      <div class="card" id="auditObservationsCard" style="display:none">
+        <div class="card-title" style="display:flex;align-items:center;gap:8px">
+          <span>Audit Observations</span>
+          <span style="font-size:10px;font-weight:600;letter-spacing:.04em;background:#ede9fe;color:#6d28d9;padding:2px 8px;border-radius:999px;text-transform:uppercase">75 Rules</span>
+        </div>
+        <div id="auditObservationsContent"></div>
       </div>
 
       <!-- ── Event log ───────────────────────────────────────────── -->

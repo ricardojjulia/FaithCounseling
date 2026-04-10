@@ -1774,6 +1774,11 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/audit/intelligence/observations' || requestUrl.pathname === '/v1/audit/intelligence/observations/') {
+      await handleAuditObservations(request, response, session);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/platform/overview') {
       await handlePlatformOverview(request, response, session);
       return;
@@ -10118,6 +10123,552 @@ async function handleAuditIntelligence(request, response, requestUrl, session) {
       tenantId: role === 'platform_admin' ? filters.tenantId : callerTenant(request, session),
     },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic audit observations — 75 rule-based callouts, no AI required.
+// Organized into severity tiers: critical → warning → info.
+// Returns up to 8 observations ordered by priority.
+// ---------------------------------------------------------------------------
+function generateAuditObservations(summary, events, filters) {
+  const critical = [];
+  const warnings = [];
+  const info     = [];
+
+  const total      = summary.total ?? 0;
+  const days       = summary.window?.days ?? filters?.days ?? 7;
+  const byResult   = summary.byResult   ?? [];
+  const byAction   = summary.byAction   ?? [];
+  const byActorRole  = summary.byActorRole  ?? [];
+  const byTargetType = summary.byTargetType ?? [];
+
+  const getResult   = (key) => byResult.find((r) => r.result === key)?.total ?? 0;
+  const denied      = getResult('denied');
+  const errors      = getResult('error');
+  const failures    = getResult('failure');
+  const success     = getResult('success');
+  const pct         = (n) => total > 0 ? ((n / total) * 100).toFixed(1) : '0.0';
+  const dailyAvg    = days > 0 ? (total / days) : total;
+  const sampleSize  = events.length;
+  const samplePct   = (n) => sampleSize > 0 ? ((n / sampleSize) * 100).toFixed(1) : '0.0';
+
+  // ── RULE 1: Zero events ──────────────────────────────────────────────────
+  if (total === 0) {
+    return [`No audit events recorded in the last ${days} day${days !== 1 ? 's' : ''}. If activity is expected, verify audit event emission is functioning correctly.`];
+  }
+
+  // ── RULES 2–8: Volume & throughput ──────────────────────────────────────
+  // R2: Very high daily volume
+  if (dailyAvg > 500) {
+    warnings.push(`Unusually high activity: ${total.toLocaleString()} events over ${days} days (avg ${dailyAvg.toFixed(0)}/day). Confirm no runaway automation or logging loop.`);
+  } else if (dailyAvg > 200) {
+    info.push(`High-volume period: ${total.toLocaleString()} events over ${days} days (avg ${dailyAvg.toFixed(0)}/day).`);
+  }
+
+  // R3: Very low daily volume (less than 2/day) for windows > 3 days
+  if (days > 3 && dailyAvg < 2) {
+    info.push(`Low activity: only ${total.toLocaleString()} event${total !== 1 ? 's' : ''} recorded over ${days} days (avg ${dailyAvg.toFixed(1)}/day). Verify the practice is actively using the platform.`);
+  }
+
+  // R4: Large total — purely informational landmark
+  if (total >= 10000) {
+    info.push(`${total.toLocaleString()} total events in this window — a high-volume dataset. Consider narrowing the time range for more targeted analysis.`);
+  }
+
+  // R5: Sample may be truncated
+  const requestedLimit = filters?.limit ?? 100;
+  if (sampleSize >= requestedLimit && total > sampleSize) {
+    info.push(`Event sample is at the display limit (${sampleSize} of ${total.toLocaleString()} total). Increase the limit or narrow filters for full visibility.`);
+  }
+
+  // R6: Single-day narrow window
+  if (days === 1) {
+    info.push(`Analysis window is a single day — patterns may not reflect typical activity. Consider reviewing a 7- or 30-day window for trends.`);
+  }
+
+  // R7: Very wide window (90 days)
+  if (days >= 90) {
+    info.push(`90-day window active — long-range view may obscure recent anomalies. Use a shorter window to investigate specific incidents.`);
+  }
+
+  // R8: Entire sample within same hour (burst)
+  if (sampleSize >= 10) {
+    const timestamps = events.map((e) => new Date(e.occurredAt).getTime()).filter(Boolean);
+    if (timestamps.length >= 10) {
+      const span = Math.max(...timestamps) - Math.min(...timestamps);
+      if (span < 60 * 60 * 1000) {
+        warnings.push(`All ${sampleSize} sampled events occurred within a single hour — possible automated burst or event replay.`);
+      }
+    }
+  }
+
+  // ── RULES 9–20: Error & denial rates ────────────────────────────────────
+  // R9: Critical denial rate
+  if (denied > 0 && total > 0) {
+    const dr = denied / total;
+    if (dr >= 0.25) {
+      critical.push(`Critical: ${pct(denied)}% access denial rate — ${denied.toLocaleString()} of ${total.toLocaleString()} events were denied. Investigate unauthorized access attempts immediately.`);
+    } else if (dr >= 0.10) {
+      // R10: Elevated denial rate
+      warnings.push(`Elevated denial rate: ${pct(denied)}% of events were access denials (${denied.toLocaleString()} denials). Review whether roles have appropriate permissions.`);
+    } else if (dr >= 0.02) {
+      // R11: Minor denial rate note
+      info.push(`${denied.toLocaleString()} access denial${denied !== 1 ? 's' : ''} recorded (${pct(denied)}% of events) — within acceptable range.`);
+    }
+  } else if (denied === 0 && total > 10) {
+    // R12: Zero denials — clean access control
+    info.push(`Zero access denials in this window — access control is enforcing correctly and all authorized requests are succeeding.`);
+  }
+
+  // R13: Critical error rate
+  if (errors > 0 && total > 0) {
+    const er = errors / total;
+    if (er >= 0.15) {
+      critical.push(`Critical: ${pct(errors)}% system error rate — ${errors.toLocaleString()} errors out of ${total.toLocaleString()} events. Investigate server health and error logs immediately.`);
+    } else if (er >= 0.05) {
+      // R14: Elevated error rate
+      warnings.push(`Elevated error rate: ${pct(errors)}% of events resulted in system errors (${errors.toLocaleString()} errors). Review server logs for root cause.`);
+    } else if (er >= 0.01) {
+      info.push(`${errors.toLocaleString()} system error${errors !== 1 ? 's' : ''} recorded (${pct(errors)}%) — low but worth monitoring.`);
+    }
+  } else if (errors === 0 && total > 10) {
+    // R15: Zero errors — healthy system
+    info.push(`Zero system errors in this window — the platform is operating without server-side faults.`);
+  }
+
+  // R16: Both high denial and high error simultaneously
+  if (denied / Math.max(total, 1) >= 0.10 && errors / Math.max(total, 1) >= 0.05) {
+    critical.push(`Both denial rate (${pct(denied)}%) and error rate (${pct(errors)}%) are elevated simultaneously — this combination may indicate a systemic misconfiguration.`);
+  }
+
+  // R17: Failures (result=failure) present
+  if (failures > 0) {
+    warnings.push(`${failures.toLocaleString()} event${failures !== 1 ? 's' : ''} recorded with result "failure" (distinct from "denied" and "error"). Review these for failed business operations.`);
+  }
+
+  // R18: Errors outnumber denials significantly
+  if (errors > denied * 3 && errors > 5) {
+    warnings.push(`System errors (${errors.toLocaleString()}) outnumber access denials (${denied.toLocaleString()}) by more than 3:1 — error conditions are the dominant non-success outcome.`);
+  }
+
+  // R19: Denials outnumber errors significantly
+  if (denied > errors * 5 && denied > 5) {
+    info.push(`Access denials (${denied.toLocaleString()}) dominate non-success events vs errors (${errors.toLocaleString()}) — access control is active and is the primary friction point.`);
+  }
+
+  // R20: 100% success rate
+  if (success === total && total >= 10) {
+    info.push(`100% success rate across all ${total.toLocaleString()} events — no denials or errors in this window.`);
+  }
+
+  // ── RULES 21–26: Authentication events ──────────────────────────────────
+  const authDenied = events.filter((e) => e.action?.startsWith('auth.') && e.result === 'denied');
+  // R21: Potential brute force
+  if (authDenied.length >= 10) {
+    critical.push(`${authDenied.length} authentication failures detected — possible brute-force or credential stuffing. Verify IP allowlists and account lockout policies.`);
+  } else if (authDenied.length > 0) {
+    // R22: Auth failures (low count)
+    warnings.push(`${authDenied.length} authentication failure${authDenied.length !== 1 ? 's' : ''} recorded in this window. Verify these are expected (e.g. mistyped passwords) and not targeted attempts.`);
+  }
+
+  // R23: Multiple distinct actors with auth denials
+  const authDeniedActors = new Set(authDenied.map((e) => e.actorId).filter(Boolean));
+  if (authDeniedActors.size >= 3) {
+    warnings.push(`Authentication failures span ${authDeniedActors.size} distinct actors — distributed failure pattern may indicate a coordinated attack or shared credential issue.`);
+  }
+
+  // R24: Auth events are the top action
+  const topAction = byAction[0];
+  if (topAction?.action?.startsWith('auth.')) {
+    info.push(`Authentication events ("${topAction.action}") are the most frequent action (${topAction.total} events) — this window is auth-heavy. Normal for peak login periods.`);
+  }
+
+  // R25: Password change/reset events
+  const pwdEvents = events.filter((e) => e.action?.includes('password'));
+  if (pwdEvents.length > 0) {
+    info.push(`${pwdEvents.length} password change/reset event${pwdEvents.length !== 1 ? 's' : ''} recorded — verify these were user-initiated and not forced resets.`);
+  }
+
+  // R26: Token / API key events
+  const tokenEvents = events.filter((e) => e.action?.includes('token') || e.action?.includes('api_key') || e.action?.includes('apikey'));
+  if (tokenEvents.length > 0) {
+    info.push(`${tokenEvents.length} API token or key event${tokenEvents.length !== 1 ? 's' : ''} recorded — confirm programmatic access is from authorized integrations.`);
+  }
+
+  // ── RULES 27–33: Administrative actions ─────────────────────────────────
+  // R27: Impersonation events
+  const impersonationEvents = events.filter((e) => e.action?.includes('impersonation'));
+  if (impersonationEvents.length > 0) {
+    critical.push(`${impersonationEvents.length} admin impersonation event${impersonationEvents.length !== 1 ? 's' : ''} recorded — verify each was an authorized support session with documented justification.`);
+  }
+
+  // R28: Role or permission change events
+  const roleChangeEvents = events.filter((e) =>
+    e.action?.includes('role') || e.action?.includes('permission') || e.action?.includes('access.grant') || e.action?.includes('access.revoke'),
+  );
+  if (roleChangeEvents.length > 0) {
+    warnings.push(`${roleChangeEvents.length} role or permission change event${roleChangeEvents.length !== 1 ? 's' : ''} recorded — review for unauthorized privilege changes.`);
+  }
+
+  // R29: Platform admin activity
+  const platformAdminEvents = events.filter((e) => e.actorRole === 'platform_admin');
+  if (platformAdminEvents.length > 0) {
+    warnings.push(`Platform admin performed ${platformAdminEvents.length} action${platformAdminEvents.length !== 1 ? 's' : ''} in this window — cross-tenant operations should be documented.`);
+  }
+
+  // R30: Settings or configuration change events
+  const settingsEvents = events.filter((e) => e.action?.includes('settings') || e.action?.includes('config') || e.targetType === 'settings');
+  if (settingsEvents.length > 0) {
+    info.push(`${settingsEvents.length} settings or configuration change event${settingsEvents.length !== 1 ? 's' : ''} recorded.`);
+  }
+
+  // R31: User creation or deletion
+  const userMgmtEvents = events.filter((e) =>
+    (e.targetType === 'user' || e.targetType === 'staff') &&
+    (e.action?.includes('.create') || e.action?.includes('.delete') || e.action?.includes('.deactivate')),
+  );
+  if (userMgmtEvents.length > 0) {
+    info.push(`${userMgmtEvents.length} user account creation or deletion event${userMgmtEvents.length !== 1 ? 's' : ''} recorded — verify all account changes were authorized.`);
+  }
+
+  // R32: Tenant-level events (platform admin context)
+  const tenantEvents = events.filter((e) => e.targetType === 'tenant');
+  if (tenantEvents.length > 0) {
+    warnings.push(`${tenantEvents.length} tenant-level event${tenantEvents.length !== 1 ? 's' : ''} recorded — platform-scope operations should be audited carefully.`);
+  }
+
+  // R33: Invitation / onboarding events
+  const inviteEvents = events.filter((e) => e.action?.includes('invitation') || e.action?.includes('invite') || e.action?.includes('onboard'));
+  if (inviteEvents.length > 0) {
+    info.push(`${inviteEvents.length} invitation or onboarding event${inviteEvents.length !== 1 ? 's' : ''} recorded — new users are being provisioned.`);
+  }
+
+  // ── RULES 34–40: Data operations ────────────────────────────────────────
+  // R34: Export / download events
+  const exportEvents = events.filter((e) => e.action?.includes('export') || e.action?.includes('.download'));
+  if (exportEvents.length > 0) {
+    warnings.push(`${exportEvents.length} data export or download event${exportEvents.length !== 1 ? 's' : ''} recorded — confirm all exports were authorized and within retention scope.`);
+  }
+
+  // R35: Bulk or batch operations
+  const bulkEvents = events.filter((e) => e.action?.includes('bulk') || e.action?.includes('.batch'));
+  if (bulkEvents.length > 0) {
+    warnings.push(`${bulkEvents.length} bulk or batch operation event${bulkEvents.length !== 1 ? 's' : ''} detected — verify scope and authorization for mass data changes.`);
+  }
+
+  // R36: High deletion activity
+  const deleteEvents = events.filter((e) =>
+    e.action?.includes('.delete') || e.action?.includes('.destroy') || e.action?.includes('.remove'),
+  );
+  if (deleteEvents.length >= 20) {
+    warnings.push(`High deletion activity: ${deleteEvents.length} record deletion events in this window — confirm all are intentional and follow data retention policy.`);
+  } else if (deleteEvents.length > 0) {
+    // R37: Low deletion
+    info.push(`${deleteEvents.length} record deletion event${deleteEvents.length !== 1 ? 's' : ''} recorded.`);
+  }
+
+  // R38: Backup or restore events
+  const backupEvents = events.filter((e) => e.action?.includes('backup') || e.action?.includes('restore'));
+  if (backupEvents.length > 0) {
+    info.push(`${backupEvents.length} backup or restore event${backupEvents.length !== 1 ? 's' : ''} recorded — data management operations are active.`);
+  }
+
+  // R39: Report generation events
+  const reportEvents = events.filter((e) => e.action?.startsWith('report.') || e.action?.includes('.report'));
+  if (reportEvents.length > 0) {
+    info.push(`${reportEvents.length} report generation event${reportEvents.length !== 1 ? 's' : ''} recorded.`);
+  }
+
+  // R40: Write events dominate reads (unusual for most systems)
+  const writeEvents = events.filter((e) => e.action?.includes('.create') || e.action?.includes('.update') || e.action?.includes('.write'));
+  const readEvents  = events.filter((e) => e.action?.includes('.read')   || e.action?.includes('.view')   || e.action?.includes('.list'));
+  if (writeEvents.length > readEvents.length * 2 && writeEvents.length > 10) {
+    info.push(`Write events (${writeEvents.length}) significantly outnumber read events (${readEvents.length}) in the sample — high content creation or update period.`);
+  }
+
+  // ── RULES 41–47: PHI & client data ──────────────────────────────────────
+  // R41: Client records dominate target types
+  const clientTargets = byTargetType.find((t) => t.targetType === 'client' || t.targetType === 'client_record');
+  if (clientTargets && total > 0 && clientTargets.total / total > 0.5) {
+    info.push(`Client record events are the majority (${clientTargets.total.toLocaleString()} of ${total.toLocaleString()} total, ${((clientTargets.total / total) * 100).toFixed(1)}%) — verify all access is session-authorized.`);
+  }
+
+  // R42: Client record accesses with errors
+  const clientErrorEvents = events.filter((e) =>
+    (e.targetType === 'client' || e.targetType === 'client_record') && e.result === 'error',
+  );
+  if (clientErrorEvents.length > 0) {
+    warnings.push(`${clientErrorEvents.length} client record access event${clientErrorEvents.length !== 1 ? 's' : ''} resulted in system errors — PHI access failures should be investigated.`);
+  }
+
+  // R43: Intake events active
+  const intakeEvents = events.filter((e) => e.action?.includes('intake') || e.sourceWorkflow === 'intake');
+  if (intakeEvents.length > 0) {
+    info.push(`${intakeEvents.length} intake workflow event${intakeEvents.length !== 1 ? 's' : ''} recorded — new client intake is active.`);
+  }
+
+  // R44: Form or assessment events
+  const formEvents = events.filter((e) => e.targetType === 'form' || e.targetType === 'assessment' || e.action?.includes('form') || e.action?.includes('assessment'));
+  if (formEvents.length > 0) {
+    info.push(`${formEvents.length} form or assessment event${formEvents.length !== 1 ? 's' : ''} recorded — clinical screening or documentation is active.`);
+  }
+
+  // R45: Note or document access heavy
+  const noteEvents = byTargetType.find((t) => t.targetType === 'note' || t.targetType === 'document');
+  if (noteEvents && noteEvents.total > 20) {
+    info.push(`Clinical notes/documents are a highly accessed target type (${noteEvents.total.toLocaleString()} events) — confirm access follows minimum necessary standards.`);
+  }
+
+  // R46: Client portal activity
+  const portalEvents = events.filter((e) => e.sourceSurface === 'portal' || e.sourceWorkflow === 'portal');
+  if (portalEvents.length > 0) {
+    info.push(`${portalEvents.length} client portal event${portalEvents.length !== 1 ? 's' : ''} recorded — portal self-service is being used by clients.`);
+  }
+
+  // R47: Anonymous actors accessing client resources
+  const anonClientEvents = events.filter((e) =>
+    (e.actorId === 'anonymous' || e.actorRole === 'anonymous') &&
+    (e.targetType === 'client' || e.targetType === 'client_record' || e.targetType === 'note'),
+  );
+  if (anonClientEvents.length > 0) {
+    critical.push(`${anonClientEvents.length} unauthenticated event${anonClientEvents.length !== 1 ? 's' : ''} targeting client records or notes — PHI may have been accessed without authentication.`);
+  }
+
+  // ── RULES 48–55: Actor & role patterns ──────────────────────────────────
+  // R48: No counselor activity
+  const counselorRole = byActorRole.find((r) => r.actorRole === 'counselor' || r.actorRole === 'therapist');
+  if (!counselorRole && days > 1 && total > 20) {
+    info.push(`No counselor activity in this window — expected if practice is between sessions, but unusual for an active multi-day period.`);
+  }
+
+  // R49: No admin activity
+  const adminRole = byActorRole.find((r) => r.actorRole === 'practice_admin' || r.actorRole === 'admin');
+  if (!adminRole && days >= 7 && total > 50) {
+    info.push(`No practice admin activity recorded over ${days} days — confirm admin oversight is occurring outside this window.`);
+  }
+
+  // R50: Single actor dominates
+  if (sampleSize >= 10) {
+    const actorCounts = new Map();
+    for (const e of events) if (e.actorId) actorCounts.set(e.actorId, (actorCounts.get(e.actorId) ?? 0) + 1);
+    const topActorCount = Math.max(...actorCounts.values());
+    if (topActorCount / sampleSize > 0.70) {
+      warnings.push(`A single actor accounts for ${samplePct(topActorCount)}% of sampled events (${topActorCount} of ${sampleSize}) — verify this is expected for a single-user session.`);
+    }
+  }
+
+  // R51: Single role dominates
+  const topRole = byActorRole[0];
+  if (topRole && total > 0 && topRole.total / total > 0.85) {
+    info.push(`Role "${topRole.actorRole}" generated ${((topRole.total / total) * 100).toFixed(1)}% of all events (${topRole.total.toLocaleString()}) — usage is concentrated in one role.`);
+  }
+
+  // R52: Multiple distinct roles active (healthy)
+  if (byActorRole.length >= 4) {
+    info.push(`${byActorRole.length} distinct actor roles are active — healthy multi-role engagement across the platform.`);
+  }
+
+  // R53: System actors dominant
+  const systemActors = byActorRole.filter((r) => r.actorRole === 'system' || r.actorRole === 'service' || r.actorRole === 'worker');
+  const systemTotal  = systemActors.reduce((s, r) => s + r.total, 0);
+  if (systemTotal > 0 && total > 0 && systemTotal / total > 0.60) {
+    info.push(`System/automated actors generated ${((systemTotal / total) * 100).toFixed(1)}% of events (${systemTotal.toLocaleString()}) — high automation activity. Confirm background jobs are operating correctly.`);
+  }
+
+  // R54: Anonymous actors present
+  const anonRole = byActorRole.find((r) => r.actorRole === 'anonymous' || r.actorRole === 'unknown');
+  if (anonRole && anonRole.total > 0) {
+    const anonShare = anonRole.total / total;
+    if (anonShare >= 0.05) {
+      warnings.push(`${anonRole.total.toLocaleString()} event${anonRole.total !== 1 ? 's' : ''} (${((anonShare) * 100).toFixed(1)}% of total) from anonymous or unknown actors — review unauthenticated activity.`);
+    } else {
+      info.push(`${anonRole.total.toLocaleString()} event${anonRole.total !== 1 ? 's' : ''} from anonymous/unknown actors (${((anonShare) * 100).toFixed(1)}% of total).`);
+    }
+  }
+
+  // R55: Only one role active in window
+  if (byActorRole.length === 1 && total > 20) {
+    info.push(`All ${total.toLocaleString()} events in this window originated from a single role ("${byActorRole[0].actorRole}") — usage is narrow.`);
+  }
+
+  // ── RULES 56–63: Action distribution ────────────────────────────────────
+  // R56: Single action dominates
+  if (topAction && total > 0 && topAction.total / total > 0.60) {
+    info.push(`Action "${topAction.action}" accounts for ${((topAction.total / total) * 100).toFixed(1)}% of all events (${topAction.total.toLocaleString()}) — activity is concentrated on one operation.`);
+  }
+
+  // R57: High action diversity
+  if (byAction.length >= 15) {
+    info.push(`${byAction.length} distinct action types recorded — broad platform usage across many workflows.`);
+  }
+
+  // R58: Very low action diversity
+  if (byAction.length <= 2 && total > 20) {
+    info.push(`Only ${byAction.length} distinct action type${byAction.length !== 1 ? 's' : ''} across ${total.toLocaleString()} events — very narrow usage pattern.`);
+  }
+
+  // R59: Read actions heavily dominate
+  const readActionTotal  = byAction.filter((a) => a.action?.includes('.read') || a.action?.includes('.list') || a.action?.includes('.view')).reduce((s, a) => s + a.total, 0);
+  const writeActionTotal = byAction.filter((a) => a.action?.includes('.create') || a.action?.includes('.update')).reduce((s, a) => s + a.total, 0);
+  if (readActionTotal > writeActionTotal * 5 && readActionTotal > 20) {
+    info.push(`Read-heavy period: ${readActionTotal.toLocaleString()} read events vs ${writeActionTotal.toLocaleString()} write events — mostly data retrieval, minimal creation/modification.`);
+  }
+
+  // R60: Delete actions in top 5
+  const topFiveActions = byAction.slice(0, 5);
+  const topFiveHasDelete = topFiveActions.some((a) => a.action?.includes('.delete') || a.action?.includes('.destroy'));
+  if (topFiveHasDelete) {
+    warnings.push(`Deletion actions appear in the top 5 most frequent operations — confirm this volume of deletions is expected.`);
+  }
+
+  // R61: Denied events concentrated in one action
+  if (sampleSize >= 5) {
+    const deniedByAction = new Map();
+    for (const e of events) if (e.result === 'denied' && e.action) deniedByAction.set(e.action, (deniedByAction.get(e.action) ?? 0) + 1);
+    if (deniedByAction.size > 0) {
+      const topDeniedAction = [...deniedByAction.entries()].sort((a, b) => b[1] - a[1])[0];
+      const deniedSample    = events.filter((e) => e.result === 'denied').length;
+      if (deniedSample > 0 && topDeniedAction[1] / deniedSample > 0.75) {
+        info.push(`${((topDeniedAction[1] / deniedSample) * 100).toFixed(0)}% of denied events in the sample share the same action ("${topDeniedAction[0]}") — targeted access restriction.`);
+      }
+    }
+  }
+
+  // R62: Errors concentrated in one action
+  if (sampleSize >= 5) {
+    const errorsByAction = new Map();
+    for (const e of events) if (e.result === 'error' && e.action) errorsByAction.set(e.action, (errorsByAction.get(e.action) ?? 0) + 1);
+    if (errorsByAction.size > 0) {
+      const topErrorAction = [...errorsByAction.entries()].sort((a, b) => b[1] - a[1])[0];
+      const errorSample    = events.filter((e) => e.result === 'error').length;
+      if (errorSample >= 3 && topErrorAction[1] / errorSample > 0.75) {
+        warnings.push(`${((topErrorAction[1] / errorSample) * 100).toFixed(0)}% of system errors in the sample are from action "${topErrorAction[0]}" — this specific operation may have a bug or misconfiguration.`);
+      }
+    }
+  }
+
+  // R63: Top action is a delete or destroy
+  if (topAction?.action?.includes('.delete') || topAction?.action?.includes('.destroy')) {
+    warnings.push(`The most frequent action in this window is "${topAction.action}" (${topAction.total} events) — deletion is the dominant operation. Verify retention policy compliance.`);
+  }
+
+  // ── RULES 64–68: Target type patterns ───────────────────────────────────
+  const topTarget = byTargetType[0];
+
+  // R64: Note/document most common
+  if (topTarget?.targetType === 'note' || topTarget?.targetType === 'document') {
+    info.push(`Clinical notes or documents are the most accessed resource type (${topTarget.total.toLocaleString()} events) — consistent with an active session documentation workflow.`);
+  }
+
+  // R65: Session/appointment most common
+  if (topTarget?.targetType === 'session' || topTarget?.targetType === 'appointment') {
+    info.push(`Session or appointment records are the most accessed resource type (${topTarget.total.toLocaleString()} events) — scheduling workflow is dominant.`);
+  }
+
+  // R66: User/settings most common target (admin focus)
+  if (topTarget?.targetType === 'user' || topTarget?.targetType === 'settings') {
+    info.push(`User or settings records are the most accessed resource type (${topTarget.total.toLocaleString()} events) — administrative operations are dominant in this window.`);
+  }
+
+  // R67: Only one target type
+  if (byTargetType.length === 1 && total > 20) {
+    info.push(`All events target a single resource type ("${byTargetType[0].targetType}") — very narrow scope for a ${days}-day window.`);
+  }
+
+  // R68: High target type diversity
+  if (byTargetType.length >= 8) {
+    info.push(`${byTargetType.length} distinct resource types targeted — broad cross-domain usage across the platform.`);
+  }
+
+  // ── RULES 69–75: Data quality ────────────────────────────────────────────
+  // R69: Denied events missing reasonCode
+  const deniedNoReason = events.filter((e) => e.result === 'denied' && (!e.reasonCode || e.reasonCode === 'unknown' || e.reasonCode === 'ok'));
+  if (deniedNoReason.length > 0) {
+    info.push(`${deniedNoReason.length} denied event${deniedNoReason.length !== 1 ? 's' : ''} are missing a specific reason code — improve callsite instrumentation to capture denial reasons.`);
+  }
+
+  // R70: Error events missing reasonCode
+  const errorNoReason = events.filter((e) => e.result === 'error' && (!e.reasonCode || e.reasonCode === 'unknown' || e.reasonCode === 'ok'));
+  if (errorNoReason.length > 0) {
+    info.push(`${errorNoReason.length} error event${errorNoReason.length !== 1 ? 's' : ''} lack a specific reason code — adding reason codes at error sites will improve diagnostic value.`);
+  }
+
+  // R71: Anonymous actorId with non-anonymous role (inconsistency)
+  const roleIdMismatch = events.filter((e) =>
+    e.actorId === 'anonymous' && e.actorRole && e.actorRole !== 'anonymous' && e.actorRole !== 'unknown',
+  );
+  if (roleIdMismatch.length > 0) {
+    warnings.push(`${roleIdMismatch.length} event${roleIdMismatch.length !== 1 ? 's' : ''} have an "anonymous" actor ID but a named role — actor context is inconsistent and may indicate an instrumentation bug.`);
+  }
+
+  // R72: Events missing sourceSurface
+  const noSurface = events.filter((e) => !e.sourceSurface || e.sourceSurface === 'unknown');
+  if (noSurface.length > sampleSize * 0.20 && noSurface.length > 5) {
+    info.push(`${noSurface.length} sampled events (${samplePct(noSurface.length)}%) lack a sourceSurface value — improve event instrumentation to track the originating UI or API surface.`);
+  }
+
+  // R73: Events missing sourceWorkflow
+  const noWorkflow = events.filter((e) => !e.sourceWorkflow || e.sourceWorkflow === 'unknown');
+  if (noWorkflow.length > sampleSize * 0.30 && noWorkflow.length > 5) {
+    info.push(`${noWorkflow.length} sampled events (${samplePct(noWorkflow.length)}%) lack a sourceWorkflow value — workflow tagging coverage could be improved.`);
+  }
+
+  // R74: High-frequency repeated actor-action-target combo (possible automation)
+  if (sampleSize >= 10) {
+    const comboMap = new Map();
+    for (const e of events) {
+      const key = `${e.actorId}|${e.action}|${e.targetId}`;
+      comboMap.set(key, (comboMap.get(key) ?? 0) + 1);
+    }
+    const topComboCount = Math.max(...comboMap.values());
+    if (topComboCount >= 5) {
+      info.push(`A single actor-action-target combination repeats ${topComboCount} times in the sample — may indicate polling, automation, or retry loops.`);
+    }
+  }
+
+  // R75: Off-hours events in sample (outside 06:00–21:00 local)
+  if (sampleSize >= 5) {
+    const offHours = events.filter((e) => {
+      const h = new Date(e.occurredAt).getHours();
+      return h < 6 || h >= 21;
+    });
+    if (offHours.length > 0 && offHours.length / sampleSize > 0.15) {
+      info.push(`${offHours.length} sampled events (${samplePct(offHours.length)}%) occurred outside typical hours (before 6 AM or after 9 PM) — verify this is expected for your practice schedule.`);
+    }
+  }
+
+  // ── Assemble final list, priority: critical → warning → info, max 8 ─────
+  const all = [...critical, ...warnings, ...info];
+  return all.slice(0, 8);
+}
+
+async function handleAuditObservations(request, response, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response, session)) return;
+
+  let body;
+  try {
+    body = await readJsonBody(request);
+  } catch {
+    writeJson(response, 400, { error: 'Invalid request body' });
+    return;
+  }
+
+  const { summary, events, filters } = body ?? {};
+  if (!summary || !Array.isArray(events)) {
+    writeJson(response, 400, { error: 'Request must include summary and events' });
+    return;
+  }
+
+  const observations = generateAuditObservations(summary, events, filters ?? {});
+
+  await emitAudit(request, 'audit.intelligence.observations.read', 'audit_event', 'collection', session);
+
+  writeJson(response, 200, { observations });
 }
 
 async function handlePlatformOverview(request, response, session) {
