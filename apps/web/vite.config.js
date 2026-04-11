@@ -27,12 +27,6 @@ export default defineConfig({
           if (normalizedId.includes('/@mantine/')) {
             return 'vendor-mantine';
           }
-          if (
-            normalizedId.includes('/@opentelemetry/') ||
-            normalizedId.includes('/web-vitals/')
-          ) {
-            return 'vendor-otel';
-          }
         },
       },
     },

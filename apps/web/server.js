@@ -3,7 +3,6 @@ import crypto from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createServiceTelemetry, getPrometheusExporter, startNodeTelemetry } from '../../packages/telemetry/src/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,9 +10,6 @@ const __dirname = path.dirname(__filename);
 const port = Number(process.env.PORT || 3002);
 const apiBaseUrl = process.env.API_BASE_URL || 'http://127.0.0.1:3001';
 const publicDir = path.join(__dirname, 'public');
-
-await startNodeTelemetry({ serviceName: 'faith-web' });
-const telemetry = createServiceTelemetry('faith-web');
 
 const contentTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -109,10 +105,6 @@ function csrfCheckFailed(request, response) {
   if (CSRF_SAFE_METHODS.has(request.method ?? 'GET')) return false;
   // Auth login is allowed without CSRF (browser needs to POST before getting cookie)
   if (request.url?.replace('/api', '') === '/v1/auth/login') return false;
-  // Telemetry ingestion endpoints are exempt: they carry no harmful state changes
-  // and are already protected by session-cookie authentication.
-  const urlWithoutApi = request.url?.replace('/api', '');
-  if (urlWithoutApi === '/v1/telemetry/events' || urlWithoutApi === '/v1/telemetry/vitals') return false;
   const cookies = parseCookies(request.headers.cookie);
   const cookieToken  = cookies[CSRF_COOKIE_NAME];
   const headerToken  = request.headers[CSRF_HEADER_NAME];
@@ -132,44 +124,10 @@ const server = http.createServer(async (request, response) => {
   // Ensure CSRF cookie on every request so the browser has a token to use
   ensureCsrfCookie(request, response);
 
-  const requestScope = telemetry.beginRequest({
-    method: request.method ?? 'GET',
-    route: request.url?.startsWith('/api/') ? '/api/*' : request.url === '/' ? '/index.html' : request.url ?? '/',
-  });
-
   if (request.url?.startsWith('/api/')) {
     // CSRF check before proxying
-    if (csrfCheckFailed(request, response)) {
-      requestScope.end(403);
-      return;
-    }
-    try {
-      await proxyApiRequest(request, response);
-      return;
-    } finally {
-      requestScope.end(response.statusCode || 200);
-    }
-  }
-
-  if (request.url === '/telemetry/summary') {
-    writeJson(response, 200, {
-      service: 'web',
-      summary: telemetry.getSummary(),
-    });
-    requestScope.end(200);
-    return;
-  }
-
-  if (request.url === '/metrics' && request.method === 'GET') {
-    const prometheusExporter = getPrometheusExporter();
-    if (!prometheusExporter) {
-      response.writeHead(503, { 'content-type': 'text/plain; charset=utf-8' });
-      response.end('Metrics exporter not available');
-      requestScope.end(503);
-      return;
-    }
-    requestScope.end(200);
-    await prometheusExporter.getMetricsRequestHandler(request, response);
+    if (csrfCheckFailed(request, response)) return;
+    await proxyApiRequest(request, response);
     return;
   }
 
@@ -208,8 +166,6 @@ const server = http.createServer(async (request, response) => {
     }
 
     writeText(response, 404, 'Not Found');
-  } finally {
-    requestScope.end(response.statusCode || 200);
   }
 });
 
@@ -258,10 +214,6 @@ async function proxyApiRequest(request, response) {
     };
     if (request.headers.cookie)          forwardHeaders.cookie          = request.headers.cookie;
     if (request.headers['x-request-id']) forwardHeaders['x-request-id'] = request.headers['x-request-id'];
-    // W3C trace context — allows Jaeger to link browser spans → web → API in one trace
-    if (request.headers.traceparent)     forwardHeaders.traceparent     = request.headers.traceparent;
-    if (request.headers.tracestate)      forwardHeaders.tracestate      = request.headers.tracestate;
-
     const upstreamResponse = await fetch(upstreamUrl, {
       method: request.method,
       headers: forwardHeaders,
@@ -269,7 +221,6 @@ async function proxyApiRequest(request, response) {
     });
 
     const responseText = await upstreamResponse.text();
-    telemetry.recordProxy(performance.now() - start, upstreamPath);
 
     const responseHeaders = {
       'content-type': upstreamResponse.headers.get('content-type') ?? 'application/json; charset=utf-8',

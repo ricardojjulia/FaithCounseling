@@ -1,30 +1,6 @@
 import http from 'node:http';
-import { createServiceTelemetry, getPrometheusExporter, startNodeTelemetry } from '../../../packages/telemetry/src/index.js';
 
 const workerName = 'reminder-worker';
-await startNodeTelemetry({ serviceName: workerName });
-const telemetry = createServiceTelemetry(workerName);
-
-// ── Prometheus metrics server ─────────────────────────────────────────────────
-// The worker has no app HTTP server, so we start a small dedicated server
-// solely to serve /metrics for Prometheus scraping.
-const metricsPort = Number(process.env.WORKER_METRICS_PORT || 9465);
-const prometheusExporter = getPrometheusExporter();
-if (prometheusExporter) {
-  const metricsServer = http.createServer(async (req, res) => {
-    if (req.url === '/metrics' && req.method === 'GET') {
-      await prometheusExporter.getMetricsRequestHandler(req, res);
-    } else {
-      res.writeHead(404, { 'content-type': 'text/plain' });
-      res.end('Not Found');
-    }
-  });
-  metricsServer.listen(metricsPort, () => {
-    console.log(`[${workerName}] Metrics server listening on port ${metricsPort} (GET /metrics)`);
-  });
-}
-
-telemetry.recordMutation('worker.start');
 
 // Log a minimal operational message — never emit raw audit payloads to stdout.
 console.log(`${workerName} initialized`);
@@ -88,10 +64,6 @@ if (process.env.DB_NAME) {
           `UPDATE reminders SET status = 'sent', sent_at = NOW() WHERE id = ? AND tenant_id = ?`,
           [row.id, row.tenant_id]
         );
-
-        telemetry.recordMutation('reminder.sent');
-        // Audit events must be written to the audit table, not to stdout.
-        // Telemetry above captures the operational signal.
       } catch (err) {
         console.error(`[${workerName}] Failed to process reminder ${row.id}:`, err.message);
       }
@@ -109,19 +81,11 @@ if (process.env.DB_NAME) {
     );
     if (result.affectedRows > 0) {
       console.log(`[${workerName}] Expired ${result.affectedRows} stale reminder(s)`);
-      telemetry.recordMutation('reminder.expired');
     }
   }
 
   async function poll() {
-    const start = performance.now();
-    try {
-      await Promise.all([processDueReminders(), expireStaleReminders()]);
-      telemetry.recordWorkerPoll(performance.now() - start, 'success');
-    } catch (err) {
-      telemetry.recordWorkerPoll(performance.now() - start, 'error');
-      throw err;
-    }
+    await Promise.all([processDueReminders(), expireStaleReminders()]);
   }
 
   // Run once immediately, then on a fixed interval.

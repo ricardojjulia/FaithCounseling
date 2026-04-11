@@ -20,47 +20,6 @@ services:
       timeout: 5s
       retries: 6
 
-  # ── Observability stack (optional) ──────────────────────────────────────────
-  # Start with: docker compose --profile observability up -d
-  # Jaeger UI:  http://localhost:16686
-  # Prometheus: http://localhost:9090
-  # Then set in .env:  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:4318/v1/traces
-
-  jaeger:
-    profiles:
-      - observability
-    image: cr.jaegertracing.io/jaegertracing/jaeger:2.17.0
-    container_name: faith-jaeger
-    restart: unless-stopped
-    ports:
-      - '16686:16686'   # Jaeger UI
-      - '4317:4317'     # OTLP gRPC receiver
-      - '4318:4318'     # OTLP HTTP receiver
-      - '9411:9411'     # Zipkin-compatible (optional)
-    environment:
-      - LOG_LEVEL=warn
-
-  prometheus:
-    profiles:
-      - observability
-    image: prom/prometheus:latest
-    container_name: faith-prometheus
-    restart: unless-stopped
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
-    volumes:
-      - ./ops/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - faith_prometheus_data:/prometheus
-    ports:
-      - '9090:9090'     # Prometheus UI and query API
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=7d'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--web.enable-lifecycle'
-
   translation-guardian:
     profiles:
       - agent
@@ -80,4 +39,3 @@ services:
 
 volumes:
   faith_mysql_data:
-  faith_prometheus_data:

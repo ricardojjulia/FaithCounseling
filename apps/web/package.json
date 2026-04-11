@@ -5,7 +5,6 @@
   "type": "module",
   "dependencies": {
     "@faith/i18n": "workspace:*",
-    "@faith/telemetry": "workspace:*",
     "@mantine/core": "^8.3.18",
     "@mantine/dates": "^8.3.18",
     "@mantine/form": "^8.3.18",
