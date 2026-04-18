@@ -2,6 +2,7 @@ node_modules/
 .pnpm-store/
 dist/
 build/
+apps/web/public/assets/
 coverage/
 .env
 .env.*
