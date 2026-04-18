@@ -1915,6 +1915,10 @@ export async function handleApiRequest(request, response) {
       await handleTimeEntriesSummary(request, response, requestUrl, session);
       return;
     }
+    if (requestUrl.pathname === '/v1/time-entries/export') {
+      await handleTimeEntriesExport(request, response, requestUrl, session);
+      return;
+    }
     if (requestUrl.pathname.startsWith('/v1/time-entries/')) {
       await handleTimeEntryById(request, response, requestUrl, session);
       return;
@@ -14719,6 +14723,46 @@ async function handleTimeEntriesSummary(request, response, requestUrl, session) 
     dateTo:   requestUrl.searchParams.get('date_to') ?? undefined,
   });
   writeJson(response, 200, { summary });
+}
+
+// PHI-safe CSV export — omits descriptions, client IDs, and free-text fields.
+// Exports only: entry_id, date (UTC date only), category, duration_minutes.
+async function handleTimeEntriesExport(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+
+  const userId = await resolveTimeEntryUser(session, requestUrl);
+  if (!userId) { writeJson(response, 403, { error: 'Not authorised' }); return; }
+  if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+
+  const entries = await listTimeEntries(session.tenantId, userId, {
+    category: requestUrl.searchParams.get('category') ?? undefined,
+    dateFrom: requestUrl.searchParams.get('date_from') ?? undefined,
+    dateTo:   requestUrl.searchParams.get('date_to') ?? undefined,
+    limit:    5000,
+  });
+
+  // Build CSV — no descriptions, no names, no client IDs
+  const SAFE_CATEGORIES = new Set([
+    'direct_clinical', 'indirect_admin', 'supervision_individual',
+    'supervision_group', 'ce_spiritual', 'ministry_coordination',
+  ]);
+  const csvRows = ['entry_id,date,category,duration_minutes'];
+  for (const entry of entries) {
+    const date = entry.startTime ? entry.startTime.slice(0, 10) : '';
+    const cat  = SAFE_CATEGORIES.has(entry.category) ? entry.category : 'other';
+    csvRows.push(`${entry.id},${date},${cat},${entry.durationMinutes ?? 0}`);
+  }
+  const csv = csvRows.join('\r\n');
+
+  emitAudit(request, 'time_entry.export', 'time_entry', null, session);
+
+  response.writeHead(200, {
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="time-entries.csv"',
+    'Cache-Control': 'no-store',
+  });
+  response.end(csv);
 }
 
 async function handleTimeEntryById(request, response, requestUrl, session) {

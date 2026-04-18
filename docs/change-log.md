@@ -2,6 +2,20 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 17, 2026 — Licensure progress bars on Counselor Home + PHI-safe CSV export
+
+### feat: wire LicensureProgressBars into CounselorHomePage and add PHI-safe CSV export
+
+**Date:** April 17, 2026
+**Affected area:** `apps/web/src/components/CounselorHomePage.jsx`, `apps/web/src/components/TimeTracking/TimeTrackingPage.jsx`, `apps/api/src/index.js`
+
+**What changed:**
+- **Counselor Home dashboard:** `LicensureProgressBars` component is now rendered below the main dashboard panels so counselors see live licensure-hours progress without navigating to the Time Tracking page.
+- **PHI-safe CSV export:** `GET /api/v1/time-entries/export` returns a downloadable CSV containing only `entry_id`, `date`, `category`, and `duration_minutes` — no descriptions, no client identifiers, no free-text fields. The endpoint is auth-gated, role-scoped, and emits a `time_entry.export` audit event.
+- **Export button:** `TimeTrackingPage` now includes an "Export CSV" button (respects the current category filter).
+
+---
+
 ## April 17, 2026 — Telehealth Phase 2+3, Supervision Cosign, Time Tracking
 
 ### feat: faith-integrated clinical notes, supervision cosign workflow, licensure time tracking

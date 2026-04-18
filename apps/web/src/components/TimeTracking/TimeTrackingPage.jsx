@@ -3,7 +3,7 @@ import {
   Stack, Paper, Group, Title, Text, Button, Badge, Table, Loader,
   Alert, ActionIcon, Select,
 } from '@mantine/core';
-import { IconPlus, IconTrash } from '@tabler/icons-react';
+import { IconPlus, IconTrash, IconDownload } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { csrfHeaders } from '../../lib/csrf.js';
 import { frontendTelemetry } from '../../lib/frontendTelemetry.js';
@@ -106,13 +106,29 @@ export default function TimeTrackingPage({ currentUser }) {
     }
   };
 
+  const handleExportCsv = () => {
+    const catQuery = categoryFilter ? `&category=${encodeURIComponent(categoryFilter)}` : '';
+    // Trigger browser download — session cookie is sent automatically
+    window.location.assign(`/api/v1/time-entries/export?${catQuery}`);
+    frontendTelemetry.trackAction('time_tracking', 'export_csv', 'success', {});
+  };
+
   return (
     <Stack gap="md">
       <Group justify="space-between">
         <Title order={3}>Time Tracking</Title>
-        <Button leftSection={<IconPlus size={16} />} onClick={() => setLogOpen(true)}>
-          Quick Log
-        </Button>
+        <Group gap="xs">
+          <Button
+            leftSection={<IconDownload size={16} />}
+            variant="default"
+            onClick={handleExportCsv}
+          >
+            Export CSV
+          </Button>
+          <Button leftSection={<IconPlus size={16} />} onClick={() => setLogOpen(true)}>
+            Quick Log
+          </Button>
+        </Group>
       </Group>
 
       <LicensureProgressBars userId={currentUser?.id} />
