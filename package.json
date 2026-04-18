@@ -47,6 +47,11 @@
     "axe-core": "^4.11.1"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["argon2"]
+    "onlyBuiltDependencies": ["argon2"],
+    "overrides": {
+      "protobufjs": ">=7.5.5",
+      "tar": ">=7.5.11",
+      "brace-expansion": ">=1.1.13"
+    }
   }
 }
