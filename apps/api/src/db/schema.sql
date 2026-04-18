@@ -255,16 +255,21 @@ CREATE TABLE IF NOT EXISTS intake_packets (
 -- ─── Treatment plans ─────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS treatment_plans (
-  id               VARCHAR(64) NOT NULL,
-  tenant_id        VARCHAR(64) NOT NULL,
-  client_id        VARCHAR(64) NOT NULL,
-  status           VARCHAR(64) NOT NULL DEFAULT 'draft',
-  goals_enc        TEXT,                  -- encrypted PHI (JSON array)
-  interventions_enc TEXT,                 -- encrypted PHI (JSON array)
-  review_cadence   VARCHAR(64),
-  reviewed_at      TIMESTAMP   NULL,
-  created_at       TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at       TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  id                        VARCHAR(64) NOT NULL,
+  tenant_id                 VARCHAR(64) NOT NULL,
+  client_id                 VARCHAR(64) NOT NULL,
+  status                    VARCHAR(64) NOT NULL DEFAULT 'draft',
+  goals_enc                 TEXT,                  -- encrypted PHI (JSON array)
+  interventions_enc         TEXT,                  -- encrypted PHI (JSON array)
+  review_cadence            VARCHAR(64),
+  reviewed_at               TIMESTAMP   NULL,
+  presenting_problem_enc    TEXT,                  -- encrypted PHI (free text)
+  faith_integration_level   VARCHAR(32) NULL,      -- none|light|moderate|full
+  christian_interventions   JSON        NULL,      -- array of faith intervention type tags
+  spiritual_goals_enc       TEXT,                  -- encrypted PHI (JSON array)
+  scripture_assignments_enc TEXT,                  -- encrypted PHI (free text)
+  created_at                TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at                TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   INDEX idx_plan_tenant_client (tenant_id, client_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

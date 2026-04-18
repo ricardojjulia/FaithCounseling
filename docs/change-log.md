@@ -2,6 +2,22 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 18, 2026 — Treatment Plan: Faith Integration & Persistence Fix
+
+### feat: structured Christian interventions + faith fields on treatment plans; fix cadence/date persistence bug
+
+**Date:** April 18, 2026
+**Affected area:** `apps/api/src/db/schema.sql`, `apps/api/src/db/migrate.js`, `apps/api/src/db/queries/clinical.js`, `apps/api/src/index.js`, `apps/web/src/components/ClinicalChart/tabs/TreatmentPlanTab.jsx`, `packages/i18n/src/index.js`
+
+**What changed:**
+- **Bug fix — `reviewCadence` and `reviewedAt` not persisting:** `updateTreatmentPlan` and `createTreatmentPlan` never accepted or wrote these fields to the DB. Fixed in the query layer, the API handler now passes them through, and `addColumnIfMissing` migration guards ensure the columns exist.
+- **New `treatment_plans` columns (Phase 5 migration):** `presenting_problem_enc` (AES-256-GCM encrypted text), `faith_integration_level VARCHAR(32)` (`none|light|moderate|full`), `christian_interventions JSON` (array of faith intervention type tags — not PHI), `spiritual_goals_enc` (AES-256-GCM encrypted JSON array), `scripture_assignments_enc` (AES-256-GCM encrypted text). All columns are `NULL`-safe and additive.
+- **API handler updated:** `PUT /api/v1/clients/:id/treatment-plan` now accepts, validates, and persists all new fields. `faithIntegrationLevel` uses an allowlist normalizer (`none|light|moderate|full`). `christianInterventions` items are filtered against a 14-item server-side allowlist.
+- **`TreatmentPlanTab.jsx` redesigned:** New "Faith Integration" accordion section with: faith integration level select, 14-option Christian interventions checklist, spiritual formation goals list, scripture assignment textarea. Clinical goals list gains a per-goal "Spiritual / faith-integrated goal" checkbox. New presenting problem textarea. Summary cards updated to show faith integration status.
+- **i18n:** 12 new keys added under `chart.plan.*` for all new fields.
+
+---
+
 ## April 2026 — Clinical Note Template Library (SOAP, DAP, BIRP, faith-integrated, crisis, EMDR, group)
 
 ### feat: clinical note template library with 12 system-wide templates

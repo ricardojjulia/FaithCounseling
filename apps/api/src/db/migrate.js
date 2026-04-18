@@ -409,6 +409,15 @@ async function applyColumnMigrations(conn) {
   await addColumnIfMissing('progress_notes', 'template_id', 'VARCHAR(64) NULL COMMENT \'references clinical_note_templates.id\'');
   await addColumnIfMissing('progress_notes', 'template_sections_enc', 'TEXT NULL COMMENT \'AES-256-GCM encrypted JSON of {sectionKey: content}\'');
 
+  // ── Phase 5: Treatment plan — fix missing cadence/review columns + faith integration ────
+  await addColumnIfMissing('treatment_plans', 'review_cadence', "VARCHAR(64) NULL COMMENT 'weekly|biweekly|monthly|quarterly'");
+  await addColumnIfMissing('treatment_plans', 'reviewed_at', 'TIMESTAMP NULL');
+  await addColumnIfMissing('treatment_plans', 'presenting_problem_enc', 'TEXT NULL COMMENT \'AES-256-GCM encrypted free-text presenting problem\'');
+  await addColumnIfMissing('treatment_plans', 'faith_integration_level', "VARCHAR(32) NULL DEFAULT NULL COMMENT 'none|light|moderate|full'");
+  await addColumnIfMissing('treatment_plans', 'christian_interventions', "JSON NULL COMMENT 'Array of selected faith intervention type tags'");
+  await addColumnIfMissing('treatment_plans', 'spiritual_goals_enc', 'TEXT NULL COMMENT \'AES-256-GCM encrypted JSON array of spiritual/faith goals\'');
+  await addColumnIfMissing('treatment_plans', 'scripture_assignments_enc', 'TEXT NULL COMMENT \'AES-256-GCM encrypted scripture homework text\'');
+
   // ── Phase 3: Supervisor assignments table ────────────────────────────────
   await conn.query(`
     CREATE TABLE IF NOT EXISTS \`supervisor_assignments\` (

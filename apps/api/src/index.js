@@ -3356,6 +3356,15 @@ async function handleClientTreatmentPlan(request, response, requestUrl, session)
   const interventions = Array.isArray(payload.interventions)
     ? payload.interventions.map((entry) => sanitizeStr(String(entry), 300)).filter(Boolean)
     : [];
+  const reviewCadence = sanitizeStr(payload.reviewCadence, 60) || null;
+  const reviewedAt = normalizeIsoDate(payload.reviewedAt) ?? null;
+  const presentingProblem = sanitizeStr(payload.presentingProblem, 2000) || null;
+  const faithIntegrationLevel = normalizeTreatmentPlanFaithLevel(payload.faithIntegrationLevel);
+  const christianInterventions = sanitizeChristianInterventions(payload.christianInterventions ?? []);
+  const spiritualGoals = Array.isArray(payload.spiritualGoals)
+    ? payload.spiritualGoals.map((g) => sanitizeStr(String(g), 300)).filter(Boolean)
+    : [];
+  const scriptureAssignments = sanitizeStr(payload.scriptureAssignments, 2000) || null;
 
   if (process.env.DB_NAME) {
     const existing = await getTreatmentPlan(clientId, client.tenantId);
@@ -3367,9 +3376,21 @@ async function handleClientTreatmentPlan(request, response, requestUrl, session)
         status,
         goals,
         interventions,
+        reviewCadence,
+        reviewedAt,
+        presentingProblem,
+        faithIntegrationLevel,
+        christianInterventions,
+        spiritualGoals,
+        scriptureAssignments,
       });
     } else {
-      await updateTreatmentPlan(clientId, client.tenantId, { status, goals, interventions });
+      await updateTreatmentPlan(clientId, client.tenantId, {
+        status, goals, interventions,
+        reviewCadence, reviewedAt,
+        presentingProblem, faithIntegrationLevel, christianInterventions,
+        spiritualGoals, scriptureAssignments,
+      });
     }
     const plan = await getTreatmentPlan(clientId, client.tenantId);
     emitAudit(request, 'chart.treatment_plan.upsert', 'treatment_plan', plan.id, session);
@@ -3387,16 +3408,26 @@ async function handleClientTreatmentPlan(request, response, requestUrl, session)
       status,
       goals,
       interventions,
-      reviewCadence: sanitizeStr(payload.reviewCadence, 60) ?? 'monthly',
-      reviewedAt: normalizeIsoDate(payload.reviewedAt) ?? null,
+      reviewCadence,
+      reviewedAt,
+      presentingProblem,
+      faithIntegrationLevel,
+      christianInterventions,
+      spiritualGoals,
+      scriptureAssignments,
     }) };
     treatmentPlans.push(plan);
   } else {
     plan.status = status;
     plan.goals = goals;
     plan.interventions = interventions;
-    plan.reviewCadence = sanitizeStr(payload.reviewCadence, 60) ?? plan.reviewCadence;
-    plan.reviewedAt = normalizeIsoDate(payload.reviewedAt) ?? plan.reviewedAt;
+    plan.reviewCadence = reviewCadence ?? plan.reviewCadence;
+    plan.reviewedAt = reviewedAt ?? plan.reviewedAt;
+    plan.presentingProblem = presentingProblem;
+    plan.faithIntegrationLevel = faithIntegrationLevel;
+    plan.christianInterventions = christianInterventions;
+    plan.spiritualGoals = spiritualGoals;
+    plan.scriptureAssignments = scriptureAssignments;
   }
 
   emitAudit(request, 'chart.treatment_plan.upsert', 'treatment_plan', plan.id);
@@ -12541,7 +12572,22 @@ function normalizeTreatmentPlanStatus(value) {
   return treatmentPlanStatuses.includes(value) ? value : null;
 }
 
-function buildAuditIntelligenceFilters(request, requestUrl, session) {
+const treatmentPlanFaithLevels = Object.freeze(['none', 'light', 'moderate', 'full']);
+function normalizeTreatmentPlanFaithLevel(value) {
+  if (!value) return null;
+  return treatmentPlanFaithLevels.includes(value) ? value : null;
+}
+
+const allowedChristianInterventions = Object.freeze([
+  'prayer', 'intercessory_prayer', 'scripture_reading', 'scripture_memorization',
+  'confession_forgiveness', 'spiritual_direction', 'fasting', 'worship',
+  'church_community', 'discipleship_mentoring', 'biblical_counseling_homework',
+  'journaling', 'contemplative_prayer', 'accountability_partner',
+]);
+function sanitizeChristianInterventions(value) {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v) => allowedChristianInterventions.includes(v));
+}(request, requestUrl, session) {
   const daysRaw = Number(requestUrl.searchParams.get('days') ?? 7);
   const days = Number.isFinite(daysRaw) && daysRaw >= 1 && daysRaw <= 90 ? Math.floor(daysRaw) : null;
   if (!days) return null;

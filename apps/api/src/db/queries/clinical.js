@@ -76,6 +76,16 @@ function rowToTreatmentPlan(row) {
     reviewCadence: row.review_cadence ?? null,
     reviewedAt: row.reviewed_at ?? null,
     lastReviewedAt: row.reviewed_at ?? null,  // alias used by Faithful Workflows rules engine
+    // Faith integration fields (Phase 5)
+    presentingProblem: row.presenting_problem_enc ? decrypt(row.presenting_problem_enc) : null,
+    faithIntegrationLevel: row.faith_integration_level ?? null,
+    christianInterventions: row.christian_interventions
+      ? (typeof row.christian_interventions === 'string'
+          ? JSON.parse(row.christian_interventions)
+          : row.christian_interventions)
+      : [],
+    spiritualGoals: row.spiritual_goals_enc ? decryptJson(row.spiritual_goals_enc) : [],
+    scriptureAssignments: row.scripture_assignments_enc ? decrypt(row.scripture_assignments_enc) : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -332,13 +342,30 @@ export async function getTreatmentPlan(clientId, tenantId) {
   return rows.length ? rowToTreatmentPlan(rows[0]) : null;
 }
 
-export async function createTreatmentPlan({ id, clientId, tenantId, status, goals, interventions }) {
+export async function createTreatmentPlan({
+  id, clientId, tenantId, status, goals, interventions,
+  reviewCadence, reviewedAt,
+  presentingProblem, faithIntegrationLevel, christianInterventions, spiritualGoals, scriptureAssignments,
+}) {
   const goalsEnc = goals ? encryptJson(goals) : null;
   const interventionsEnc = interventions ? encryptJson(interventions) : null;
+  const presentingProblemEnc = presentingProblem ? encrypt(presentingProblem) : null;
+  const christianInterventionsJson = christianInterventions ? JSON.stringify(christianInterventions) : null;
+  const spiritualGoalsEnc = spiritualGoals ? encryptJson(spiritualGoals) : null;
+  const scriptureAssignmentsEnc = scriptureAssignments ? encrypt(scriptureAssignments) : null;
   await pool.query(
-    `INSERT INTO treatment_plans (id, client_id, tenant_id, status, goals_enc, interventions_enc)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [id, clientId, tenantId, status, goalsEnc, interventionsEnc],
+    `INSERT INTO treatment_plans
+       (id, client_id, tenant_id, status, goals_enc, interventions_enc,
+        review_cadence, reviewed_at,
+        presenting_problem_enc, faith_integration_level, christian_interventions,
+        spiritual_goals_enc, scripture_assignments_enc)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id, clientId, tenantId, status, goalsEnc, interventionsEnc,
+      reviewCadence ?? null, reviewedAt ?? null,
+      presentingProblemEnc, faithIntegrationLevel ?? null, christianInterventionsJson,
+      spiritualGoalsEnc, scriptureAssignmentsEnc,
+    ],
   );
 }
 
@@ -361,6 +388,21 @@ export async function updateTreatmentPlan(clientId, tenantId, fields) {
     pairs.push(['goals_enc = ?', fields.goals ? encryptJson(fields.goals) : null]);
   if (fields.interventions !== undefined)
     pairs.push(['interventions_enc = ?', fields.interventions ? encryptJson(fields.interventions) : null]);
+  if (fields.reviewCadence !== undefined)
+    pairs.push(['review_cadence = ?', fields.reviewCadence || null]);
+  if (fields.reviewedAt !== undefined)
+    pairs.push(['reviewed_at = ?', fields.reviewedAt || null]);
+  // Faith integration fields (Phase 5)
+  if (fields.presentingProblem !== undefined)
+    pairs.push(['presenting_problem_enc = ?', fields.presentingProblem ? encrypt(fields.presentingProblem) : null]);
+  if (fields.faithIntegrationLevel !== undefined)
+    pairs.push(['faith_integration_level = ?', fields.faithIntegrationLevel || null]);
+  if (fields.christianInterventions !== undefined)
+    pairs.push(['christian_interventions = ?', fields.christianInterventions ? JSON.stringify(fields.christianInterventions) : null]);
+  if (fields.spiritualGoals !== undefined)
+    pairs.push(['spiritual_goals_enc = ?', fields.spiritualGoals ? encryptJson(fields.spiritualGoals) : null]);
+  if (fields.scriptureAssignments !== undefined)
+    pairs.push(['scripture_assignments_enc = ?', fields.scriptureAssignments ? encrypt(fields.scriptureAssignments) : null]);
 
   if (!pairs.length) return;
 
