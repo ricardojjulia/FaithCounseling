@@ -89,6 +89,16 @@ export const baseMessages = Object.freeze({
   'chart.note.cosignStatus.reviewed': 'Cosigned',
   'chart.note.cosignStatus.returned': 'Returned for Revision',
 
+  'chart.templates.label': 'Note Template',
+  'chart.templates.placeholder': 'Select a template (optional)…',
+  'chart.templates.clearLabel': 'No template (free text)',
+  'chart.templates.overwriteWarning': 'Applying a template will overwrite your current note content. This cannot be undone.',
+  'chart.templates.applied': 'Template applied',
+  'chart.templates.categories.standard': 'Standard Clinical',
+  'chart.templates.categories.faith_integrated': 'Faith-Integrated',
+  'chart.templates.categories.specialty': 'Specialty',
+  'chart.templates.categories.crisis': 'Crisis & Safety',
+
   'chart.plan.status': 'Plan Status',
   'chart.plan.status.draft': 'Draft',
   'chart.plan.status.active': 'Active',

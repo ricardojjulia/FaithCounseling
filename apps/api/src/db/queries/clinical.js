@@ -108,6 +108,9 @@ function rowToProgressNote(row) {
     cosignedBy: row.cosigned_by ?? null,
     cosignedAt: row.cosigned_at ?? null,
     cosignComments: row.cosign_comments_enc ? decrypt(row.cosign_comments_enc) : null,
+    // Phase 4 clinical note templates
+    templateId: row.template_id ?? null,
+    templateSections: row.template_sections_enc ? decryptJson(row.template_sections_enc) : null,
   };
 }
 
@@ -399,6 +402,8 @@ export async function createProgressNote({
   signedAt,
   scriptureReference = null,
   spiritualPractices = null,
+  templateId = null,
+  templateSections = null,
 }) {
   const summaryEnc = summary ? encrypt(summary) : null;
   const interventionsEnc = interventions ? encrypt(interventions) : null;
@@ -407,13 +412,16 @@ export async function createProgressNote({
   const spiritualPracticesJson = spiritualPractices
     ? JSON.stringify(spiritualPractices)
     : null;
+  const templateSectionsEnc = templateSections ? encryptJson(templateSections) : null;
   await pool.query(
     `INSERT INTO progress_notes
        (id, client_id, tenant_id, appointment_id, note_type, summary_enc, interventions_enc,
-        locked, signed_by, signed_at, scripture_reference, spiritual_practices)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        locked, signed_by, signed_at, scripture_reference, spiritual_practices,
+        template_id, template_sections_enc)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, clientId, tenantId, apptId, noteType, summaryEnc, interventionsEnc,
-     lockedNote ? 1 : 0, signedBy, signedAtSql, scriptureReference ?? null, spiritualPracticesJson],
+     lockedNote ? 1 : 0, signedBy, signedAtSql, scriptureReference ?? null, spiritualPracticesJson,
+     templateId ?? null, templateSectionsEnc],
   );
   const [rows] = await pool.query(
     'SELECT * FROM progress_notes WHERE id = ? AND client_id = ? AND tenant_id = ?',
@@ -446,6 +454,11 @@ export async function updateProgressNote(id, clientId, tenantId, fields) {
   if (fields.cosignedAt !== undefined) pairs.push(['cosigned_at = ?', toSqlTimestamp(fields.cosignedAt)]);
   if (fields.cosignComments !== undefined)
     pairs.push(['cosign_comments_enc = ?', fields.cosignComments ? encrypt(fields.cosignComments) : null]);
+  // Phase 4 clinical note templates
+  if (fields.templateId !== undefined)
+    pairs.push(['template_id = ?', fields.templateId ?? null]);
+  if (fields.templateSections !== undefined)
+    pairs.push(['template_sections_enc = ?', fields.templateSections ? encryptJson(fields.templateSections) : null]);
 
   if (!pairs.length) return;
 

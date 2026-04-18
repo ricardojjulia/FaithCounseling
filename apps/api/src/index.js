@@ -105,6 +105,7 @@ import {
   listInventoryDefinitions, createInventoryDefinition,
   listInventoryAssignments, createInventoryAssignment, updateInventoryAssignment,
 } from './db/queries/clinical.js';
+import { listNoteTemplates, getNoteTemplate } from './db/queries/noteTemplates.js';
 import {
   listDocumentTemplates, getDocumentTemplateById, createDocumentTemplate, updateDocumentTemplate,
   listDocumentAssignments, createDocumentAssignment, updateDocumentAssignment,
@@ -1716,6 +1717,17 @@ export async function handleApiRequest(request, response) {
 
     if (requestUrl.pathname === '/v1/faith/note-templates') {
       await handleFaithNoteTemplates(request, response);
+      return;
+    }
+
+    // ── System-level clinical note template library ────────────────────────
+    if (requestUrl.pathname === '/v1/note-templates') {
+      await handleNoteTemplates(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/note-templates/')) {
+      await handleNoteTemplateById(request, response, requestUrl);
       return;
     }
 
@@ -3433,6 +3445,11 @@ async function handleClientProgressNotes(request, response, requestUrl, session)
   const spiritualPractices = Array.isArray(payload.spiritualPractices)
     ? payload.spiritualPractices.map((s) => sanitizeStr(String(s), 64)).filter(Boolean)
     : null;
+  const templateId = sanitizeStr(payload.templateId, 64) ?? null;
+  // templateSections is a plain object {sectionKey: content}; validate it is object-shaped
+  const templateSections = (payload.templateSections && typeof payload.templateSections === 'object' && !Array.isArray(payload.templateSections))
+    ? payload.templateSections
+    : null;
 
   if (process.env.DB_NAME) {
     const item = await createProgressNote({
@@ -3448,8 +3465,13 @@ async function handleClientProgressNotes(request, response, requestUrl, session)
       signedAt: Boolean(payload.locked) ? new Date().toISOString() : null,
       scriptureReference,
       spiritualPractices,
+      templateId,
+      templateSections,
     });
     emitAudit(request, 'chart.progress_note.create', 'progress_note', item.id, session);
+    if (templateId) {
+      emitAudit(request, 'clinical_note.template_applied', 'progress_note', item.id, session);
+    }
     writeJson(response, 201, { item });
     return;
   }
@@ -9615,6 +9637,56 @@ async function handleFaithNoteTemplates(request, response, session) {
   christianNoteTemplates.push(item);
   await emitAudit(request, 'faith.note_template.create', 'faith_note_template', item.id, session);
   writeJson(response, 201, { item });
+}
+
+// ---------------------------------------------------------------------------
+// System-level clinical note template library — read-only
+// ---------------------------------------------------------------------------
+async function handleNoteTemplates(request, response) {
+  if (request.method !== 'GET') {
+    response.writeHead(405, { Allow: 'GET' });
+    response.end();
+    return;
+  }
+  const session = await requireSession(request, response);
+  if (!session) return;
+
+  if (process.env.DB_NAME) {
+    const items = await listNoteTemplates();
+    writeJson(response, 200, { items });
+  } else {
+    // Fallback for environments without a DB (tests/local stub)
+    writeJson(response, 200, { items: [] });
+  }
+}
+
+async function handleNoteTemplateById(request, response, requestUrl) {
+  if (request.method !== 'GET') {
+    response.writeHead(405, { Allow: 'GET' });
+    response.end();
+    return;
+  }
+  const session = await requireSession(request, response);
+  if (!session) return;
+
+  const parts = requestUrl.pathname.split('/').filter(Boolean);
+  // /v1/note-templates/:id → parts = ['v1', 'note-templates', ':id']
+  const idOrSlug = parts[2];
+  if (!idOrSlug) {
+    writeJson(response, 400, { error: 'Template id or slug is required.' });
+    return;
+  }
+
+  if (process.env.DB_NAME) {
+    const item = await getNoteTemplate(idOrSlug);
+    if (!item) {
+      writeJson(response, 404, { error: 'Template not found.' });
+      return;
+    }
+    writeJson(response, 200, { item });
+  } else {
+    writeJson(response, 404, { error: 'Template not found.' });
+  }
 }
 
 async function handleFaithTreatmentGoals(request, response, session) {

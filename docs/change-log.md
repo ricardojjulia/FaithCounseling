@@ -2,6 +2,25 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 2026 — Clinical Note Template Library (SOAP, DAP, BIRP, faith-integrated, crisis, EMDR, group)
+
+### feat: clinical note template library with 12 system-wide templates
+
+**Date:** April 2026
+**Affected area:** `apps/api/src/db/schema.sql`, `apps/api/src/db/migrate.js`, `apps/api/src/db/queries/noteTemplates.js` (new), `apps/api/src/db/queries/clinical.js`, `apps/api/src/index.js`, `apps/web/src/components/ClinicalChart/TemplatePicker.jsx` (new), `apps/web/src/components/ClinicalChart/tabs/SessionNotesTab.jsx`, `packages/i18n/src/index.js`
+
+**What changed:**
+- **`clinical_note_templates` table:** New system-wide (no `tenant_id`) table seeded with 12 templates at migration time (INSERT IGNORE, idempotent). Slugs: `soap`, `dap`, `birp`, `girp`, `stop`, `mint`, `soap-faith`, `dap-faith`, `spiritual-formation`, `emdr`, `crisis-safety`, `group-therapy`.
+- **`progress_notes` table:** Two new columns — `template_id VARCHAR(64) NULL` (not PHI, plain) and `template_sections_enc TEXT NULL` (PHI, AES-256-GCM encrypted JSON).
+- **`GET /api/v1/note-templates`** and **`GET /api/v1/note-templates/:id`** — auth-gated read-only API returning the system template library, grouped by category.
+- **`TemplatePicker` component:** Mantine `Select` grouped by Standard Clinical / Faith-Integrated / Specialty / Crisis & Safety. Auto-recommends faith-integrated templates when client faith preference is "integrated". Overwrite confirmation modal when a draft already has content.
+- **`SessionNotesTab` wired:** Both the note composer and the `NoteCard` edit form include `TemplatePicker`. When a template is selected, the summary area splits into per-section `Textarea` fields. Section values are assembled into the `summary_enc` field for backwards compatibility and also stored as `template_sections_enc` for structured retrieval.
+- **Crisis/safety sign guard:** Attempting to sign a note that contains `si_assessment` or `hi_assessment` fields while either is empty is blocked with an error notification.
+- **Audit event:** `clinical_note.template_applied` is emitted via `emitAudit` whenever a note is created with a `templateId`.
+- **i18n:** 10 new keys added under `chart.templates.*`.
+
+---
+
 ## April 17, 2026 — Licensure progress bars on Counselor Home + PHI-safe CSV export
 
 ### feat: wire LicensureProgressBars into CounselorHomePage and add PHI-safe CSV export

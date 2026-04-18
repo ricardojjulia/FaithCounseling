@@ -3,6 +3,7 @@ import {
   Stack, Paper, Group, Title, Text, Button, Textarea, Select, Badge,
   Loader, Alert, Divider, TextInput, Checkbox,
 } from '@mantine/core';
+import TemplatePicker from '../TemplatePicker.jsx';
 import { notifications } from '@mantine/notifications';
 import { useI18n } from '../../../lib/i18nContext.jsx';
 import { csrfHeaders } from '../../../lib/csrf.js';
@@ -202,6 +203,8 @@ function NoteCard({ note, appointment, onSign, onUpdate, onSubmitForReview, onCo
       : (note.interventions ?? ''),
     scriptureReference: note.scriptureReference ?? '',
     spiritualPractices: note.spiritualPractices ?? [],
+    templateId: note.templateId ?? null,
+    templateSections: note.templateSections ?? null,
   });
   const [saving, setSaving] = useState(false);
   const [signing, setSigning] = useState(false);
@@ -214,6 +217,8 @@ function NoteCard({ note, appointment, onSign, onUpdate, onSubmitForReview, onCo
         interventions: draft.interventions.split('\n').map((s) => s.trim()).filter(Boolean),
         scriptureReference: draft.scriptureReference.trim() || null,
         spiritualPractices: draft.spiritualPractices.length ? draft.spiritualPractices : null,
+        templateId: draft.templateId ?? null,
+        templateSections: draft.templateSections ?? null,
       });
       setEditing(false);
       notifications.show({ title: 'Saved', message: 'Note updated.', color: 'green' });
@@ -251,6 +256,21 @@ function NoteCard({ note, appointment, onSign, onUpdate, onSubmitForReview, onCo
   };
 
   const handleSign = async () => {
+    // Crisis/safety template: require si_assessment and hi_assessment before locking
+    if (draft.templateId && draft.templateSections) {
+      const si = (draft.templateSections.si_assessment ?? '').trim();
+      const hi = (draft.templateSections.hi_assessment ?? '').trim();
+      // Only enforce if the note has these fields (i.e. it is the crisis-safety template)
+      const hasCrisisFields = 'si_assessment' in (draft.templateSections ?? {}) || 'hi_assessment' in (draft.templateSections ?? {});
+      if (hasCrisisFields && (!si || !hi)) {
+        notifications.show({
+          title: 'Cannot sign',
+          message: 'Crisis & Safety notes require Suicidal Ideation and Homicidal Ideation assessments before signing.',
+          color: 'red',
+        });
+        return;
+      }
+    }
     if (!window.confirm(t('chart.note.confirmSign'))) return;
     setSigning(true);
     try {
@@ -314,6 +334,48 @@ function NoteCard({ note, appointment, onSign, onUpdate, onSubmitForReview, onCo
         </>
       ) : editing ? (
         <Stack gap="sm">
+          <TemplatePicker
+            value={draft.templateId}
+            onChange={(id, tmpl) => {
+              if (!id || !tmpl) {
+                setDraft((d) => ({ ...d, templateId: null, templateSections: null }));
+                return;
+              }
+              const sectionDefaults = Object.fromEntries(
+                (tmpl.structure ?? []).map((f) => [f.key, ''])
+              );
+              const assembled = (tmpl.structure ?? [])
+                .map((f) => `## ${f.label}\n`)
+                .join('\n');
+              setDraft((d) => ({
+                ...d,
+                templateId: id,
+                templateSections: sectionDefaults,
+                summary: assembled,
+              }));
+            }}
+            hasExistingContent={Boolean(draft.summary.trim())}
+          />
+          {draft.templateSections
+            ? (draft.templateId && Object.keys(draft.templateSections).length > 0
+                ? Object.entries(draft.templateSections).map(([key, val]) => (
+                    <Textarea
+                      key={key}
+                      label={key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                      value={val}
+                      onChange={(e) => setDraft((d) => ({
+                        ...d,
+                        templateSections: { ...d.templateSections, [key]: e.currentTarget.value },
+                        summary: Object.entries({ ...d.templateSections, [key]: e.currentTarget.value })
+                          .map(([k, v]) => `## ${k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}\n${v}`)
+                          .join('\n\n'),
+                      }))}
+                      minRows={3}
+                      autosize
+                    />
+                  ))
+                : null)
+            : (
           <Textarea
             label={t('chart.note.summary')}
             placeholder={t('chart.note.summaryPlaceholder')}
@@ -322,6 +384,7 @@ function NoteCard({ note, appointment, onSign, onUpdate, onSubmitForReview, onCo
             minRows={4}
             autosize
           />
+            )}
           <Textarea
             label={t('chart.note.interventions')}
             description="One per line"
@@ -449,6 +512,8 @@ export default function SessionNotesTab({
     interventions: '',
     scriptureReference: '',
     spiritualPractices: [],
+    templateId: null,
+    templateSections: null,
   });
 
   const loadAppointments = useCallback(async () => {
@@ -498,6 +563,8 @@ export default function SessionNotesTab({
       interventions: '',
       scriptureReference: '',
       spiritualPractices: [],
+      templateId: null,
+      templateSections: null,
     });
   }, [clientId]);
 
@@ -544,10 +611,12 @@ export default function SessionNotesTab({
           interventions: draft.interventions.split('\n').map((s) => s.trim()).filter(Boolean),
           scriptureReference: draft.scriptureReference.trim() || null,
           spiritualPractices: draft.spiritualPractices.length ? draft.spiritualPractices : null,
+          templateId: draft.templateId ?? null,
+          templateSections: draft.templateSections ?? null,
           locked: false,
         }),
       });
-      setDraft({ appointmentId: '', noteType: 'progress_note', summary: '', interventions: '', scriptureReference: '', spiritualPractices: [] });
+      setDraft({ appointmentId: '', noteType: 'progress_note', summary: '', interventions: '', scriptureReference: '', spiritualPractices: [], templateId: null, templateSections: null });
       setComposerOpen(false);
       await loadNotes();
       notifications.show({ title: 'Saved', message: 'Draft note created.', color: 'green' });
@@ -640,6 +709,28 @@ export default function SessionNotesTab({
                 {apptLoadError}
               </Alert>
             )}
+            <TemplatePicker
+              value={draft.templateId}
+              onChange={(id, tmpl) => {
+                if (!id || !tmpl) {
+                  setDraft((d) => ({ ...d, templateId: null, templateSections: null, summary: '' }));
+                  return;
+                }
+                const sectionDefaults = Object.fromEntries(
+                  (tmpl.structure ?? []).map((f) => [f.key, ''])
+                );
+                const assembled = (tmpl.structure ?? [])
+                  .map((f) => `## ${f.label}\n`)
+                  .join('\n');
+                setDraft((d) => ({
+                  ...d,
+                  templateId: id,
+                  templateSections: sectionDefaults,
+                  summary: assembled,
+                }));
+              }}
+              hasExistingContent={Boolean(draft.summary.trim())}
+            />
             <Select
               label="Session (required)"
               description="Notes must be attached to a scheduled calendar session"
@@ -657,15 +748,35 @@ export default function SessionNotesTab({
               value={draft.noteType}
               onChange={(val) => setDraft((d) => ({ ...d, noteType: val ?? 'progress_note' }))}
             />
-            <Textarea
-              label={t('chart.note.summary')}
-              placeholder={t('chart.note.summaryPlaceholder')}
-              value={draft.summary}
-              onChange={(e) => setDraft((d) => ({ ...d, summary: e.currentTarget.value }))}
-              minRows={5}
-              autosize
-              required
-            />
+            {draft.templateSections
+              ? Object.entries(draft.templateSections).map(([key, val]) => (
+                  <Textarea
+                    key={key}
+                    label={key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                    value={val}
+                    onChange={(e) => setDraft((d) => ({
+                      ...d,
+                      templateSections: { ...d.templateSections, [key]: e.currentTarget.value },
+                      summary: Object.entries({ ...d.templateSections, [key]: e.currentTarget.value })
+                        .map(([k, v]) => `## ${k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}\n${v}`)
+                        .join('\n\n'),
+                    }))}
+                    minRows={3}
+                    autosize
+                    required={key === 'si_assessment' || key === 'hi_assessment' ? undefined : undefined}
+                  />
+                ))
+              : (
+              <Textarea
+                label={t('chart.note.summary')}
+                placeholder={t('chart.note.summaryPlaceholder')}
+                value={draft.summary}
+                onChange={(e) => setDraft((d) => ({ ...d, summary: e.currentTarget.value }))}
+                minRows={5}
+                autosize
+                required
+              />
+              )}
             <Textarea
               label={t('chart.note.interventions')}
               description="One per line (e.g. CBT thought record, EMDR resourcing, prayer, Scripture reflection)"

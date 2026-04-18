@@ -1163,6 +1163,23 @@ CREATE TABLE IF NOT EXISTS faith_note_templates (
   INDEX idx_faith_note_tmpl_tenant (tenant_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ─── System-level clinical note template library ─────────────────────────────
+-- These are read-only, system-wide templates (no tenant_id).
+-- Seeded in migrate.js. Practices use faith_note_templates for custom templates.
+
+CREATE TABLE IF NOT EXISTS clinical_note_templates (
+  id             CHAR(36)     NOT NULL,
+  name           VARCHAR(128) NOT NULL,
+  slug           VARCHAR(64)  NOT NULL,
+  category       VARCHAR(32)  NOT NULL DEFAULT 'standard'
+                   COMMENT 'standard|faith_integrated|specialty|crisis',
+  structure_json JSON         NOT NULL,
+  is_default     TINYINT(1)   NOT NULL DEFAULT 0,
+  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_clinical_tmpl_slug (slug)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ─── Faith: treatment goal templates ─────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS faith_goal_templates (

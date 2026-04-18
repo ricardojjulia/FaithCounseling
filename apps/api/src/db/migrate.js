@@ -62,6 +62,7 @@ try {
   } else {
     console.log('Skipping dev portal client/resource seed (SEED_DEV_PORTAL_DATA=false).');
   }
+  await seedClinicalNoteTemplates(connection);
 } finally {
   await connection.end();
 }
@@ -404,6 +405,10 @@ async function applyColumnMigrations(conn) {
   await addColumnIfMissing('progress_notes', 'cosigned_at', 'DATETIME NULL');
   await addColumnIfMissing('progress_notes', 'cosign_comments_enc', 'TEXT NULL');
 
+  // ── Phase 4: Clinical note template linking on progress notes ─────────────
+  await addColumnIfMissing('progress_notes', 'template_id', 'VARCHAR(64) NULL COMMENT \'references clinical_note_templates.id\'');
+  await addColumnIfMissing('progress_notes', 'template_sections_enc', 'TEXT NULL COMMENT \'AES-256-GCM encrypted JSON of {sectionKey: content}\'');
+
   // ── Phase 3: Supervisor assignments table ────────────────────────────────
   await conn.query(`
     CREATE TABLE IF NOT EXISTS \`supervisor_assignments\` (
@@ -695,4 +700,182 @@ async function ensureDevPortalClient(conn) {
     );
     console.log('  + ensured seeded portal resource for local development');
   }
+}
+
+// ---------------------------------------------------------------------------
+// System-level clinical note template library
+// Seeded idempotently — skips rows that already exist (INSERT IGNORE).
+// ---------------------------------------------------------------------------
+async function seedClinicalNoteTemplates(conn) {
+  const { v4: uuidv4 } = await import('uuid').catch(() => ({ v4: () => crypto.randomUUID() }));
+
+  const templates = [
+    // ── Standard formats ──────────────────────────────────────────────────
+    {
+      slug: 'soap',
+      name: 'SOAP Note',
+      category: 'standard',
+      is_default: 1,
+      structure: [
+        { key: 'subjective', label: 'Subjective', placeholder: 'Client\'s reported experience, presenting concerns, mood, symptoms…', type: 'textarea', required: false },
+        { key: 'objective', label: 'Objective', placeholder: 'Clinician\'s observable data: appearance, affect, behavior, MSE findings…', type: 'textarea', required: false },
+        { key: 'assessment', label: 'Assessment', placeholder: 'Clinical interpretation, diagnostic impressions, progress toward goals…', type: 'textarea', required: false },
+        { key: 'plan', label: 'Plan', placeholder: 'Treatment interventions, homework, referrals, next steps…', type: 'textarea', required: false },
+      ],
+    },
+    {
+      slug: 'dap',
+      name: 'DAP Note',
+      category: 'standard',
+      is_default: 0,
+      structure: [
+        { key: 'data', label: 'Data', placeholder: 'Objective and subjective data gathered this session…', type: 'textarea', required: false },
+        { key: 'assessment', label: 'Assessment', placeholder: 'Clinical interpretation and diagnostic impressions…', type: 'textarea', required: false },
+        { key: 'plan', label: 'Plan', placeholder: 'Next steps, interventions, and homework…', type: 'textarea', required: false },
+      ],
+    },
+    {
+      slug: 'birp',
+      name: 'BIRP Note',
+      category: 'standard',
+      is_default: 0,
+      structure: [
+        { key: 'behavior', label: 'Behavior', placeholder: 'Client\'s behavior, affect, and presenting problems this session…', type: 'textarea', required: false },
+        { key: 'intervention', label: 'Intervention', placeholder: 'Therapeutic interventions applied…', type: 'textarea', required: false },
+        { key: 'response', label: 'Response', placeholder: 'Client\'s response to interventions…', type: 'textarea', required: false },
+        { key: 'plan', label: 'Plan', placeholder: 'Plan for next session, homework, referrals…', type: 'textarea', required: false },
+      ],
+    },
+    {
+      slug: 'girp',
+      name: 'GIRP Note',
+      category: 'standard',
+      is_default: 0,
+      structure: [
+        { key: 'goal', label: 'Goal', placeholder: 'Treatment goal addressed this session…', type: 'textarea', required: false },
+        { key: 'intervention', label: 'Intervention', placeholder: 'Therapeutic techniques and interventions used…', type: 'textarea', required: false },
+        { key: 'response', label: 'Response', placeholder: 'Client\'s response, engagement, and progress…', type: 'textarea', required: false },
+        { key: 'plan', label: 'Plan', placeholder: 'Next steps and homework…', type: 'textarea', required: false },
+      ],
+    },
+    {
+      slug: 'stop',
+      name: 'STOP Note',
+      category: 'standard',
+      is_default: 0,
+      structure: [
+        { key: 'summary', label: 'Summary', placeholder: 'Brief summary of session content…', type: 'textarea', required: false },
+        { key: 'treatment', label: 'Treatment', placeholder: 'Interventions and techniques applied…', type: 'textarea', required: false },
+        { key: 'objective', label: 'Objective', placeholder: 'Observable data and measurable outcomes…', type: 'textarea', required: false },
+        { key: 'plan', label: 'Plan', placeholder: 'Plan for next session…', type: 'textarea', required: false },
+      ],
+    },
+    {
+      slug: 'mint',
+      name: 'MINT Note',
+      category: 'standard',
+      is_default: 0,
+      structure: [
+        { key: 'motivation', label: 'Motivation', placeholder: 'Client\'s motivational status, ambivalence, readiness to change…', type: 'textarea', required: false },
+        { key: 'intervention', label: 'Intervention', placeholder: 'MI techniques used (OARS, change talk, affirmation)…', type: 'textarea', required: false },
+        { key: 'next_steps', label: 'Next Steps', placeholder: 'Agreed action steps and client commitments…', type: 'textarea', required: false },
+        { key: 'theme', label: 'Theme', placeholder: 'Overarching therapeutic theme of the session…', type: 'textarea', required: false },
+      ],
+    },
+    // ── Faith-integrated formats ───────────────────────────────────────────
+    {
+      slug: 'soap-faith',
+      name: 'SOAP Note — Faith Integrated',
+      category: 'faith_integrated',
+      is_default: 0,
+      structure: [
+        { key: 'subjective', label: 'Subjective', placeholder: 'Client\'s reported experience, including spiritual concerns or questions…', type: 'textarea', required: false },
+        { key: 'spiritual_subjective', label: 'Spiritual Subjective', placeholder: 'Client\'s spiritual experience, prayer life, faith struggles or growth…', type: 'textarea', required: false, faithOnly: true },
+        { key: 'objective', label: 'Objective', placeholder: 'Clinician\'s observable data: affect, behavior, MSE findings…', type: 'textarea', required: false },
+        { key: 'assessment', label: 'Assessment', placeholder: 'Clinical interpretation and diagnostic impressions…', type: 'textarea', required: false },
+        { key: 'scripture_applied', label: 'Scripture Applied', placeholder: 'Scripture reference and how it was integrated therapeutically…', type: 'textarea', required: false, faithOnly: true },
+        { key: 'plan', label: 'Plan', placeholder: 'Treatment plan including faith-integrated homework and practices…', type: 'textarea', required: false },
+      ],
+    },
+    {
+      slug: 'dap-faith',
+      name: 'DAP Note — Faith Integrated',
+      category: 'faith_integrated',
+      is_default: 0,
+      structure: [
+        { key: 'data', label: 'Data', placeholder: 'Data gathered this session including spiritual themes…', type: 'textarea', required: false },
+        { key: 'assessment', label: 'Assessment', placeholder: 'Clinical interpretation, including theological assessment where relevant…', type: 'textarea', required: false },
+        { key: 'theological_assessment', label: 'Theological Assessment', placeholder: 'Faith-lens observations: spiritual barriers, theological distortions, resources…', type: 'textarea', required: false, faithOnly: true },
+        { key: 'plan', label: 'Plan', placeholder: 'Plan including faith-based practices, Scripture, spiritual disciplines…', type: 'textarea', required: false },
+      ],
+    },
+    {
+      slug: 'spiritual-formation',
+      name: 'Spiritual Formation Note',
+      category: 'faith_integrated',
+      is_default: 0,
+      structure: [
+        { key: 'prayer_life', label: 'Prayer Life', placeholder: 'Current prayer practices, consistency, quality of communion with God…', type: 'textarea', required: false, faithOnly: true },
+        { key: 'scripture_engagement', label: 'Scripture Engagement', placeholder: 'Bible reading, study habits, verses explored this session…', type: 'textarea', required: false, faithOnly: true },
+        { key: 'spiritual_barriers', label: 'Spiritual Barriers', placeholder: 'Obstacles to faith growth, doubts, past wounds, spiritual dry seasons…', type: 'textarea', required: false, faithOnly: true },
+        { key: 'spiritual_goals', label: 'Spiritual Goals', placeholder: 'Growth goals agreed upon, spiritual disciplines to practice…', type: 'textarea', required: false, faithOnly: true },
+        { key: 'pastoral_notes', label: 'Pastoral Notes', placeholder: 'Pastoral observations, referral to pastoral care, church community involvement…', type: 'textarea', required: false, faithOnly: true },
+      ],
+    },
+    // ── Specialty formats ──────────────────────────────────────────────────
+    {
+      slug: 'emdr',
+      name: 'EMDR Session Note',
+      category: 'specialty',
+      is_default: 0,
+      structure: [
+        { key: 'target_image', label: 'Target Image / Memory', placeholder: 'Target memory or image addressed this session…', type: 'textarea', required: false },
+        { key: 'negative_cognition', label: 'Negative Cognition (NC)', placeholder: 'e.g. "I am not safe" / "I am powerless"', type: 'text', required: false },
+        { key: 'positive_cognition', label: 'Positive Cognition (PC)', placeholder: 'e.g. "I am safe now" / "I have choices"', type: 'text', required: false },
+        { key: 'suds_score', label: 'SUDS Score (0–10)', placeholder: 'Starting and ending distress level…', type: 'text', required: false },
+        { key: 'voc_score', label: 'VOC Score (1–7)', placeholder: 'Validity of Cognition rating…', type: 'text', required: false },
+        { key: 'phase_reached', label: 'Phase Reached', placeholder: 'e.g. Phase 3 (Assessment), Phase 4 (Desensitization), Phase 5 (Installation)…', type: 'text', required: false },
+        { key: 'session_notes', label: 'Session Notes', placeholder: 'Client response, blocks encountered, positive experiences, next session target…', type: 'textarea', required: false },
+      ],
+    },
+    // ── Crisis / Safety ────────────────────────────────────────────────────
+    {
+      slug: 'crisis-safety',
+      name: 'Crisis / Safety Note',
+      category: 'crisis',
+      is_default: 0,
+      structure: [
+        { key: 'si_assessment', label: 'Suicidal Ideation Assessment', placeholder: 'Ideation, intent, plan, means, timeline, protective factors…', type: 'textarea', required: false, required_for_lock: true },
+        { key: 'hi_assessment', label: 'Homicidal Ideation Assessment', placeholder: 'Ideation, target, intent, plan, means, Tarasoff duty assessment…', type: 'textarea', required: false, required_for_lock: true },
+        { key: 'safety_plan_status', label: 'Safety Plan Status', placeholder: 'Active safety plan reviewed, updated, or created this session…', type: 'textarea', required: false },
+        { key: 'hospitalization_triggers', label: 'Hospitalization Triggers / Outcome', placeholder: 'Criteria for voluntary / involuntary hospitalization; outcome of evaluation…', type: 'textarea', required: false },
+        { key: 'crisis_intervention', label: 'Crisis Intervention', placeholder: 'Interventions applied: grounding, coping skills, de-escalation, faith resources…', type: 'textarea', required: false },
+        { key: 'follow_up_plan', label: 'Follow-Up Plan', placeholder: 'Between-session contacts, emergency contacts, next appointment…', type: 'textarea', required: false },
+      ],
+    },
+    // ── Group therapy ──────────────────────────────────────────────────────
+    {
+      slug: 'group-therapy',
+      name: 'Group Therapy Note',
+      category: 'specialty',
+      is_default: 0,
+      structure: [
+        { key: 'group_dynamics', label: 'Group Dynamics', placeholder: 'Overall group cohesion, safety, themes, conflict, or breakthroughs…', type: 'textarea', required: false },
+        { key: 'individual_participation', label: 'Individual Participation', placeholder: 'This client\'s participation, disclosure level, engagement…', type: 'textarea', required: false },
+        { key: 'peer_interactions', label: 'Peer Interactions', placeholder: 'Notable peer interactions, support given/received, boundary observations…', type: 'textarea', required: false },
+        { key: 'group_theme', label: 'Group Theme / Topic', placeholder: 'Central theme or psychoeducation topic for this session…', type: 'textarea', required: false },
+        { key: 'individual_response', label: 'Individual Clinical Response', placeholder: 'This client\'s clinical response, affect, and progress toward treatment goals…', type: 'textarea', required: false },
+      ],
+    },
+  ];
+
+  for (const tmpl of templates) {
+    const id = uuidv4();
+    await conn.query(
+      `INSERT IGNORE INTO clinical_note_templates (id, name, slug, category, structure_json, is_default)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, tmpl.name, tmpl.slug, tmpl.category, JSON.stringify(tmpl.structure), tmpl.is_default],
+    );
+  }
+  console.log(`  + seeded ${templates.length} system clinical note templates (INSERT IGNORE — safe to re-run)`);
 }
