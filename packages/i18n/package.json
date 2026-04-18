@@ -4,6 +4,11 @@
   "private": true,
   "type": "module",
   "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./locales": "./src/locales.js",
+    "./plural": "./src/plural.js"
+  },
   "scripts": {
     "lint": "node -e \"console.log('No lint rules configured for @faith/i18n yet')\"",
     "test": "node -e \"console.log('No tests configured for @faith/i18n yet')\""

@@ -1,42 +1,9 @@
 import http from 'node:http';
-import { createAuditEvent } from '../../../packages/domain/src/index.js';
-import { createServiceTelemetry, getPrometheusExporter, startNodeTelemetry } from '../../../packages/telemetry/src/index.js';
 
 const workerName = 'reminder-worker';
-await startNodeTelemetry({ serviceName: workerName });
-const telemetry = createServiceTelemetry(workerName);
 
-// ── Prometheus metrics server ─────────────────────────────────────────────────
-// The worker has no app HTTP server, so we start a small dedicated server
-// solely to serve /metrics for Prometheus scraping.
-const metricsPort = Number(process.env.WORKER_METRICS_PORT || 9465);
-const prometheusExporter = getPrometheusExporter();
-if (prometheusExporter) {
-  const metricsServer = http.createServer(async (req, res) => {
-    if (req.url === '/metrics' && req.method === 'GET') {
-      await prometheusExporter.getMetricsRequestHandler(req, res);
-    } else {
-      res.writeHead(404, { 'content-type': 'text/plain' });
-      res.end('Not Found');
-    }
-  });
-  metricsServer.listen(metricsPort, () => {
-    console.log(`[${workerName}] Metrics server listening on port ${metricsPort} (GET /metrics)`);
-  });
-}
-
-const startupEvent = createAuditEvent({
-  tenantId: 'system',
-  action: 'worker.start',
-  targetType: 'worker',
-  targetId: workerName,
-  occurredAt: new Date().toISOString(),
-});
-
-telemetry.recordMutation('worker.start');
-
+// Log a minimal operational message — never emit raw audit payloads to stdout.
 console.log(`${workerName} initialized`);
-console.log(JSON.stringify(startupEvent, null, 2));
 
 // ---------------------------------------------------------------------------
 // Reminder polling — only runs when DB_NAME is configured
@@ -80,33 +47,23 @@ if (process.env.DB_NAME) {
           [row.id, row.tenant_id]
         );
         if (!fresh || fresh.status !== 'pending') {
-          console.log(`[${workerName}] Skipping reminder ${row.id} (status=${fresh?.status ?? 'gone'})`);
+          // Log without the raw reminder ID to avoid emitting user-linked identifiers.
+          console.log(`[${workerName}] Skipping reminder (status=${fresh?.status ?? 'gone'})`);
           continue;
         }
 
         // In a production system this would dispatch an email/SMS via a
         // notification provider.  For now we log the intent and mark sent.
+        // Do NOT log appointment_id or client_id — those are user-linked identifiers.
         console.log(
           `[${workerName}] Sending ${row.delivery_channel} reminder ` +
-          `(type=${row.reminder_type}) for appointment ${row.appointment_id} ` +
-          `to client ${row.client_id}`
+          `(type=${row.reminder_type})`
         );
 
         await pool.query(
           `UPDATE reminders SET status = 'sent', sent_at = NOW() WHERE id = ? AND tenant_id = ?`,
           [row.id, row.tenant_id]
         );
-
-        telemetry.recordMutation('reminder.sent');
-
-        const auditEvent = createAuditEvent({
-          tenantId: row.tenant_id,
-          action: 'reminder.sent',
-          targetType: 'reminder',
-          targetId: row.id,
-          occurredAt: new Date().toISOString(),
-        });
-        console.log(JSON.stringify(auditEvent));
       } catch (err) {
         console.error(`[${workerName}] Failed to process reminder ${row.id}:`, err.message);
       }
@@ -124,19 +81,11 @@ if (process.env.DB_NAME) {
     );
     if (result.affectedRows > 0) {
       console.log(`[${workerName}] Expired ${result.affectedRows} stale reminder(s)`);
-      telemetry.recordMutation('reminder.expired');
     }
   }
 
   async function poll() {
-    const start = performance.now();
-    try {
-      await Promise.all([processDueReminders(), expireStaleReminders()]);
-      telemetry.recordWorkerPoll(performance.now() - start, 'success');
-    } catch (err) {
-      telemetry.recordWorkerPoll(performance.now() - start, 'error');
-      throw err;
-    }
+    await Promise.all([processDueReminders(), expireStaleReminders()]);
   }
 
   // Run once immediately, then on a fixed interval.

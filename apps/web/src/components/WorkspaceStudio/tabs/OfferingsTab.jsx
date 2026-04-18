@@ -19,10 +19,7 @@ async function apiFetch(url, options = {}) {
   return res.json();
 }
 
-function formatCurrency(cents) {
-  if (typeof cents !== 'number') return '$0.00';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
-}
+// formatCurrency is provided by useI18n() — imported at component level
 
 function centsToDollars(cents) {
   const amount = Number(cents ?? 0);
@@ -31,7 +28,7 @@ function centsToDollars(cents) {
 }
 
 export default function OfferingsTab() {
-  const { t } = useI18n();
+  const { t, formatCurrency } = useI18n();
   useSurfaceTelemetry('studio.offerings', { surfaceKind: 'tab', workflow: 'workspace_studio' });
 
   const [loading, setLoading] = useState(true);

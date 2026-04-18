@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useI18n } from '../../../lib/i18nContext.jsx';
 import { notifications } from '@mantine/notifications';
 import {
   Stack, Title, Paper, SimpleGrid, TextInput, Select, Textarea, Checkbox,
@@ -49,6 +50,7 @@ const ALCOHOL_FREQ_OPTIONS = [
 const AUDITC = { never: 0, 'monthly or less': 1, '2-4x/month': 2, '2-3x/week': 3, '4+x/week': 4 };
 
 export default function ClinicalHistoryTab({ client, clientId }) {
+  const { formatDate } = useI18n();
   const ch = client.clinical ?? {};
 
   // Medical History
@@ -196,7 +198,7 @@ export default function ClinicalHistoryTab({ client, clientId }) {
       <CollapsibleSection title="Risk Assessment" riskActive={riskActive}>
         {ch.last_risk_assessment_at && (
           <Paper p="sm" radius="sm" withBorder>
-            <Text fz="sm">Last assessed by <strong>{ch.risk_assessed_by ?? 'unknown'}</strong> on {new Date(ch.last_risk_assessment_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</Text>
+            <Text fz="sm">Last assessed by <strong>{ch.risk_assessed_by ?? 'unknown'}</strong> on {formatDate(ch.last_risk_assessment_at, 'long')}</Text>
           </Paper>
         )}
         {siCurrent && <Alert color="red" variant="filled">Active suicidal ideation — document risk plan.</Alert>}

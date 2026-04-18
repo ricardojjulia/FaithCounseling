@@ -37,7 +37,6 @@ import {
   supervisionStatuses,
   treatmentPlanStatuses,
 } from '../../../packages/domain/src/index.js';
-import { createServiceTelemetry, getPrometheusExporter, startNodeTelemetry } from '../../../packages/telemetry/src/index.js';
 import { createI18nStore } from './lib/i18n-store.js';
 import { featureFlags } from './lib/feature-flags.js';
 import { buildIntakePreview } from './lib/intake-preview.js';
@@ -64,7 +63,7 @@ import {
 } from './lib/auth.js';
 import {
   listStaff, getStaffById, createStaff, updateStaff,
-  listPractices, getPracticeById, createPractice, updatePractice,
+  listPractices, getPracticeById, getPracticeVideoKeyEnc, createPractice, updatePractice,
   listLocations, getLocationById, createLocation, updateLocation, deleteLocation,
   listAvailabilityTemplates, upsertAvailabilityTemplate, deleteAvailabilityTemplate,
 } from './db/queries/staff.js';
@@ -81,7 +80,7 @@ import { getStaffEmployment, upsertStaffEmployment } from './db/queries/staffEmp
 import { getStaffFaithProfile, upsertStaffFaithProfile } from './db/queries/staffFaithProfiles.js';
 import {
   listAppointments, getAppointmentById, createAppointment, updateAppointment, deleteAppointment,
-  listAppointmentsByDateRange,
+  listAppointmentsByDateRange, updateAppointmentVideoRoom,
   listReminders, createReminder, updateReminder,
   listWaitlist, createWaitlistEntry, updateWaitlistEntry,
   listAvailabilityOverrides, createAvailabilityOverride, updateAvailabilityOverride, deleteAvailabilityOverride,
@@ -154,6 +153,12 @@ import { getClientClinicalHistory, upsertClientClinicalHistory } from './db/quer
 import { getClientFaithProfile, upsertClientFaithProfile } from './db/queries/clientFaithProfiles.js';
 import { getClientLegal, upsertClientLegal } from './db/queries/clientLegal.js';
 import { createClient as createClientRecord } from './db/queries/clients.js';
+import {
+  listTimeEntries, createTimeEntry, getTimeEntry, updateTimeEntry, deleteTimeEntry,
+  syncTimeEntryFromAppointment, getTimeEntrySummary,
+  listLicensureGoals, createLicensureGoal,
+  listSupervisorAssignments, createSupervisorAssignment, deleteSupervisorAssignment, isSupervisorOf,
+} from './db/queries/timeTracking.js';
 
 const port = Number(process.env.PORT || 3001);
 const currentFilePath = fileURLToPath(import.meta.url);
@@ -162,8 +167,48 @@ const openApiSpecPath = path.resolve(currentDirPath, '../../../docs/api/openapi.
 const openApiSpecYaml = await readFile(openApiSpecPath, 'utf8');
 const standaloneHint = 'If the shared dev stack is already running, use `pnpm start:api:standalone`.';
 
-await startNodeTelemetry({ serviceName: 'faith-api' });
-const telemetry = createServiceTelemetry('faith-api');
+// ─── Portal upload allowlist (F-005) ──────────────────────────────────────────
+// Only safe document types that a counseling practice legitimately needs.
+const UPLOAD_ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/tiff',
+  'text/plain',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
+]);
+
+// Allowed file extensions (lower-case, including leading dot).
+const UPLOAD_ALLOWED_EXTENSIONS = new Set([
+  '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.tiff', '.tif',
+  '.txt', '.docx', '.doc',
+]);
+
+// Known file-signature (magic bytes) checks for common document types.
+// Each entry maps a byte-sequence prefix to a MIME-type prefix string so that
+// we can confirm the declared type is consistent with the actual content.
+const UPLOAD_FILE_SIGNATURES = [
+  { magic: [0x25, 0x50, 0x44, 0x46], mimePrefix: 'application/pdf' },                   // %PDF
+  { magic: [0xFF, 0xD8, 0xFF],        mimePrefix: 'image/jpeg' },                        // JPEG
+  { magic: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], mimePrefix: 'image/png' }, // PNG
+  { magic: [0x47, 0x49, 0x46, 0x38],  mimePrefix: 'image/gif' },                         // GIF8
+  { magic: [0x49, 0x49, 0x2A, 0x00],  mimePrefix: 'image/tiff' },                        // TIFF LE
+  { magic: [0x4D, 0x4D, 0x00, 0x2A],  mimePrefix: 'image/tiff' },                        // TIFF BE
+  { magic: [0x50, 0x4B, 0x03, 0x04],  mimePrefix: 'application/vnd' },                   // ZIP/DOCX
+  { magic: [0xD0, 0xCF, 0x11, 0xE0],  mimePrefix: 'application/msword' },                // Legacy DOC
+];
+
+function detectUploadFileSignature(buffer) {
+  for (const sig of UPLOAD_FILE_SIGNATURES) {
+    if (buffer.length >= sig.magic.length && sig.magic.every((byte, i) => buffer[i] === byte)) {
+      return sig.mimePrefix;
+    }
+  }
+  return null; // no known signature — allow through (e.g. plain text)
+}
+
 const i18nStore = await createI18nStore();
 
 // Verify DB connectivity at startup when DB_NAME is configured.
@@ -195,44 +240,6 @@ process.on('uncaughtException', (error) => {
   logError('process.uncaught_exception', { error });
   process.exit(1);
 });
-
-telemetry.updateHealth({
-  serviceStatus: 2,
-  dependencies: {
-    db: {
-      status: process.env.DB_NAME ? 2 : 1,
-      observedAt: new Date().toISOString(),
-    },
-  },
-  checks: {
-    startup: {
-      status: 2,
-      observedAt: new Date().toISOString(),
-      detail: process.env.DB_NAME ? 'database connection verified at startup' : 'running without DB_NAME configured',
-    },
-  },
-});
-
-// Sample MySQL pool stats every 30 seconds for Prometheus gauges.
-function sampleDbPoolStats() {
-  try {
-    const inner = pool.pool;
-    if (inner) {
-      telemetry.updateDbPoolStats({
-        active: inner._allConnections?.length ?? 0,
-        idle: inner._freeConnections?.length ?? 0,
-        waiting: inner._connectionQueue?.length ?? 0,
-      });
-    }
-  } catch {
-    // Pool stats sampling is best-effort; skip on any error.
-  }
-}
-
-if (process.env.DB_NAME) {
-  sampleDbPoolStats();
-  setInterval(sampleDbPoolStats, 30_000).unref();
-}
 
 const clients = [
   { id: 'c-001', tenantId: 'system', firstName: 'Sarah', lastName: 'Kim', status: 'active', faithBackground: 'Evangelical', highTouchpoint: true, primaryCounselorId: 's-001' },
@@ -813,6 +820,8 @@ const DEFAULT_FORM_CATALOG = Object.freeze([
   { formKey: 'SpiritualWellnessInventory', title: 'Spiritual Wellness Inventory', category: 'faith', isStandardOnSignup: false },
   { formKey: 'FaithHistoryQuestionnaire', title: 'Faith History Questionnaire', category: 'faith', isStandardOnSignup: false },
   { formKey: 'ValuesAndBiblicalIdentityWorksheet', title: 'Values and Biblical Identity Worksheet', category: 'faith', isStandardOnSignup: false },
+  { formKey: 'FaithIntegratedAdultIntake', title: 'Faith-Integrated Adult Intake', category: 'intake', isStandardOnSignup: false },
+  { formKey: 'PreMaritalChristianIntake', title: 'Pre-Marital Christian Counseling Intake', category: 'intake', isStandardOnSignup: false },
   { formKey: 'FamilySystemsAssessment', title: 'Family Systems Assessment', category: 'family', isStandardOnSignup: false },
 ]);
 
@@ -1311,7 +1320,6 @@ export async function handleApiRequest(request, response) {
   const route = resolveRoute(requestUrl.pathname);
   const requestStartedAt = Date.now();
   const requestId = normalizeRequestId(request.headers['x-request-id']) ?? crypto.randomUUID();
-  const requestTelemetryAttributes = {};
   let session = null;
   let requestFailureLogged = false;
 
@@ -1319,48 +1327,15 @@ export async function handleApiRequest(request, response) {
   request.route = route;
   response.setHeader('x-request-id', requestId);
 
-  if (featureFlags.tenantTelemetry) {
-    const headerTenantId = normalizeTenantId(request.headers['x-tenant-id']);
-    if (headerTenantId) {
-      requestTelemetryAttributes.tenantId = headerTenantId;
-    }
-  }
-
-  const requestScope = telemetry.beginRequest({
-    method: request.method ?? 'GET',
-    route,
-    ...requestTelemetryAttributes,
-  });
-
   try {
     // CORS — must come before rate-limit so preflight gets through cleanly
     if (handleCors(request, response)) return;
-
-    // Prometheus metrics — no auth required; restrict at network level in production
-    if (requestUrl.pathname === '/metrics' && request.method === 'GET') {
-      const prometheusExporter = getPrometheusExporter();
-      if (!prometheusExporter) {
-        response.writeHead(503, { 'content-type': 'text/plain; charset=utf-8' });
-        response.end('Metrics exporter not available');
-        return;
-      }
-      await prometheusExporter.getMetricsRequestHandler(request, response);
-      return;
-    }
 
     // Rate limiting
     if (checkRateLimit(request, response, route)) return;
 
     // Resolve session from cookie (null if unauthenticated or DB not configured)
     session = process.env.DB_NAME ? await resolveSession(request) : null;
-
-    if (featureFlags.tenantTelemetry) {
-      const identity = callerIdentity(request, session);
-      const scopedTenantId = normalizeTenantId(identity.tenantId);
-      if (scopedTenantId) {
-        requestTelemetryAttributes.tenantId = scopedTenantId;
-      }
-    }
 
     // RBAC — uses session when available, falls back to headers in dev
     if (enforceRbac(request, response, route, session)) return;
@@ -1469,6 +1444,16 @@ export async function handleApiRequest(request, response) {
     }
 
     if (requestUrl.pathname.startsWith('/v1/clients/') && requestUrl.pathname.includes('/progress-notes/') && !requestUrl.pathname.endsWith('/progress-notes')) {
+      // Cosign sub-actions: /v1/clients/:cId/progress-notes/:nId/submit-for-review
+      //                     /v1/clients/:cId/progress-notes/:nId/cosign
+      if (requestUrl.pathname.endsWith('/submit-for-review')) {
+        await handleProgressNoteCosignRequest(request, response, requestUrl, session);
+        return;
+      }
+      if (requestUrl.pathname.endsWith('/cosign')) {
+        await handleProgressNoteCosign(request, response, requestUrl, session);
+        return;
+      }
       await handleClientProgressNoteById(request, response, requestUrl, session);
       return;
     }
@@ -1760,6 +1745,13 @@ export async function handleApiRequest(request, response) {
     }
 
     if (requestUrl.pathname === '/v1/faith/language-preferences') {
+      // 301 → canonical name; keep old route working for one release cycle
+      response.writeHead(301, { Location: '/v1/faith/pastoral-register' });
+      response.end();
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/faith/pastoral-register') {
       await handleFaithLanguagePreferences(request, response, requestUrl);
       return;
     }
@@ -1771,6 +1763,11 @@ export async function handleApiRequest(request, response) {
 
     if (requestUrl.pathname === '/v1/audit/intelligence' || requestUrl.pathname === '/v1/audit/intelligence/') {
       await handleAuditIntelligence(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/audit/intelligence/observations' || requestUrl.pathname === '/v1/audit/intelligence/observations/') {
+      await handleAuditObservations(request, response, session);
       return;
     }
 
@@ -1804,6 +1801,16 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname.endsWith('/video-session') && requestUrl.pathname.startsWith('/v1/appointments/')) {
+      await handleVideoSession(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname.endsWith('/sync-time') && requestUrl.pathname.startsWith('/v1/appointments/')) {
+      await handleAppointmentSyncTime(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname.startsWith('/v1/appointments/')) {
       await handleAppointmentById(request, response, requestUrl, session);
       return;
@@ -1811,6 +1818,11 @@ export async function handleApiRequest(request, response) {
 
     if (requestUrl.pathname === '/v1/practices') {
       await handlePracticesCollection(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname.endsWith('/video-config') && requestUrl.pathname.startsWith('/v1/practices/')) {
+      await handlePracticeVideoConfig(request, response, requestUrl, session);
       return;
     }
 
@@ -1884,8 +1896,47 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    // ─── Supervisor assignments ─────────────────────────────────────────────
+    if (requestUrl.pathname === '/v1/supervisor-assignments') {
+      await handleSupervisorAssignments(request, response, requestUrl, session);
+      return;
+    }
+    if (requestUrl.pathname.startsWith('/v1/supervisor-assignments/')) {
+      await handleSupervisorAssignmentById(request, response, requestUrl, session);
+      return;
+    }
+
+    // ─── Time entries ────────────────────────────────────────────────────────
+    if (requestUrl.pathname === '/v1/time-entries') {
+      await handleTimeEntries(request, response, requestUrl, session);
+      return;
+    }
+    if (requestUrl.pathname === '/v1/time-entries/summary') {
+      await handleTimeEntriesSummary(request, response, requestUrl, session);
+      return;
+    }
+    if (requestUrl.pathname === '/v1/time-entries/export') {
+      await handleTimeEntriesExport(request, response, requestUrl, session);
+      return;
+    }
+    if (requestUrl.pathname.startsWith('/v1/time-entries/')) {
+      await handleTimeEntryById(request, response, requestUrl, session);
+      return;
+    }
+
+    // ─── Licensure goals ─────────────────────────────────────────────────────
+    if (requestUrl.pathname === '/v1/licensure-goals') {
+      await handleLicensureGoals(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/i18n/locales') {
-      await handleLocales(request, response);
+      await handleLocales(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/i18n/status') {
+      await handleI18nStatus(request, response, session);
       return;
     }
 
@@ -1894,8 +1945,12 @@ export async function handleApiRequest(request, response) {
         writeJson(response, 405, { error: 'Method not allowed' });
         return;
       }
+      writeJson(response, 200, i18nStore.getCatalog(requestUrl.searchParams.get('locale') ?? 'en-US'));
+      return;
+    }
 
-      writeJson(response, 200, i18nStore.getCatalog(requestUrl.searchParams.get('locale') ?? 'en'));
+    if (requestUrl.pathname.startsWith('/v1/i18n/locales/')) {
+      await handleDeleteLocale(request, response, requestUrl, session);
       return;
     }
 
@@ -1914,45 +1969,9 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
-    if (requestUrl.pathname === '/v1/telemetry/vitals') {
-      await handleFrontendVitals(request, response, session);
-      return;
-    }
-
-    if (requestUrl.pathname === '/v1/telemetry/events') {
-      await handleFrontendTelemetryEvents(request, response, session);
-      return;
-    }
-
     if (requestUrl.pathname === '/v1/monitoring/db' && request.method === 'GET') {
       if (requirePracticeAdmin(request, response, session)) return;
       await handleMonitoringDb(response);
-      return;
-    }
-
-    if (requestUrl.pathname === '/v1/monitoring/observability-stack' && request.method === 'GET') {
-      if (requirePracticeAdmin(request, response, session)) return;
-      await handleObservabilityStackHealth(response);
-      return;
-    }
-
-    if (requestUrl.pathname === '/v1/telemetry/summary' && request.method === 'GET') {
-      if (requirePracticeAdmin(request, response, session)) return;
-      writeJson(response, 200, {
-        service: 'api',
-        features: {
-          tenantTelemetry: featureFlags.tenantTelemetry,
-          tenantTelemetrySummary: featureFlags.tenantTelemetrySummary,
-        },
-        exportedViaOtel: Boolean(
-          process.env.OTEL_EXPORTER_OTLP_ENDPOINT
-          || process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
-          || process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
-        ),
-        summary: telemetry.getSummary({
-          includeTenantBreakdown: featureFlags.tenantTelemetrySummary,
-        }),
-      });
       return;
     }
 
@@ -1980,7 +1999,6 @@ export async function handleApiRequest(request, response) {
       session,
       skipServerErrorCompletionLog: requestFailureLogged,
     });
-    requestScope.end(response.statusCode || 200, requestTelemetryAttributes);
   }
 }
 
@@ -2009,11 +2027,6 @@ if (process.env.FAITH_API_DISABLE_LISTEN !== '1') {
     logInfo('server.listening', {
       port,
       dbConfigured: Boolean(process.env.DB_NAME),
-      otelExportConfigured: Boolean(
-        process.env.OTEL_EXPORTER_OTLP_ENDPOINT
-        || process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
-        || process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
-      ),
     });
   });
 }
@@ -2031,10 +2044,8 @@ async function handleAuthLogin(request, response) {
       profile.role === 'client' ? 'portal_account' : 'staff_account',
       profile.portalAccountId ?? profile.clientId ?? profile.staffId,
     );
-    telemetry.recordAuthEvent('success', { role: profile.role ?? 'unknown' });
     writeJson(response, 200, { profile });
   } catch (err) {
-    telemetry.recordAuthEvent('failure', { reason: err.code ?? 'error' });
     writeJson(response, err.statusCode || 500, { error: err.error || err.message });
   }
 }
@@ -2126,8 +2137,8 @@ async function handlePortalPasswordResetRequest(request, response) {
     writeJson(response, 202, {
       ok: true,
       notice: 'If the portal account exists, a reset code has been issued.',
-      resetToken: result.resetToken,
-      expiresAt: result.expiresAt,
+      // resetToken is intentionally omitted — it must be delivered out-of-band
+      expiresAt: result.issued ? result.expiresAt : undefined,
     });
   } catch (err) {
     writeJson(response, err.statusCode || 500, { error: err.error || err.message });
@@ -2221,7 +2232,6 @@ async function handleClientsCollection(request, response, requestUrl, session) {
       [id, tenantId, encrypt(firstName), encrypt(lastName), status, faithBackground, highTouchpoint ? 1 : 0],
     );
     const newClient = { id, tenantId, firstName, lastName, status, faithBackground, highTouchpoint };
-    telemetry.recordMutation('client.create');
     await emitAudit(request, 'client.create', 'client', id, session);
     writeJson(response, 201, { item: newClient });
   } else {
@@ -2235,7 +2245,6 @@ async function handleClientsCollection(request, response, requestUrl, session) {
       highTouchpoint,
     };
     clients.push(nextClient);
-    telemetry.recordMutation('client.create');
     await emitAudit(request, 'client.create', 'client', nextClient.id, session);
     writeJson(response, 201, { item: nextClient });
   }
@@ -2443,7 +2452,6 @@ async function handleClientById(request, response, requestUrl, session) {
       if (mem) mem.status = 'inactive';
       if (client) client.status = 'inactive';
     }
-    telemetry.recordMutation('client.delete');
     await emitAudit(request, 'client.delete', 'client', client.id, session);
     writeJson(response, 200, { item: { ...client, status: 'inactive' } });
     return;
@@ -2517,7 +2525,6 @@ async function handleClientById(request, response, requestUrl, session) {
   }
 
   const updated = { ...client, firstName: newFirst, lastName: newLast, faithBackground: newFaith, highTouchpoint: newHighTouchpoint, status };
-  telemetry.recordMutation('client.update');
   await emitAudit(request, 'client.update', 'client', client.id, session);
   writeJson(response, 200, { item: updated });
 }
@@ -3022,7 +3029,6 @@ async function handleClientLifecycle(request, response, requestUrl, session) {
     }
 
     const updated = await updateLifecycle(client.id, client.tenantId, fields);
-    telemetry.recordMutation('client.lifecycle.update');
     await emitAudit(request, 'client.lifecycle.update', 'client', client.id, session);
     writeJson(response, 200, { item: updated });
     return;
@@ -3076,7 +3082,6 @@ async function handleClientLifecycle(request, response, requestUrl, session) {
 
   lifecycle.updatedAt = new Date().toISOString();
 
-  telemetry.recordMutation('client.lifecycle.update');
   await emitAudit(request, 'client.lifecycle.update', 'client', client.id, session);
   writeJson(response, 200, { item: lifecycle });
 }
@@ -3123,7 +3128,6 @@ async function handleClientConsents(request, response, requestUrl, session) {
         effectiveFrom: normalizeIsoDate(payload.effectiveFrom) ?? new Date().toISOString(),
         effectiveTo: normalizeIsoDate(payload.effectiveTo),
       });
-      telemetry.recordMutation('client.consent.create');
       emitAudit(request, 'client.consent.create', 'consent', item.id, session);
       writeJson(response, 201, { item });
       return;
@@ -3141,7 +3145,6 @@ async function handleClientConsents(request, response, requestUrl, session) {
     }) };
 
     consentRecords.push(item);
-    telemetry.recordMutation('client.consent.create');
     emitAudit(request, 'client.consent.create', 'consent', item.id);
     writeJson(response, 201, { item });
     return;
@@ -3169,7 +3172,6 @@ async function handleClientConsents(request, response, requestUrl, session) {
     await updateConsent(consentId, clientId, client.tenantId, fields);
     const [updated] = await pool.query('SELECT * FROM consent_records WHERE id = ?', [consentId]);
     const item = { id: updated[0].id, clientId: updated[0].client_id, tenantId: updated[0].tenant_id, consentType: updated[0].consent_type, signatureState: updated[0].signature_state, version: updated[0].version, effectiveFrom: updated[0].effective_from, effectiveTo: updated[0].effective_to, signedAt: updated[0].signed_at };
-    telemetry.recordMutation('client.consent.update');
     emitAudit(request, 'client.consent.update', 'consent', item.id, session);
     writeJson(response, 200, { item });
     return;
@@ -3193,7 +3195,6 @@ async function handleClientConsents(request, response, requestUrl, session) {
   if (typeof payload.effectiveFrom === 'string') item.effectiveFrom = normalizeIsoDate(payload.effectiveFrom) ?? item.effectiveFrom;
   if (typeof payload.effectiveTo === 'string') item.effectiveTo = normalizeIsoDate(payload.effectiveTo);
 
-  telemetry.recordMutation('client.consent.update');
   emitAudit(request, 'client.consent.update', 'consent', item.id);
   writeJson(response, 200, { item });
 }
@@ -3236,7 +3237,6 @@ async function handleClientIntakePackets(request, response, requestUrl, session)
         assignedForms,
         submittedAt: normalizeIsoDate(payload.submittedAt),
       });
-      telemetry.recordMutation('client.intake.create');
       emitAudit(request, 'client.intake.create', 'intake_packet', item.id, session);
       writeJson(response, 201, { item });
       return;
@@ -3252,7 +3252,6 @@ async function handleClientIntakePackets(request, response, requestUrl, session)
     }) };
 
     intakePackets.push(item);
-    telemetry.recordMutation('client.intake.create');
     emitAudit(request, 'client.intake.create', 'intake_packet', item.id);
     writeJson(response, 201, { item });
     return;
@@ -3278,7 +3277,6 @@ async function handleClientIntakePackets(request, response, requestUrl, session)
     if (typeof payload.submittedAt === 'string') fields.submittedAt = normalizeIsoDate(payload.submittedAt);
     await updateIntakePacket(clientId, client.tenantId, fields);
     const item = await getIntakePacket(clientId, client.tenantId);
-    telemetry.recordMutation('client.intake.update');
     emitAudit(request, 'client.intake.update', 'intake_packet', item.id, session);
     writeJson(response, 200, { item });
     return;
@@ -3306,7 +3304,6 @@ async function handleClientIntakePackets(request, response, requestUrl, session)
     item.submittedAt = normalizeIsoDate(payload.submittedAt) ?? item.submittedAt;
   }
 
-  telemetry.recordMutation('client.intake.update');
   emitAudit(request, 'client.intake.update', 'intake_packet', item.id);
   writeJson(response, 200, { item });
 }
@@ -3363,7 +3360,6 @@ async function handleClientTreatmentPlan(request, response, requestUrl, session)
       await updateTreatmentPlan(clientId, client.tenantId, { status, goals, interventions });
     }
     const plan = await getTreatmentPlan(clientId, client.tenantId);
-    telemetry.recordMutation('chart.treatment_plan.upsert');
     emitAudit(request, 'chart.treatment_plan.upsert', 'treatment_plan', plan.id, session);
     writeJson(response, 200, { item: plan });
     return;
@@ -3391,7 +3387,6 @@ async function handleClientTreatmentPlan(request, response, requestUrl, session)
     plan.reviewedAt = normalizeIsoDate(payload.reviewedAt) ?? plan.reviewedAt;
   }
 
-  telemetry.recordMutation('chart.treatment_plan.upsert');
   emitAudit(request, 'chart.treatment_plan.upsert', 'treatment_plan', plan.id);
   writeJson(response, 200, { item: plan });
 }
@@ -3434,6 +3429,10 @@ async function handleClientProgressNotes(request, response, requestUrl, session)
     ? payload.interventions.map((entry) => sanitizeStr(String(entry), 300)).filter(Boolean)
     : [];
   const appointmentId = sanitizeStr(payload.appointmentId, 64) ?? null;
+  const scriptureReference = sanitizeStr(payload.scriptureReference, 255) ?? null;
+  const spiritualPractices = Array.isArray(payload.spiritualPractices)
+    ? payload.spiritualPractices.map((s) => sanitizeStr(String(s), 64)).filter(Boolean)
+    : null;
 
   if (process.env.DB_NAME) {
     const item = await createProgressNote({
@@ -3447,8 +3446,9 @@ async function handleClientProgressNotes(request, response, requestUrl, session)
       lockedNote: Boolean(payload.locked),
       signedBy: Boolean(payload.locked) ? sanitizeStr(payload.signedBy, 120) ?? callerRole(request, session) : null,
       signedAt: Boolean(payload.locked) ? new Date().toISOString() : null,
+      scriptureReference,
+      spiritualPractices,
     });
-    telemetry.recordMutation('chart.progress_note.create');
     emitAudit(request, 'chart.progress_note.create', 'progress_note', item.id, session);
     writeJson(response, 201, { item });
     return;
@@ -3468,7 +3468,6 @@ async function handleClientProgressNotes(request, response, requestUrl, session)
   }) };
 
   progressNotes.push(item);
-  telemetry.recordMutation('chart.progress_note.create');
   emitAudit(request, 'chart.progress_note.create', 'progress_note', item.id);
   writeJson(response, 201, { item });
 }
@@ -3533,6 +3532,14 @@ async function handleClientProgressNoteById(request, response, requestUrl, sessi
     fields.signedBy = sanitizeStr(payload.signedBy, 120) ?? callerRole(request, session);
     fields.signedAt = new Date().toISOString();
   }
+  // Phase 2 faith fields
+  if (payload.scriptureReference !== undefined)
+    fields.scriptureReference = sanitizeStr(payload.scriptureReference, 255) ?? null;
+  if (payload.spiritualPractices !== undefined) {
+    fields.spiritualPractices = Array.isArray(payload.spiritualPractices)
+      ? payload.spiritualPractices.map((s) => sanitizeStr(String(s), 64)).filter(Boolean)
+      : null;
+  }
 
   if (!Object.keys(fields).length) {
     writeJson(response, 400, { error: 'No updatable fields provided' });
@@ -3557,7 +3564,6 @@ async function handleClientProgressNoteById(request, response, requestUrl, sessi
       signedAt: updated[0].signed_at,
       createdAt: updated[0].created_at,
     } : null;
-    telemetry.recordMutation(fields.lockedNote ? 'chart.progress_note.sign' : 'chart.progress_note.update');
     emitAudit(request, fields.lockedNote ? 'chart.progress_note.sign' : 'chart.progress_note.update', 'progress_note', noteId, session);
     writeJson(response, 200, { item });
     return;
@@ -3573,7 +3579,6 @@ async function handleClientProgressNoteById(request, response, requestUrl, sessi
     ...(fields.interventions !== undefined ? { interventions: fields.interventions.split('\n').filter(Boolean) } : {}),
     ...(fields.lockedNote ? { locked: true, signedBy: fields.signedBy, signedAt: fields.signedAt } : {}),
   });
-  telemetry.recordMutation(fields.lockedNote ? 'chart.progress_note.sign' : 'chart.progress_note.update');
   emitAudit(request, fields.lockedNote ? 'chart.progress_note.sign' : 'chart.progress_note.update', 'progress_note', noteId);
   writeJson(response, 200, { item: progressNotes[noteIdx] });
 }
@@ -3632,7 +3637,6 @@ async function handleDocumentTemplates(request, response, session) {
       contentBlocks,
     });
     const item = await getDocumentTemplateById(newId, tenantId);
-    telemetry.recordMutation('documents.template.create');
     emitAudit(request, 'documents.template.create', 'document_template', newId, session);
     writeJson(response, 201, { item });
     return;
@@ -3650,7 +3654,6 @@ async function handleDocumentTemplates(request, response, session) {
   }) };
 
   documentTemplates.push(item);
-  telemetry.recordMutation('documents.template.create');
   emitAudit(request, 'documents.template.create', 'document_template', item.id);
   writeJson(response, 201, { item });
 }
@@ -3691,7 +3694,6 @@ async function handleDocumentTemplateById(request, response, requestUrl, session
     }
     await updateDocumentTemplate(templateId, tenantId, fields);
     const updated = await getDocumentTemplateById(templateId, tenantId);
-    telemetry.recordMutation('documents.template.update');
     emitAudit(request, 'documents.template.update', 'document_template', item.id, session);
     writeJson(response, 200, { item: updated });
     return;
@@ -3748,7 +3750,6 @@ async function handleDocumentTemplateById(request, response, requestUrl, session
     item.versionNumber = versionNumber;
   }
 
-  telemetry.recordMutation('documents.template.update');
   emitAudit(request, 'documents.template.update', 'document_template', item.id);
   writeJson(response, 200, { item });
 }
@@ -3872,7 +3873,6 @@ async function handleDocumentAssignments(request, response, requestUrl, session)
       });
       const items = await listDocumentAssignments(template.tenantId, { templateId, assigneeId });
       const item = items[items.length - 1];
-      telemetry.recordMutation('documents.assignment.create');
       emitAudit(request, 'documents.assignment.create', 'document_assignment', item?.id ?? 'unknown', session);
       writeJson(response, 201, { item });
       return;
@@ -3894,7 +3894,6 @@ async function handleDocumentAssignments(request, response, requestUrl, session)
     }) };
 
     documentAssignments.push(item);
-    telemetry.recordMutation('documents.assignment.create');
     emitAudit(request, 'documents.assignment.create', 'document_assignment', item.id);
     writeJson(response, 201, { item });
     return;
@@ -3942,7 +3941,6 @@ async function handleDocumentAssignments(request, response, requestUrl, session)
       responses: updated[0].access_history ? (typeof updated[0].access_history === 'string' ? JSON.parse(updated[0].access_history) : updated[0].access_history) : null,
       accessHistory: updated[0].access_history ? (typeof updated[0].access_history === 'string' ? JSON.parse(updated[0].access_history) : updated[0].access_history) : null,
     };
-    telemetry.recordMutation('documents.assignment.update');
     emitAudit(request, 'documents.assignment.update', 'document_assignment', item.id, session);
     writeJson(response, 200, { item });
     return;
@@ -3983,7 +3981,6 @@ async function handleDocumentAssignments(request, response, requestUrl, session)
     },
   ];
 
-  telemetry.recordMutation('documents.assignment.update');
   emitAudit(request, 'documents.assignment.update', 'document_assignment', item.id);
   writeJson(response, 200, { item });
 }
@@ -4054,7 +4051,6 @@ async function handleInventoryDefinitions(request, response, session) {
       versionNumber: rows[0].version_number,
       scoringRules: { method: rows[0].scoring_method, versionNumber: rows[0].version_number },
     } : null;
-    telemetry.recordMutation('inventory.definition.create');
     emitAudit(request, 'inventory.definition.create', 'inventory_definition', newId, session);
     writeJson(response, 201, { item });
     return;
@@ -4071,7 +4067,6 @@ async function handleInventoryDefinitions(request, response, session) {
   }) };
 
   inventoryDefinitions.push(item);
-  telemetry.recordMutation('inventory.definition.create');
   emitAudit(request, 'inventory.definition.create', 'inventory_definition', item.id);
   writeJson(response, 201, { item });
 }
@@ -4128,7 +4123,6 @@ async function handleInventoryDefinitionById(request, response, requestUrl) {
       .filter((question) => question.key && question.prompt);
   }
 
-  telemetry.recordMutation('inventory.definition.update');
   emitAudit(request, 'inventory.definition.update', 'inventory_definition', item.id);
   writeJson(response, 200, { item });
 }
@@ -4227,7 +4221,6 @@ async function handleInventoryAssignments(request, response, requestUrl, session
         responses: rows[0].responses ? (typeof rows[0].responses === 'string' ? JSON.parse(rows[0].responses) : rows[0].responses) : null,
         score: rows[0].score,
       } : null;
-      telemetry.recordMutation('inventory.assignment.create');
       emitAudit(request, 'inventory.assignment.create', 'inventory_assignment', newId, session);
       writeJson(response, 201, { item });
       return;
@@ -4247,7 +4240,6 @@ async function handleInventoryAssignments(request, response, requestUrl, session
     }) };
 
     inventoryAssignments.push(item);
-    telemetry.recordMutation('inventory.assignment.create');
     emitAudit(request, 'inventory.assignment.create', 'inventory_assignment', item.id);
     writeJson(response, 201, { item });
     return;
@@ -4286,7 +4278,6 @@ async function handleInventoryAssignments(request, response, requestUrl, session
       responses: updated[0].responses ? (typeof updated[0].responses === 'string' ? JSON.parse(updated[0].responses) : updated[0].responses) : null,
       score: updated[0].score,
     };
-    telemetry.recordMutation('inventory.assignment.update');
     emitAudit(request, 'inventory.assignment.update', 'inventory_assignment', item.id, session);
     writeJson(response, 200, { item });
     return;
@@ -4331,7 +4322,6 @@ async function handleInventoryAssignments(request, response, requestUrl, session
   item.score = computeInventoryScore(definition.scoringMethod, item.responses);
   item.scoredAt = item.score === null ? null : new Date().toISOString();
 
-  telemetry.recordMutation('inventory.assignment.update');
   emitAudit(request, 'inventory.assignment.update', 'inventory_assignment', item.id);
   writeJson(response, 200, { item });
 }
@@ -4390,7 +4380,6 @@ async function handleFormsCatalog(request, response, requestUrl, session) {
         versionNumber: Number.isFinite(Number(payload.versionNumber)) ? Number(payload.versionNumber) : 1,
       });
       const item = await getFormCatalogItemByKey(tenantId, formKey);
-      telemetry.recordMutation('forms.catalog.create');
       emitAudit(request, 'forms.catalog.create', 'form_catalog', id, session);
       writeJson(response, 201, { item });
       return;
@@ -4415,7 +4404,6 @@ async function handleFormsCatalog(request, response, requestUrl, session) {
       updatedAt: now,
     };
     formCatalogRecords.push(item);
-    telemetry.recordMutation('forms.catalog.create');
     emitAudit(request, 'forms.catalog.create', 'form_catalog', item.id);
     writeJson(response, 201, { item });
     return;
@@ -4443,7 +4431,6 @@ async function handleFormsCatalog(request, response, requestUrl, session) {
       versionNumber: payload.versionNumber !== undefined ? Number(payload.versionNumber) : undefined,
     });
     const item = (await listFormCatalog(tenantId, { includeInactive: true })).find((row) => row.id === existing.id);
-    telemetry.recordMutation('forms.catalog.update');
     emitAudit(request, 'forms.catalog.update', 'form_catalog', existing.id, session);
     writeJson(response, 200, { item });
     return;
@@ -4462,7 +4449,6 @@ async function handleFormsCatalog(request, response, requestUrl, session) {
     existing.versionNumber = Number(payload.versionNumber);
   }
   existing.updatedAt = new Date().toISOString();
-  telemetry.recordMutation('forms.catalog.update');
   emitAudit(request, 'forms.catalog.update', 'form_catalog', existing.id);
   writeJson(response, 200, { item: existing });
 }
@@ -4546,7 +4532,6 @@ async function handleFormWorkflowAssignments(request, response, requestUrl, sess
       });
       const items = await listFormAssignments(tenantId, { clientId });
       const item = items[0] ?? null;
-      telemetry.recordMutation('forms.assignment.create');
       emitAudit(request, 'forms.assignment.create', 'form_assignment', item?.id ?? 'unknown', session);
       writeJson(response, 201, { item });
       return;
@@ -4571,7 +4556,6 @@ async function handleFormWorkflowAssignments(request, response, requestUrl, sess
       updatedAt: now,
     };
     formWorkflowAssignments.unshift(item);
-    telemetry.recordMutation('forms.assignment.create');
     emitAudit(request, 'forms.assignment.create', 'form_assignment', item.id);
     writeJson(response, 201, { item });
     return;
@@ -4616,7 +4600,6 @@ async function handleFormWorkflowAssignments(request, response, requestUrl, sess
       completedAt: nextStatus === 'completed' ? new Date().toISOString() : undefined,
     });
     const item = await getFormAssignmentById(assignmentId, tenantId);
-    telemetry.recordMutation('forms.assignment.update');
     emitAudit(request, 'forms.assignment.update', 'form_assignment', assignmentId, session);
     writeJson(response, 200, { item });
     return;
@@ -4639,7 +4622,6 @@ async function handleFormWorkflowAssignments(request, response, requestUrl, sess
   if (payload.notes !== undefined) item.notes = sanitizeStr(payload.notes, 500);
   if (payload.dueAt !== undefined) item.dueAt = normalizeIsoDate(payload.dueAt);
   item.updatedAt = new Date().toISOString();
-  telemetry.recordMutation('forms.assignment.update');
   emitAudit(request, 'forms.assignment.update', 'form_assignment', assignmentId);
   writeJson(response, 200, { item });
 }
@@ -4724,7 +4706,6 @@ async function handleFormWorkflowSubmissions(request, response, requestUrl, sess
     }
     const items = await listFormSubmissions(tenantId, { clientId: client.id, formKey });
     const item = items[0] ?? null;
-    telemetry.recordMutation('forms.submission.create');
     emitAudit(request, 'forms.submission.create', 'form_submission', item?.id ?? 'unknown', session);
     writeJson(response, 201, { item });
     return;
@@ -4760,7 +4741,6 @@ async function handleFormWorkflowSubmissions(request, response, requestUrl, sess
       assignment.updatedAt = now;
     }
   }
-  telemetry.recordMutation('forms.submission.create');
   emitAudit(request, 'forms.submission.create', 'form_submission', item.id);
   writeJson(response, 201, { item });
 }
@@ -4911,7 +4891,8 @@ async function activatePortalSignupRequest({ tenantId, requestRecord, actorId = 
     status: 'active',
     email: normalizedEmail,
     mfaEnabled: false,
-    temporaryPassword,
+    // temporaryPassword is NOT stored — the caller strips it from the API
+    // response and must deliver it via a secure out-of-band channel.
     lastLoginAt: null,
     invitedAt: new Date().toISOString(),
   };
@@ -5159,7 +5140,6 @@ async function handlePortalPublicRequestConversion(request, response, session) {
     item = items.find((entry) => entry.id === requestId) ?? requestRecord;
   }
 
-  telemetry.recordMutation('portal.public_request.convert');
   await emitAudit(request, 'portal.public_request.convert', 'portal_registration_request', requestId, session);
   writeJson(response, 200, { item, conversion });
 }
@@ -5215,9 +5195,10 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
           actorId: callerIdentity(request, session)?.staffId ?? 'system',
         })
         : null;
-      telemetry.recordMutation('portal.public_request.update');
       emitAudit(request, 'portal.public_request.update', 'portal_registration_request', requestId, session);
-      writeJson(response, 200, { item, activation });
+      // Strip temporaryPassword before serialising — credentials must not travel in API responses.
+      const safeActivation = activation ? { ...activation, temporaryPassword: undefined } : null;
+      writeJson(response, 200, { item, activation: safeActivation });
       return;
     }
 
@@ -5235,9 +5216,10 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
         actorId: callerIdentity(request, session)?.staffId ?? 'system',
       })
       : null;
-    telemetry.recordMutation('portal.public_request.update');
     emitAudit(request, 'portal.public_request.update', 'portal_registration_request', requestId, session);
-    writeJson(response, 200, { item, activation });
+    // Strip temporaryPassword before serialising — credentials must not travel in API responses.
+    const safeActivationMem = activation ? { ...activation, temporaryPassword: undefined } : null;
+    writeJson(response, 200, { item, activation: safeActivationMem });
     return;
   }
 
@@ -5338,9 +5320,10 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
         await updatePortalRegistrationRequest(id, tenantId, { status });
       }
     }
-    telemetry.recordMutation('portal.public_request.create');
     emitAudit(request, 'portal.public_request.create', 'portal_registration_request', id, session);
-    writeJson(response, 201, { item: { id, status }, activation });
+    // Strip temporaryPassword — the public endpoint must never return authentication secrets.
+    const safeActivationDb = activation ? { ...activation, temporaryPassword: undefined } : null;
+    writeJson(response, 201, { item: { id, status }, activation: safeActivationDb });
     return;
   }
 
@@ -5376,9 +5359,10 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
       status = item.status;
     }
   }
-  telemetry.recordMutation('portal.public_request.create');
   emitAudit(request, 'portal.public_request.create', 'portal_registration_request', item.id);
-  writeJson(response, 201, { item: { id: item.id, status: item.status }, activation });
+  // Strip temporaryPassword — the public endpoint must never return authentication secrets.
+  const safeActivationMem = activation ? { ...activation, temporaryPassword: undefined } : null;
+  writeJson(response, 201, { item: { id: item.id, status: item.status }, activation: safeActivationMem });
 }
 
 async function handleAppointmentsCollection(request, response, session) {
@@ -5492,7 +5476,6 @@ async function handleAppointmentsCollection(request, response, session) {
       remoteSession,
       timezone,
     });
-    telemetry.recordMutation('appointment.create');
     await emitAudit(request, 'appointment.create', 'appointment', appointment.id, session);
     writeJson(response, 201, { item: appointment });
   } else {
@@ -5521,10 +5504,135 @@ async function handleAppointmentsCollection(request, response, session) {
       timezone,
     };
     appointments.push(appointment);
-    telemetry.recordMutation('appointment.create');
     emitAudit(request, 'appointment.create', 'appointment', appointment.id);
     writeJson(response, 201, { item: appointment });
   }
+}
+
+async function handleVideoSession(request, response, requestUrl, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const appointmentId = requestUrl.pathname
+    .replace(/\/video-session$/, '')
+    .replace('/v1/appointments/', '');
+  const appointment = await resolveAuthorizedAppointment(
+    request, response, appointmentId, session, 'appointment.video_session.start',
+  );
+  if (!appointment) return;
+
+  const tenantId = callerTenant(request, session);
+  const role = callerRole(request, session);
+  const isModerator = role !== 'client';
+
+  // Persist a stable opaque room name for this appointment (not PHI).
+  let roomName = appointment.videoRoomId;
+  if (!roomName) {
+    roomName = crypto.randomBytes(16).toString('hex');
+    if (process.env.DB_NAME) {
+      await updateAppointmentVideoRoom(appointmentId, tenantId, roomName);
+    } else {
+      const appt = appointments.find((a) => a.id === appointmentId);
+      if (appt) appt.videoRoomId = roomName;
+    }
+  }
+
+  // Resolve JaaS config: per-practice DB config takes precedence over server-
+  // level env vars so that each counseling practice can bring its own free or
+  // paid JaaS account.
+  let appId = null;
+  let apiKeyId = null;
+  let privateKeyPem = null;
+  let domain = '8x8.vc';
+
+  if (process.env.DB_NAME) {
+    // Look up the practice for this tenant to find its JaaS credentials.
+    const [practices] = await pool.query(
+      'SELECT jaas_app_id, jaas_api_key_id, jaas_private_key_enc, jaas_domain FROM practices WHERE tenant_id = ? LIMIT 1',
+      [tenantId],
+    );
+    if (practices.length) {
+      const p = practices[0];
+      if (p.jaas_app_id) appId = p.jaas_app_id;
+      if (p.jaas_api_key_id) apiKeyId = p.jaas_api_key_id;
+      if (p.jaas_domain) domain = p.jaas_domain;
+      if (p.jaas_private_key_enc) {
+        // Decrypt the stored private key ciphertext (AES-256-GCM).
+        try {
+          privateKeyPem = decrypt(p.jaas_private_key_enc);
+        } catch {
+          // Corrupted key — fall through to env var fallback.
+        }
+      }
+    }
+  }
+
+  // Fall back to server-level env vars (single-tenant / self-hosted installs).
+  if (!appId) appId = process.env.JITSI_APP_ID ?? null;
+  if (!apiKeyId) apiKeyId = process.env.JITSI_API_KEY_ID ?? null;
+  if (!privateKeyPem && process.env.JITSI_PRIVATE_KEY_BASE64) {
+    privateKeyPem = Buffer.from(process.env.JITSI_PRIVATE_KEY_BASE64, 'base64').toString();
+  }
+  if (process.env.JITSI_DOMAIN) domain = process.env.JITSI_DOMAIN;
+
+  let jwt = null;
+  if (appId && apiKeyId && privateKeyPem) {
+    const now = Math.floor(Date.now() / 1000);
+    // Display name: role label only — no PII/PHI in JWT claims.
+    const displayName = isModerator ? 'Counselor' : 'Client';
+    const header = Buffer.from(
+      JSON.stringify({ alg: 'RS256', kid: apiKeyId, typ: 'JWT' }),
+    ).toString('base64url');
+    const payload = Buffer.from(
+      JSON.stringify({
+        aud: 'jitsi',
+        iss: 'chat',
+        iat: now,
+        exp: now + 7200,
+        nbf: now - 5,
+        sub: appId,
+        context: {
+          features: {
+            livestreaming: false,
+            'file-upload': false,
+            'outbound-call': false,
+            'sip-outbound-call': false,
+            transcription: false,
+            'list-visitors': false,
+            recording: false,
+            flip: false,
+          },
+          user: {
+            'hidden-from-recorder': false,
+            moderator: isModerator,
+            name: displayName,
+            id: session?.userId ?? 'anonymous',
+            avatar: '',
+            email: '',
+          },
+        },
+        room: `${appId}/${roomName}`,
+      }),
+    ).toString('base64url');
+
+    const signer = crypto.createSign('RSA-SHA256');
+    signer.update(`${header}.${payload}`);
+    const signature = signer.sign(privateKeyPem, 'base64url');
+    jwt = `${header}.${payload}.${signature}`;
+  }
+
+  const fullRoomName = appId ? `${appId}/${roomName}` : roomName;
+
+  await emitAudit(request, 'session.video_started', 'appointment', appointmentId, session);
+
+  writeJson(response, 200, {
+    jwt,
+    domain,
+    roomName: fullRoomName,
+    appointmentId,
+  });
 }
 
 async function handleAppointmentById(request, response, requestUrl, session) {
@@ -5536,7 +5644,6 @@ async function handleAppointmentById(request, response, requestUrl, session) {
     const tenantId = callerTenant(request, session);
     if (request.method === 'DELETE') {
       await deleteAppointment(appointmentId, tenantId);
-      telemetry.recordMutation('appointment.delete');
       emitAudit(request, 'appointment.delete', 'appointment', appointmentId);
       writeJson(response, 200, { deleted: true, id: appointmentId });
       return;
@@ -5567,7 +5674,6 @@ async function handleAppointmentById(request, response, requestUrl, session) {
     if (typeof payload.startsAt === 'string') { const t = normalizeIsoDate(payload.startsAt); if (!t) { writeJson(response, 400, { error: 'startsAt must be a valid ISO date' }); return; } fields.startsAt = t; }
     if (typeof payload.endsAt === 'string') { const t = normalizeIsoDate(payload.endsAt); if (!t) { writeJson(response, 400, { error: 'endsAt must be a valid ISO date' }); return; } fields.endsAt = t; }
     const updated = await updateAppointment(appointmentId, tenantId, fields);
-    telemetry.recordMutation('appointment.update');
     emitAudit(request, 'appointment.update', 'appointment', appointmentId);
     writeJson(response, 200, { item: updated });
     return;
@@ -5576,7 +5682,6 @@ async function handleAppointmentById(request, response, requestUrl, session) {
   if (request.method === 'DELETE') {
     const index = appointments.findIndex((item) => item.id === appointmentId);
     appointments.splice(index, 1);
-    telemetry.recordMutation('appointment.delete');
     emitAudit(request, 'appointment.delete', 'appointment', appointmentId);
     writeJson(response, 200, { deleted: true, id: appointmentId });
     return;
@@ -5667,7 +5772,6 @@ async function handleAppointmentById(request, response, requestUrl, session) {
     return;
   }
 
-  telemetry.recordMutation('appointment.update');
   emitAudit(request, 'appointment.update', 'appointment', appointment.id);
   writeJson(response, 200, { item: appointment });
 }
@@ -5827,7 +5931,6 @@ async function handleReminders(request, response, requestUrl, session) {
         status,
         sentAt: status === 'sent' ? new Date().toISOString() : null,
       });
-      telemetry.recordMutation('reminder.create');
       emitAudit(request, 'reminder.create', 'reminder', item.id, session);
       writeJson(response, 201, { item });
       return;
@@ -5846,7 +5949,6 @@ async function handleReminders(request, response, requestUrl, session) {
     };
 
     reminderRecords.push(item);
-    telemetry.recordMutation('reminder.create');
     emitAudit(request, 'reminder.create', 'reminder', item.id);
     writeJson(response, 201, { item });
     return;
@@ -5869,7 +5971,6 @@ async function handleReminders(request, response, requestUrl, session) {
     if (typeof payload.status === 'string') { const s = normalizeReminderStatus(payload.status); if (!s) { writeJson(response, 400, { error: 'status must be valid' }); return; } fields.status = s; fields.sentAt = s === 'sent' ? new Date().toISOString() : null; }
     if (typeof payload.reminderAt === 'string') fields.reminderAt = normalizeIsoDate(payload.reminderAt);
     const item = await updateReminder(reminderId, tenantId, fields);
-    telemetry.recordMutation('reminder.update');
     emitAudit(request, 'reminder.update', 'reminder', item.id, session);
     writeJson(response, 200, { item });
     return;
@@ -5897,7 +5998,6 @@ async function handleReminders(request, response, requestUrl, session) {
     item.reminderAt = normalizeIsoDate(payload.reminderAt) ?? item.reminderAt;
   }
 
-  telemetry.recordMutation('reminder.update');
   emitAudit(request, 'reminder.update', 'reminder', item.id);
   writeJson(response, 200, { item });
 }
@@ -5984,7 +6084,6 @@ async function handleWaitlist(request, response, session) {
     if (payload.preferredSessionType !== undefined) fields.preferredSessionType = sanitizeStr(payload.preferredSessionType, 40);
     if (payload.notes !== undefined) fields.notes = sanitizeStr(payload.notes, 500);
     const item = await updateWaitlistEntry(existing[0].id, tenantId, fields);
-    telemetry.recordMutation('waitlist.update');
     emitAudit(request, 'waitlist.update', 'client', client.id, session);
     writeJson(response, 200, { item: { clientId: client.id, ...item } });
     return;
@@ -6003,7 +6102,6 @@ async function handleWaitlist(request, response, session) {
     updatedAt: new Date().toISOString(),
   };
 
-  telemetry.recordMutation('waitlist.update');
   emitAudit(request, 'waitlist.update', 'client', client.id);
   writeJson(response, 200, {
     item: {
@@ -6148,7 +6246,6 @@ async function handleAvailabilityOverrides(request, response, requestUrl, sessio
         endTime:      sanitizeStr(payload.endTime ?? '', 8)   || null,
         allDay:       payload.allDay !== false,
       });
-      telemetry.recordMutation('availability_override.create');
       emitAudit(request, 'availability_override.create', 'availability_override', item.id, session);
       writeJson(response, 201, { item });
       return;
@@ -6171,7 +6268,6 @@ async function handleAvailabilityOverrides(request, response, requestUrl, sessio
       if (payload.allDay      !== undefined) fields.allDay        = !!payload.allDay;
       const item = await updateAvailabilityOverride(id, tenantId, fields);
       if (!item) { writeJson(response, 404, { error: 'Override not found' }); return; }
-      telemetry.recordMutation('availability_override.update');
       emitAudit(request, 'availability_override.update', 'availability_override', id, session);
       writeJson(response, 200, { item });
       return;
@@ -6185,7 +6281,6 @@ async function handleAvailabilityOverrides(request, response, requestUrl, sessio
     if (!id) { writeJson(response, 400, { error: 'id query param is required' }); return; }
     if (process.env.DB_NAME) {
       const result = await deleteAvailabilityOverride(id, tenantId);
-      telemetry.recordMutation('availability_override.delete');
       emitAudit(request, 'availability_override.delete', 'availability_override', id, session);
       writeJson(response, 200, result);
       return;
@@ -6300,7 +6395,6 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
         }
       }
 
-      telemetry.recordMutation('series.create');
       emitAudit(request, 'series.create', 'appointment_series', item.id, session);
       writeJson(response, 201, { item, generatedCount, generationError: generationError ?? undefined });
       return;
@@ -6362,7 +6456,6 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
       });
     }
 
-    telemetry.recordMutation('series.create');
     emitAudit(request, 'series.create', 'appointment_series', item.id);
     writeJson(response, 201, { item });
     return;
@@ -6383,7 +6476,6 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
       if (payload.recurrenceRule !== undefined) fields.recurrenceRule = sanitizeStr(payload.recurrenceRule, 200);
       const item = await updateSeries(id, tenantId, fields);
       if (!item) { writeJson(response, 404, { error: 'Series not found' }); return; }
-      telemetry.recordMutation('series.update');
       emitAudit(request, 'series.update', 'appointment_series', id, session);
       writeJson(response, 200, { item });
       return;
@@ -6400,7 +6492,6 @@ async function handleAppointmentSeries(request, response, requestUrl, session) {
     if (payload.endDate !== undefined) item.endDate = sanitizeStr(payload.endDate, 12) || null;
     if (payload.recurrenceRule !== undefined) item.recurrenceRule = sanitizeStr(payload.recurrenceRule, 200) ?? item.recurrenceRule;
     item.updatedAt = new Date().toISOString();
-    telemetry.recordMutation('series.update');
     emitAudit(request, 'series.update', 'appointment_series', id);
     writeJson(response, 200, { item });
     return;
@@ -6501,7 +6592,6 @@ async function handleServiceCodes(request, response, session) {
         defaultDurationMinutes: Number.isFinite(Number(payload.defaultDurationMinutes)) ? Number(payload.defaultDurationMinutes) : 60,
         status,
       });
-      telemetry.recordMutation('billing.service_code.create');
       emitAudit(request, 'billing.service_code.create', 'billing_service_code', item.id, session);
       writeJson(response, 201, { item });
       return;
@@ -6518,7 +6608,6 @@ async function handleServiceCodes(request, response, session) {
     };
 
     serviceCodes.push(item);
-    telemetry.recordMutation('billing.service_code.create');
     emitAudit(request, 'billing.service_code.create', 'billing_service_code', item.id);
     writeJson(response, 201, { item });
     return;
@@ -6542,7 +6631,6 @@ async function handleServiceCodes(request, response, session) {
     if (payload.defaultDurationMinutes !== undefined) { const d = Number(payload.defaultDurationMinutes); if (!Number.isFinite(d) || d < 15 || d > 240) { writeJson(response, 400, { error: 'defaultDurationMinutes must be between 15 and 240' }); return; } fields.defaultDurationMinutes = d; }
     if (typeof payload.status === 'string') { const s = normalizeServiceCodeStatus(payload.status); if (!s) { writeJson(response, 400, { error: 'status must be valid' }); return; } fields.status = s; }
     const item = await updateServiceCode(serviceCodeId, tenantId, fields);
-    telemetry.recordMutation('billing.service_code.update');
     emitAudit(request, 'billing.service_code.update', 'billing_service_code', serviceCodeId, session);
     writeJson(response, 200, { item });
     return;
@@ -6575,7 +6663,6 @@ async function handleServiceCodes(request, response, session) {
     item.status = status;
   }
 
-  telemetry.recordMutation('billing.service_code.update');
   emitAudit(request, 'billing.service_code.update', 'billing_service_code', item.id);
   writeJson(response, 200, { item });
 }
@@ -6616,7 +6703,6 @@ async function handleFeeSchedules(request, response, session) {
         currency: sanitizeStr(payload.currency, 8) ?? 'USD',
         lines,
       });
-      telemetry.recordMutation('billing.fee_schedule.create');
       emitAudit(request, 'billing.fee_schedule.create', 'billing_fee_schedule', item.id, session);
       writeJson(response, 201, { item });
       return;
@@ -6633,7 +6719,6 @@ async function handleFeeSchedules(request, response, session) {
     };
 
     feeSchedules.push(item);
-    telemetry.recordMutation('billing.fee_schedule.create');
     emitAudit(request, 'billing.fee_schedule.create', 'billing_fee_schedule', item.id);
     writeJson(response, 201, { item });
     return;
@@ -6656,7 +6741,6 @@ async function handleFeeSchedules(request, response, session) {
     if (typeof payload.currency === 'string') fields.currency = sanitizeStr(payload.currency, 8) ?? existing.currency;
     if (Array.isArray(payload.lines)) { const lines = normalizeFeeScheduleLines(payload.lines); if (!lines.length) { writeJson(response, 400, { error: 'At least one valid fee schedule line is required' }); return; } fields.lines = lines; }
     const item = await updateFeeSchedule(feeScheduleId, tenantId, fields);
-    telemetry.recordMutation('billing.fee_schedule.update');
     emitAudit(request, 'billing.fee_schedule.update', 'billing_fee_schedule', feeScheduleId, session);
     writeJson(response, 200, { item });
     return;
@@ -6689,7 +6773,6 @@ async function handleFeeSchedules(request, response, session) {
   }
   item.updatedAt = new Date().toISOString();
 
-  telemetry.recordMutation('billing.fee_schedule.update');
   emitAudit(request, 'billing.fee_schedule.update', 'billing_fee_schedule', item.id);
   writeJson(response, 200, { item });
 }
@@ -6752,7 +6835,6 @@ async function handleInvoices(request, response, requestUrl, session) {
         amountPaid: 0,
         balance: totals.balance,
       });
-      telemetry.recordMutation('billing.invoice.create');
       emitAudit(request, 'billing.invoice.create', 'billing_invoice', item.id, session);
       writeJson(response, 201, { item });
       return;
@@ -6790,7 +6872,6 @@ async function handleInvoices(request, response, requestUrl, session) {
     };
 
     invoices.push(item);
-    telemetry.recordMutation('billing.invoice.create');
     emitAudit(request, 'billing.invoice.create', 'billing_invoice', item.id);
     writeJson(response, 201, { item });
     return;
@@ -6816,7 +6897,6 @@ async function handleInvoices(request, response, requestUrl, session) {
     if (payload.insurance && typeof payload.insurance === 'object') fields.insuranceInfo = { payerName: sanitizeStr(payload.insurance.payerName, 160) ?? existing.insurance?.payerName ?? '', policyNumber: sanitizeStr(payload.insurance.policyNumber, 120) ?? existing.insurance?.policyNumber ?? '', memberId: sanitizeStr(payload.insurance.memberId, 120) ?? existing.insurance?.memberId ?? '', groupNumber: sanitizeStr(payload.insurance.groupNumber, 120) ?? existing.insurance?.groupNumber ?? '' };
     if (typeof payload.claimStatus === 'string') { const cs = normalizeClaimStatus(payload.claimStatus); if (!cs) { writeJson(response, 400, { error: 'claimStatus must be valid' }); return; } fields.claimStatus = cs; }
     const item = await updateInvoice(invoiceId, tenantId, fields);
-    telemetry.recordMutation('billing.invoice.update');
     emitAudit(request, 'billing.invoice.update', 'billing_invoice', invoiceId, session);
     writeJson(response, 200, { item });
     return;
@@ -6871,7 +6951,6 @@ async function handleInvoices(request, response, requestUrl, session) {
   item.balance = totals.balance;
   item.updatedAt = new Date().toISOString();
 
-  telemetry.recordMutation('billing.invoice.update');
   emitAudit(request, 'billing.invoice.update', 'billing_invoice', item.id);
   writeJson(response, 200, { item });
 }
@@ -6925,7 +7004,6 @@ async function handlePayments(request, response, requestUrl, session) {
     const totals = computeInvoiceTotals(invoice.lineItems, invoice.adjustments, newAmountPaid);
     const newStatus = totals.balance <= 0 ? 'paid' : (newAmountPaid > 0 && invoice.status !== 'void' ? 'partially_paid' : invoice.status);
     const updatedInvoice = await updateInvoice(invoiceId, tenantId, { amountPaid: newAmountPaid, status: newStatus });
-    telemetry.recordMutation('billing.payment.create');
     emitAudit(request, 'billing.payment.create', 'billing_payment', payment.id, session);
     writeJson(response, 201, { item: payment, invoice: updatedInvoice });
     return;
@@ -6976,7 +7054,6 @@ async function handlePayments(request, response, requestUrl, session) {
   }
   invoice.updatedAt = new Date().toISOString();
 
-  telemetry.recordMutation('billing.payment.create');
   emitAudit(request, 'billing.payment.create', 'billing_payment', payment.id);
   writeJson(response, 201, { item: payment, invoice });
 }
@@ -7020,7 +7097,6 @@ async function handleSuperbills(request, response, requestUrl, session) {
       diagnosisCodes: Array.isArray(payload.diagnosisCodes) ? payload.diagnosisCodes.map((code) => sanitizeStr(String(code), 30)).filter(Boolean) : [],
       serviceLines: (invoice.lineItems ?? []).map((line) => ({ serviceCodeId: line.serviceCodeId, code: line.code, amount: line.quantity * line.unitAmount, serviceDate: line.serviceDate })),
     });
-    telemetry.recordMutation('billing.superbill.create');
     emitAudit(request, 'billing.superbill.create', 'billing_superbill', item.id, session);
     writeJson(response, 201, { item });
     return;
@@ -7052,7 +7128,6 @@ async function handleSuperbills(request, response, requestUrl, session) {
   };
 
   superbills.push(item);
-  telemetry.recordMutation('billing.superbill.create');
   emitAudit(request, 'billing.superbill.create', 'billing_superbill', item.id);
   writeJson(response, 201, { item });
 }
@@ -7099,7 +7174,6 @@ async function handleClaimPlaceholders(request, response, requestUrl, session) {
         notes: sanitizeStr(payload.notes, 500) ?? '',
       });
       const updatedInvoice = await updateInvoice(invoiceId, tenantId, { claimStatus: status });
-      telemetry.recordMutation('billing.claim.create');
       emitAudit(request, 'billing.claim.create', 'billing_claim', item.id, session);
       writeJson(response, 201, { item, invoice: updatedInvoice });
       return;
@@ -7134,7 +7208,6 @@ async function handleClaimPlaceholders(request, response, requestUrl, session) {
     invoice.claimStatus = status;
     invoice.updatedAt = new Date().toISOString();
 
-    telemetry.recordMutation('billing.claim.create');
     emitAudit(request, 'billing.claim.create', 'billing_claim', item.id);
     writeJson(response, 201, { item, invoice });
     return;
@@ -7172,7 +7245,6 @@ async function handleClaimPlaceholders(request, response, requestUrl, session) {
     if (item?.invoiceId) {
       invoice = await updateInvoice(item.invoiceId, tenantId, { claimStatus: item.status });
     }
-    telemetry.recordMutation('billing.claim.update');
     emitAudit(request, 'billing.claim.update', 'billing_claim', claimId, session);
     writeJson(response, 200, { item, invoice });
     return;
@@ -7204,7 +7276,6 @@ async function handleClaimPlaceholders(request, response, requestUrl, session) {
     invoice.updatedAt = new Date().toISOString();
   }
 
-  telemetry.recordMutation('billing.claim.update');
   emitAudit(request, 'billing.claim.update', 'billing_claim', item.id);
   writeJson(response, 200, { item, invoice: invoice ?? null });
 }
@@ -7342,7 +7413,6 @@ async function handlePortalSettings(request, response, session) {
     }
   }
 
-  telemetry.recordMutation('portal.settings.update');
   emitAudit(request, 'portal.settings.update', 'portal_settings', tenantId, session);
   writeJson(response, 200, { item });
 }
@@ -7694,7 +7764,6 @@ async function handlePortalProfile(request, response, requestUrl, session) {
     }
   }
 
-  telemetry.recordMutation('portal.profile.update');
   emitAudit(request, 'portal.profile.update', 'portal_client_profile', item.id, session);
   writeJson(response, 200, { item });
 }
@@ -7744,6 +7813,11 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
         writeJson(response, 400, { error: 'status must be valid' });
         return;
       }
+      // Block enabling MFA until full enforcement is implemented (F-003).
+      if (payload.mfaEnabled === true) {
+        writeJson(response, 400, { error: 'Multi-factor authentication is not yet available. Leave mfaEnabled unset or false.' });
+        return;
+      }
       const temporaryPassword = sanitizeStr(payload.temporaryPassword, 128) ?? generateTemporaryPassword();
       const passwordError = validatePasswordStrength(temporaryPassword);
       if (passwordError) {
@@ -7763,22 +7837,28 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
         email: sanitizeStr(payload.email, 200) ?? '',
         passwordHash,
         status,
-        mfaEnabled: Boolean(payload.mfaEnabled),
+        mfaEnabled: false,
       });
       const assignedForms = await autoAssignStandardSignupForms({
         tenantId,
         clientId,
         assignedBy: callerIdentity(request, session)?.staffId ?? 'system',
       });
-      telemetry.recordMutation('portal.account.create');
       emitAudit(request, 'portal.account.create', 'portal_account', item.id, session);
-      writeJson(response, 201, { item, assignedForms, temporaryPassword });
+      // temporaryPassword is intentionally excluded — deliver it through a secure
+      // out-of-band channel (e.g. encrypted email or direct communication).
+      writeJson(response, 201, { item, assignedForms });
       return;
     }
 
     const status = typeof payload.status === 'string' ? normalizePortalAccountStatus(payload.status) : undefined;
     if (typeof payload.status === 'string' && !status) {
       writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+    // Block enabling MFA until full enforcement is implemented (F-003).
+    if (payload.mfaEnabled === true) {
+      writeJson(response, 400, { error: 'Multi-factor authentication is not yet available. Leave mfaEnabled unset or false.' });
       return;
     }
     const temporaryPassword = typeof payload.temporaryPassword === 'string'
@@ -7802,13 +7882,12 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
           parallelism: 1,
         })
         : undefined,
-      mfaEnabled: payload.mfaEnabled !== undefined ? Boolean(payload.mfaEnabled) : undefined,
+      mfaEnabled: undefined,
     });
     if (!item) {
       writeJson(response, 404, { error: 'Portal account not found' });
       return;
     }
-    telemetry.recordMutation('portal.account.update');
     emitAudit(request, 'portal.account.update', 'portal_account', item.id, session);
     writeJson(response, 200, { item });
     return;
@@ -7833,6 +7912,12 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
       return;
     }
 
+    // Block enabling MFA until full enforcement is implemented (F-003).
+    if (payload.mfaEnabled === true) {
+      writeJson(response, 400, { error: 'Multi-factor authentication is not yet available. Leave mfaEnabled unset or false.' });
+      return;
+    }
+
     const temporaryPassword = sanitizeStr(payload.temporaryPassword, 128) ?? generateTemporaryPassword();
     const item = {
       id: createId('pa', portalAccounts),
@@ -7840,8 +7925,7 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
       clientId: client.id,
       status,
       email: sanitizeStr(payload.email, 200) ?? '',
-      mfaEnabled: Boolean(payload.mfaEnabled),
-      temporaryPassword,
+      mfaEnabled: false,
       lastLoginAt: null,
       invitedAt: new Date().toISOString(),
     };
@@ -7852,9 +7936,9 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
       clientId: client.id,
       assignedBy: callerIdentity(request, session)?.staffId ?? 'system',
     });
-    telemetry.recordMutation('portal.account.create');
     emitAudit(request, 'portal.account.create', 'portal_account', item.id);
-    writeJson(response, 201, { item, assignedForms, temporaryPassword });
+    // temporaryPassword is intentionally excluded from the response body.
+    writeJson(response, 201, { item, assignedForms });
     return;
   }
 
@@ -7877,7 +7961,6 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
   if (typeof payload.email === 'string') item.email = sanitizeStr(payload.email, 200) ?? item.email;
   if (payload.mfaEnabled !== undefined) item.mfaEnabled = Boolean(payload.mfaEnabled);
 
-  telemetry.recordMutation('portal.account.update');
   emitAudit(request, 'portal.account.update', 'portal_account', item.id);
   writeJson(response, 200, { item });
 }
@@ -7916,7 +7999,6 @@ async function handlePortalIntakePackets(request, response, requestUrl, session)
       }),
     };
     intakePackets.push(item);
-    telemetry.recordMutation('portal.intake.submit');
     emitAudit(request, 'portal.intake.submit', 'intake_packet', item.id);
     writeJson(response, 201, { item });
     return;
@@ -7942,7 +8024,6 @@ async function handlePortalIntakePackets(request, response, requestUrl, session)
     item.submittedAt = new Date().toISOString();
   }
 
-  telemetry.recordMutation('portal.intake.update');
   emitAudit(request, 'portal.intake.update', 'intake_packet', item.id);
   writeJson(response, 200, { item });
 }
@@ -8022,7 +8103,6 @@ async function handlePortalDocuments(request, response, requestUrl, session) {
       completedAt: updated[0].completed_at,
       accessHistory: updated[0].access_history ? (typeof updated[0].access_history === 'string' ? JSON.parse(updated[0].access_history) : updated[0].access_history) : [],
     };
-    telemetry.recordMutation('portal.document.update');
     emitAudit(request, 'portal.document.update', 'document_assignment', item.id, session);
     writeJson(response, 200, { item });
     return;
@@ -8058,7 +8138,6 @@ async function handlePortalDocuments(request, response, requestUrl, session) {
     },
   ];
 
-  telemetry.recordMutation('portal.document.update');
   emitAudit(request, 'portal.document.update', 'document_assignment', item.id);
   writeJson(response, 200, { item });
 }
@@ -8437,8 +8516,29 @@ async function handlePortalUploads(request, response, requestUrl, session) {
     return;
   }
 
+  // ── File type validation (F-005) ─────────────────────────────────────────
+  const fileExt = path.extname(fileName).toLowerCase();
+  if (!UPLOAD_ALLOWED_EXTENSIONS.has(fileExt)) {
+    writeJson(response, 400, { error: 'File type not allowed. Accepted formats: PDF, JPEG, PNG, GIF, TIFF, DOCX, DOC, TXT.' });
+    return;
+  }
+
+  const mimeType = sanitizeStr(payload.mimeType, 128) ?? '';
+  if (!mimeType || !UPLOAD_ALLOWED_MIME_TYPES.has(mimeType)) {
+    writeJson(response, 400, { error: 'A valid mimeType is required. Accepted formats: PDF, JPEG, PNG, GIF, TIFF, DOCX, DOC, TXT.' });
+    return;
+  }
+
+  // Verify the file signature is consistent with the declared MIME type.
+  const detectedPrefix = detectUploadFileSignature(buffer);
+  if (detectedPrefix && !mimeType.startsWith(detectedPrefix)) {
+    writeJson(response, 400, { error: 'File content does not match the declared file type.' });
+    return;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   const category = sanitizeStr(payload.category, 64) ?? 'supporting_document';
-  const mimeType = sanitizeStr(payload.mimeType, 128) ?? 'application/octet-stream';
+  // mimeType already resolved above; notes read below.
   const notes = sanitizeStr(payload.notes, 1000) ?? '';
   const uploadedByRole = callerRole(request, session) || 'client';
 
@@ -8456,7 +8556,6 @@ async function handlePortalUploads(request, response, requestUrl, session) {
       uploadedByRole,
       status: 'uploaded',
     });
-    telemetry.recordMutation('portal.upload.create');
     emitAudit(request, 'portal.upload.create', 'portal_upload', item.id, session);
     writeJson(response, 201, { item });
     return;
@@ -8478,7 +8577,6 @@ async function handlePortalUploads(request, response, requestUrl, session) {
     updatedAt: new Date().toISOString(),
   };
   portalUploads.push(item);
-  telemetry.recordMutation('portal.upload.create');
   emitAudit(request, 'portal.upload.create', 'portal_upload', item.id, session);
   writeJson(response, 201, { item: { ...item, contentBase64: undefined } });
 }
@@ -8547,7 +8645,6 @@ async function handlePortalDataRights(request, response, requestUrl, session) {
         requestedAt: now,
         resolvedAt: now,
       });
-      telemetry.recordMutation('portal.data_right.export');
       emitAudit(request, 'portal.data_right.export', 'portal_data_right_request', item.id, session);
       writeJson(response, 201, {
         item,
@@ -8585,7 +8682,6 @@ async function handlePortalDataRights(request, response, requestUrl, session) {
       updatedAt: now,
     };
     portalDataRightRequests.push(item);
-    telemetry.recordMutation('portal.data_right.export');
     emitAudit(request, 'portal.data_right.export', 'portal_data_right_request', item.id, session);
     writeJson(response, 201, {
       item,
@@ -8615,7 +8711,6 @@ async function handlePortalDataRights(request, response, requestUrl, session) {
       requestedAt: now,
       resolvedAt: normalizedStatus === 'restricted' ? now : null,
     });
-    telemetry.recordMutation('portal.data_right.delete_request');
     emitAudit(request, 'portal.data_right.delete_request.create', 'portal_data_right_request', item.id, session);
     writeJson(response, 201, {
       item,
@@ -8642,7 +8737,6 @@ async function handlePortalDataRights(request, response, requestUrl, session) {
     updatedAt: now,
   };
   portalDataRightRequests.push(item);
-  telemetry.recordMutation('portal.data_right.delete_request');
   emitAudit(request, 'portal.data_right.delete_request.create', 'portal_data_right_request', item.id, session);
   writeJson(response, 201, {
     item,
@@ -8734,7 +8828,6 @@ async function handlePortalDataRightsReview(request, response, session) {
         resolvedAt: now,
       });
 
-    telemetry.recordMutation(`portal.data_right.review.${nextStatus}`);
     emitAudit(
       request,
       nextStatus === 'completed'
@@ -8781,7 +8874,6 @@ async function handlePortalDataRightsReview(request, response, session) {
       return existing;
     })();
 
-  telemetry.recordMutation(`portal.data_right.review.${nextStatus}`);
   emitAudit(
     request,
     nextStatus === 'completed'
@@ -8865,7 +8957,6 @@ async function handlePortalAppointmentRequests(request, response, requestUrl, se
       portalAppointmentRequests.push(item);
     }
 
-    telemetry.recordMutation('portal.appointment_request.create');
     emitAudit(request, 'portal.appointment_request.create', 'portal_appointment_request', item.id);
     writeJson(response, 201, { item });
     return;
@@ -8905,7 +8996,6 @@ async function handlePortalAppointmentRequests(request, response, requestUrl, se
     updatedItem = item;
   }
 
-  telemetry.recordMutation('portal.appointment_request.update');
   emitAudit(request, 'portal.appointment_request.update', 'portal_appointment_request', updatedItem.id);
   writeJson(response, 200, { item: updatedItem });
 }
@@ -8989,7 +9079,6 @@ async function handlePortalMessages(request, response, requestUrl, session) {
   portalMessages.push(message);
   thread.updatedAt = message.sentAt;
 
-  telemetry.recordMutation('portal.message.create');
   emitAudit(request, 'portal.message.create', 'portal_message_thread', thread.id);
   writeJson(response, 201, { thread, message });
 }
@@ -9043,7 +9132,6 @@ async function handlePortalResources(request, response, requestUrl, session) {
   };
 
   portalResources.push(item);
-  telemetry.recordMutation('portal.resource.create');
   emitAudit(request, 'portal.resource.create', 'portal_resource', item.id);
   writeJson(response, 201, { item });
 }
@@ -9201,7 +9289,6 @@ async function handleOfferings(request, response, requestUrl, session) {
       createdAt: new Date().toISOString(),
     };
     await createOfferingRecord(item);
-    telemetry.recordMutation('offerings.record');
     emitAudit(request, 'offerings.record', 'offering', item.id, session);
     writeJson(response, 201, { item });
     return;
@@ -9228,7 +9315,6 @@ async function handleOfferings(request, response, requestUrl, session) {
       writeJson(response, 404, { error: 'Offering not found' });
       return;
     }
-    telemetry.recordMutation('offerings.delete');
     emitAudit(request, 'offerings.delete', 'offering', offeringId, session);
     writeJson(response, 200, { ok: true, deletedId: offeringId });
     return;
@@ -9413,7 +9499,6 @@ async function handleWorkflowRecommendationState(request, response, requestUrl, 
     );
     stateId = updated[0]?.id ?? stateId;
 
-    telemetry.recordMutation('workflow.state.set');
   } else {
     stateId = genId('wfs');
   }
@@ -9512,7 +9597,6 @@ async function handleFaithNoteTemplates(request, response, session) {
 
   if (process.env.DB_NAME) {
     const item = await createFaithNoteTemplate({ id: genId('fnt'), tenantId, name, focusArea, integrationLevel, sections });
-    telemetry.recordMutation('faith.note_template.create');
     await emitAudit(request, 'faith.note_template.create', 'faith_note_template', item.id, session);
     writeJson(response, 201, { item });
     return;
@@ -9529,7 +9613,6 @@ async function handleFaithNoteTemplates(request, response, session) {
   };
 
   christianNoteTemplates.push(item);
-  telemetry.recordMutation('faith.note_template.create');
   await emitAudit(request, 'faith.note_template.create', 'faith_note_template', item.id, session);
   writeJson(response, 201, { item });
 }
@@ -9575,7 +9658,6 @@ async function handleFaithTreatmentGoals(request, response, session) {
 
   if (process.env.DB_NAME) {
     const item = await createFaithGoalTemplate({ id: genId('ftg'), tenantId, title, integrationLevel, scriptures, milestones });
-    telemetry.recordMutation('faith.treatment_goal.create');
     await emitAudit(request, 'faith.treatment_goal.create', 'faith_treatment_goal', item.id, session);
     writeJson(response, 201, { item });
     return;
@@ -9592,7 +9674,6 @@ async function handleFaithTreatmentGoals(request, response, session) {
   };
 
   faithTreatmentGoalTemplates.push(item);
-  telemetry.recordMutation('faith.treatment_goal.create');
   await emitAudit(request, 'faith.treatment_goal.create', 'faith_treatment_goal', item.id, session);
   writeJson(response, 201, { item });
 }
@@ -9635,7 +9716,6 @@ async function handleFaithConsentVariants(request, response, session) {
 
   if (process.env.DB_NAME) {
     const item = await createFaithConsentVariant({ id: genId('fcv'), tenantId, title, body, audience, integrationLevel });
-    telemetry.recordMutation('faith.consent_variant.create');
     await emitAudit(request, 'faith.consent_variant.create', 'faith_consent_variant', item.id, session);
     writeJson(response, 201, { item });
     return;
@@ -9652,7 +9732,6 @@ async function handleFaithConsentVariants(request, response, session) {
   };
 
   consentLanguageVariants.push(item);
-  telemetry.recordMutation('faith.consent_variant.create');
   await emitAudit(request, 'faith.consent_variant.create', 'faith_consent_variant', item.id, session);
   writeJson(response, 201, { item });
 }
@@ -9693,7 +9772,6 @@ async function handleFaithResources(request, response, session) {
 
   if (process.env.DB_NAME) {
     const item = await createFaithResource({ id: genId('frl'), tenantId, title, resourceType, content, scriptureReference });
-    telemetry.recordMutation('faith.resource.create');
     await emitAudit(request, 'faith.resource.create', 'faith_resource', item.id, session);
     writeJson(response, 201, { item });
     return;
@@ -9710,7 +9788,6 @@ async function handleFaithResources(request, response, session) {
   };
 
   faithResourceLibrary.push(item);
-  telemetry.recordMutation('faith.resource.create');
   await emitAudit(request, 'faith.resource.create', 'faith_resource', item.id, session);
   writeJson(response, 201, { item });
 }
@@ -9753,7 +9830,6 @@ async function handleFaithInventories(request, response, session) {
 
   if (process.env.DB_NAME) {
     const item = await createFaithInventory({ id: genId('sfi'), tenantId, name, cadence, prompts });
-    telemetry.recordMutation('faith.inventory.create');
     await emitAudit(request, 'faith.inventory.create', 'faith_inventory', item.id, session);
     writeJson(response, 201, { item });
     return;
@@ -9769,7 +9845,6 @@ async function handleFaithInventories(request, response, session) {
   };
 
   spiritualFormationInventories.push(item);
-  telemetry.recordMutation('faith.inventory.create');
   await emitAudit(request, 'faith.inventory.create', 'faith_inventory', item.id, session);
   writeJson(response, 201, { item });
 }
@@ -9824,7 +9899,6 @@ async function handleFaithReferralCoordination(request, response, session) {
       consentToCoordinate: Boolean(payload.consentToCoordinate),
       notes: sanitizeStr(payload.notes, 600) ?? '',
     });
-    telemetry.recordMutation('faith.referral_coordination.create');
     await emitAudit(request, 'faith.referral_coordination.create', 'faith_referral_coordination', item.id, session);
     writeJson(response, 201, { item });
     return;
@@ -9849,7 +9923,6 @@ async function handleFaithReferralCoordination(request, response, session) {
   };
 
   churchReferralCoordinations.push(item);
-  telemetry.recordMutation('faith.referral_coordination.create');
   await emitAudit(request, 'faith.referral_coordination.create', 'faith_referral_coordination', item.id, session);
   writeJson(response, 201, { item });
 }
@@ -9895,7 +9968,6 @@ async function handleFaithLanguagePreferences(request, response, requestUrl, ses
       includeScriptureReferences: payload.includeScriptureReferences !== false,
       preferredTerminology: sanitizeStr(payload.preferredTerminology, 220) ?? '',
     });
-    telemetry.recordMutation('faith.language_preference.upsert');
     await emitAudit(request, 'faith.language_preference.upsert', 'faith_language_preference', tenantId, session);
     writeJson(response, 200, { item });
     return;
@@ -9924,7 +9996,6 @@ async function handleFaithLanguagePreferences(request, response, requestUrl, ses
 
   if (!existing) faithLanguagePreferences.push(item);
 
-  telemetry.recordMutation('faith.language_preference.upsert');
   await emitAudit(request, 'faith.language_preference.upsert', 'faith_language_preference', item.id, session);
   writeJson(response, 200, { item });
 }
@@ -10120,6 +10191,552 @@ async function handleAuditIntelligence(request, response, requestUrl, session) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Deterministic audit observations — 75 rule-based callouts, no AI required.
+// Organized into severity tiers: critical → warning → info.
+// Returns up to 8 observations ordered by priority.
+// ---------------------------------------------------------------------------
+function generateAuditObservations(summary, events, filters) {
+  const critical = [];
+  const warnings = [];
+  const info     = [];
+
+  const total      = summary.total ?? 0;
+  const days       = summary.window?.days ?? filters?.days ?? 7;
+  const byResult   = summary.byResult   ?? [];
+  const byAction   = summary.byAction   ?? [];
+  const byActorRole  = summary.byActorRole  ?? [];
+  const byTargetType = summary.byTargetType ?? [];
+
+  const getResult   = (key) => byResult.find((r) => r.result === key)?.total ?? 0;
+  const denied      = getResult('denied');
+  const errors      = getResult('error');
+  const failures    = getResult('failure');
+  const success     = getResult('success');
+  const pct         = (n) => total > 0 ? ((n / total) * 100).toFixed(1) : '0.0';
+  const dailyAvg    = days > 0 ? (total / days) : total;
+  const sampleSize  = events.length;
+  const samplePct   = (n) => sampleSize > 0 ? ((n / sampleSize) * 100).toFixed(1) : '0.0';
+
+  // ── RULE 1: Zero events ──────────────────────────────────────────────────
+  if (total === 0) {
+    return [`No audit events recorded in the last ${days} day${days !== 1 ? 's' : ''}. If activity is expected, verify audit event emission is functioning correctly.`];
+  }
+
+  // ── RULES 2–8: Volume & throughput ──────────────────────────────────────
+  // R2: Very high daily volume
+  if (dailyAvg > 500) {
+    warnings.push(`Unusually high activity: ${total.toLocaleString()} events over ${days} days (avg ${dailyAvg.toFixed(0)}/day). Confirm no runaway automation or logging loop.`);
+  } else if (dailyAvg > 200) {
+    info.push(`High-volume period: ${total.toLocaleString()} events over ${days} days (avg ${dailyAvg.toFixed(0)}/day).`);
+  }
+
+  // R3: Very low daily volume (less than 2/day) for windows > 3 days
+  if (days > 3 && dailyAvg < 2) {
+    info.push(`Low activity: only ${total.toLocaleString()} event${total !== 1 ? 's' : ''} recorded over ${days} days (avg ${dailyAvg.toFixed(1)}/day). Verify the practice is actively using the platform.`);
+  }
+
+  // R4: Large total — purely informational landmark
+  if (total >= 10000) {
+    info.push(`${total.toLocaleString()} total events in this window — a high-volume dataset. Consider narrowing the time range for more targeted analysis.`);
+  }
+
+  // R5: Sample may be truncated
+  const requestedLimit = filters?.limit ?? 100;
+  if (sampleSize >= requestedLimit && total > sampleSize) {
+    info.push(`Event sample is at the display limit (${sampleSize} of ${total.toLocaleString()} total). Increase the limit or narrow filters for full visibility.`);
+  }
+
+  // R6: Single-day narrow window
+  if (days === 1) {
+    info.push(`Analysis window is a single day — patterns may not reflect typical activity. Consider reviewing a 7- or 30-day window for trends.`);
+  }
+
+  // R7: Very wide window (90 days)
+  if (days >= 90) {
+    info.push(`90-day window active — long-range view may obscure recent anomalies. Use a shorter window to investigate specific incidents.`);
+  }
+
+  // R8: Entire sample within same hour (burst)
+  if (sampleSize >= 10) {
+    const timestamps = events.map((e) => new Date(e.occurredAt).getTime()).filter(Boolean);
+    if (timestamps.length >= 10) {
+      const span = Math.max(...timestamps) - Math.min(...timestamps);
+      if (span < 60 * 60 * 1000) {
+        warnings.push(`All ${sampleSize} sampled events occurred within a single hour — possible automated burst or event replay.`);
+      }
+    }
+  }
+
+  // ── RULES 9–20: Error & denial rates ────────────────────────────────────
+  // R9: Critical denial rate
+  if (denied > 0 && total > 0) {
+    const dr = denied / total;
+    if (dr >= 0.25) {
+      critical.push(`Critical: ${pct(denied)}% access denial rate — ${denied.toLocaleString()} of ${total.toLocaleString()} events were denied. Investigate unauthorized access attempts immediately.`);
+    } else if (dr >= 0.10) {
+      // R10: Elevated denial rate
+      warnings.push(`Elevated denial rate: ${pct(denied)}% of events were access denials (${denied.toLocaleString()} denials). Review whether roles have appropriate permissions.`);
+    } else if (dr >= 0.02) {
+      // R11: Minor denial rate note
+      info.push(`${denied.toLocaleString()} access denial${denied !== 1 ? 's' : ''} recorded (${pct(denied)}% of events) — within acceptable range.`);
+    }
+  } else if (denied === 0 && total > 10) {
+    // R12: Zero denials — clean access control
+    info.push(`Zero access denials in this window — access control is enforcing correctly and all authorized requests are succeeding.`);
+  }
+
+  // R13: Critical error rate
+  if (errors > 0 && total > 0) {
+    const er = errors / total;
+    if (er >= 0.15) {
+      critical.push(`Critical: ${pct(errors)}% system error rate — ${errors.toLocaleString()} errors out of ${total.toLocaleString()} events. Investigate server health and error logs immediately.`);
+    } else if (er >= 0.05) {
+      // R14: Elevated error rate
+      warnings.push(`Elevated error rate: ${pct(errors)}% of events resulted in system errors (${errors.toLocaleString()} errors). Review server logs for root cause.`);
+    } else if (er >= 0.01) {
+      info.push(`${errors.toLocaleString()} system error${errors !== 1 ? 's' : ''} recorded (${pct(errors)}%) — low but worth monitoring.`);
+    }
+  } else if (errors === 0 && total > 10) {
+    // R15: Zero errors — healthy system
+    info.push(`Zero system errors in this window — the platform is operating without server-side faults.`);
+  }
+
+  // R16: Both high denial and high error simultaneously
+  if (denied / Math.max(total, 1) >= 0.10 && errors / Math.max(total, 1) >= 0.05) {
+    critical.push(`Both denial rate (${pct(denied)}%) and error rate (${pct(errors)}%) are elevated simultaneously — this combination may indicate a systemic misconfiguration.`);
+  }
+
+  // R17: Failures (result=failure) present
+  if (failures > 0) {
+    warnings.push(`${failures.toLocaleString()} event${failures !== 1 ? 's' : ''} recorded with result "failure" (distinct from "denied" and "error"). Review these for failed business operations.`);
+  }
+
+  // R18: Errors outnumber denials significantly
+  if (errors > denied * 3 && errors > 5) {
+    warnings.push(`System errors (${errors.toLocaleString()}) outnumber access denials (${denied.toLocaleString()}) by more than 3:1 — error conditions are the dominant non-success outcome.`);
+  }
+
+  // R19: Denials outnumber errors significantly
+  if (denied > errors * 5 && denied > 5) {
+    info.push(`Access denials (${denied.toLocaleString()}) dominate non-success events vs errors (${errors.toLocaleString()}) — access control is active and is the primary friction point.`);
+  }
+
+  // R20: 100% success rate
+  if (success === total && total >= 10) {
+    info.push(`100% success rate across all ${total.toLocaleString()} events — no denials or errors in this window.`);
+  }
+
+  // ── RULES 21–26: Authentication events ──────────────────────────────────
+  const authDenied = events.filter((e) => e.action?.startsWith('auth.') && e.result === 'denied');
+  // R21: Potential brute force
+  if (authDenied.length >= 10) {
+    critical.push(`${authDenied.length} authentication failures detected — possible brute-force or credential stuffing. Verify IP allowlists and account lockout policies.`);
+  } else if (authDenied.length > 0) {
+    // R22: Auth failures (low count)
+    warnings.push(`${authDenied.length} authentication failure${authDenied.length !== 1 ? 's' : ''} recorded in this window. Verify these are expected (e.g. mistyped passwords) and not targeted attempts.`);
+  }
+
+  // R23: Multiple distinct actors with auth denials
+  const authDeniedActors = new Set(authDenied.map((e) => e.actorId).filter(Boolean));
+  if (authDeniedActors.size >= 3) {
+    warnings.push(`Authentication failures span ${authDeniedActors.size} distinct actors — distributed failure pattern may indicate a coordinated attack or shared credential issue.`);
+  }
+
+  // R24: Auth events are the top action
+  const topAction = byAction[0];
+  if (topAction?.action?.startsWith('auth.')) {
+    info.push(`Authentication events ("${topAction.action}") are the most frequent action (${topAction.total} events) — this window is auth-heavy. Normal for peak login periods.`);
+  }
+
+  // R25: Password change/reset events
+  const pwdEvents = events.filter((e) => e.action?.includes('password'));
+  if (pwdEvents.length > 0) {
+    info.push(`${pwdEvents.length} password change/reset event${pwdEvents.length !== 1 ? 's' : ''} recorded — verify these were user-initiated and not forced resets.`);
+  }
+
+  // R26: Token / API key events
+  const tokenEvents = events.filter((e) => e.action?.includes('token') || e.action?.includes('api_key') || e.action?.includes('apikey'));
+  if (tokenEvents.length > 0) {
+    info.push(`${tokenEvents.length} API token or key event${tokenEvents.length !== 1 ? 's' : ''} recorded — confirm programmatic access is from authorized integrations.`);
+  }
+
+  // ── RULES 27–33: Administrative actions ─────────────────────────────────
+  // R27: Impersonation events
+  const impersonationEvents = events.filter((e) => e.action?.includes('impersonation'));
+  if (impersonationEvents.length > 0) {
+    critical.push(`${impersonationEvents.length} admin impersonation event${impersonationEvents.length !== 1 ? 's' : ''} recorded — verify each was an authorized support session with documented justification.`);
+  }
+
+  // R28: Role or permission change events
+  const roleChangeEvents = events.filter((e) =>
+    e.action?.includes('role') || e.action?.includes('permission') || e.action?.includes('access.grant') || e.action?.includes('access.revoke'),
+  );
+  if (roleChangeEvents.length > 0) {
+    warnings.push(`${roleChangeEvents.length} role or permission change event${roleChangeEvents.length !== 1 ? 's' : ''} recorded — review for unauthorized privilege changes.`);
+  }
+
+  // R29: Platform admin activity
+  const platformAdminEvents = events.filter((e) => e.actorRole === 'platform_admin');
+  if (platformAdminEvents.length > 0) {
+    warnings.push(`Platform admin performed ${platformAdminEvents.length} action${platformAdminEvents.length !== 1 ? 's' : ''} in this window — cross-tenant operations should be documented.`);
+  }
+
+  // R30: Settings or configuration change events
+  const settingsEvents = events.filter((e) => e.action?.includes('settings') || e.action?.includes('config') || e.targetType === 'settings');
+  if (settingsEvents.length > 0) {
+    info.push(`${settingsEvents.length} settings or configuration change event${settingsEvents.length !== 1 ? 's' : ''} recorded.`);
+  }
+
+  // R31: User creation or deletion
+  const userMgmtEvents = events.filter((e) =>
+    (e.targetType === 'user' || e.targetType === 'staff') &&
+    (e.action?.includes('.create') || e.action?.includes('.delete') || e.action?.includes('.deactivate')),
+  );
+  if (userMgmtEvents.length > 0) {
+    info.push(`${userMgmtEvents.length} user account creation or deletion event${userMgmtEvents.length !== 1 ? 's' : ''} recorded — verify all account changes were authorized.`);
+  }
+
+  // R32: Tenant-level events (platform admin context)
+  const tenantEvents = events.filter((e) => e.targetType === 'tenant');
+  if (tenantEvents.length > 0) {
+    warnings.push(`${tenantEvents.length} tenant-level event${tenantEvents.length !== 1 ? 's' : ''} recorded — platform-scope operations should be audited carefully.`);
+  }
+
+  // R33: Invitation / onboarding events
+  const inviteEvents = events.filter((e) => e.action?.includes('invitation') || e.action?.includes('invite') || e.action?.includes('onboard'));
+  if (inviteEvents.length > 0) {
+    info.push(`${inviteEvents.length} invitation or onboarding event${inviteEvents.length !== 1 ? 's' : ''} recorded — new users are being provisioned.`);
+  }
+
+  // ── RULES 34–40: Data operations ────────────────────────────────────────
+  // R34: Export / download events
+  const exportEvents = events.filter((e) => e.action?.includes('export') || e.action?.includes('.download'));
+  if (exportEvents.length > 0) {
+    warnings.push(`${exportEvents.length} data export or download event${exportEvents.length !== 1 ? 's' : ''} recorded — confirm all exports were authorized and within retention scope.`);
+  }
+
+  // R35: Bulk or batch operations
+  const bulkEvents = events.filter((e) => e.action?.includes('bulk') || e.action?.includes('.batch'));
+  if (bulkEvents.length > 0) {
+    warnings.push(`${bulkEvents.length} bulk or batch operation event${bulkEvents.length !== 1 ? 's' : ''} detected — verify scope and authorization for mass data changes.`);
+  }
+
+  // R36: High deletion activity
+  const deleteEvents = events.filter((e) =>
+    e.action?.includes('.delete') || e.action?.includes('.destroy') || e.action?.includes('.remove'),
+  );
+  if (deleteEvents.length >= 20) {
+    warnings.push(`High deletion activity: ${deleteEvents.length} record deletion events in this window — confirm all are intentional and follow data retention policy.`);
+  } else if (deleteEvents.length > 0) {
+    // R37: Low deletion
+    info.push(`${deleteEvents.length} record deletion event${deleteEvents.length !== 1 ? 's' : ''} recorded.`);
+  }
+
+  // R38: Backup or restore events
+  const backupEvents = events.filter((e) => e.action?.includes('backup') || e.action?.includes('restore'));
+  if (backupEvents.length > 0) {
+    info.push(`${backupEvents.length} backup or restore event${backupEvents.length !== 1 ? 's' : ''} recorded — data management operations are active.`);
+  }
+
+  // R39: Report generation events
+  const reportEvents = events.filter((e) => e.action?.startsWith('report.') || e.action?.includes('.report'));
+  if (reportEvents.length > 0) {
+    info.push(`${reportEvents.length} report generation event${reportEvents.length !== 1 ? 's' : ''} recorded.`);
+  }
+
+  // R40: Write events dominate reads (unusual for most systems)
+  const writeEvents = events.filter((e) => e.action?.includes('.create') || e.action?.includes('.update') || e.action?.includes('.write'));
+  const readEvents  = events.filter((e) => e.action?.includes('.read')   || e.action?.includes('.view')   || e.action?.includes('.list'));
+  if (writeEvents.length > readEvents.length * 2 && writeEvents.length > 10) {
+    info.push(`Write events (${writeEvents.length}) significantly outnumber read events (${readEvents.length}) in the sample — high content creation or update period.`);
+  }
+
+  // ── RULES 41–47: PHI & client data ──────────────────────────────────────
+  // R41: Client records dominate target types
+  const clientTargets = byTargetType.find((t) => t.targetType === 'client' || t.targetType === 'client_record');
+  if (clientTargets && total > 0 && clientTargets.total / total > 0.5) {
+    info.push(`Client record events are the majority (${clientTargets.total.toLocaleString()} of ${total.toLocaleString()} total, ${((clientTargets.total / total) * 100).toFixed(1)}%) — verify all access is session-authorized.`);
+  }
+
+  // R42: Client record accesses with errors
+  const clientErrorEvents = events.filter((e) =>
+    (e.targetType === 'client' || e.targetType === 'client_record') && e.result === 'error',
+  );
+  if (clientErrorEvents.length > 0) {
+    warnings.push(`${clientErrorEvents.length} client record access event${clientErrorEvents.length !== 1 ? 's' : ''} resulted in system errors — PHI access failures should be investigated.`);
+  }
+
+  // R43: Intake events active
+  const intakeEvents = events.filter((e) => e.action?.includes('intake') || e.sourceWorkflow === 'intake');
+  if (intakeEvents.length > 0) {
+    info.push(`${intakeEvents.length} intake workflow event${intakeEvents.length !== 1 ? 's' : ''} recorded — new client intake is active.`);
+  }
+
+  // R44: Form or assessment events
+  const formEvents = events.filter((e) => e.targetType === 'form' || e.targetType === 'assessment' || e.action?.includes('form') || e.action?.includes('assessment'));
+  if (formEvents.length > 0) {
+    info.push(`${formEvents.length} form or assessment event${formEvents.length !== 1 ? 's' : ''} recorded — clinical screening or documentation is active.`);
+  }
+
+  // R45: Note or document access heavy
+  const noteEvents = byTargetType.find((t) => t.targetType === 'note' || t.targetType === 'document');
+  if (noteEvents && noteEvents.total > 20) {
+    info.push(`Clinical notes/documents are a highly accessed target type (${noteEvents.total.toLocaleString()} events) — confirm access follows minimum necessary standards.`);
+  }
+
+  // R46: Client portal activity
+  const portalEvents = events.filter((e) => e.sourceSurface === 'portal' || e.sourceWorkflow === 'portal');
+  if (portalEvents.length > 0) {
+    info.push(`${portalEvents.length} client portal event${portalEvents.length !== 1 ? 's' : ''} recorded — portal self-service is being used by clients.`);
+  }
+
+  // R47: Anonymous actors accessing client resources
+  const anonClientEvents = events.filter((e) =>
+    (e.actorId === 'anonymous' || e.actorRole === 'anonymous') &&
+    (e.targetType === 'client' || e.targetType === 'client_record' || e.targetType === 'note'),
+  );
+  if (anonClientEvents.length > 0) {
+    critical.push(`${anonClientEvents.length} unauthenticated event${anonClientEvents.length !== 1 ? 's' : ''} targeting client records or notes — PHI may have been accessed without authentication.`);
+  }
+
+  // ── RULES 48–55: Actor & role patterns ──────────────────────────────────
+  // R48: No counselor activity
+  const counselorRole = byActorRole.find((r) => r.actorRole === 'counselor' || r.actorRole === 'therapist');
+  if (!counselorRole && days > 1 && total > 20) {
+    info.push(`No counselor activity in this window — expected if practice is between sessions, but unusual for an active multi-day period.`);
+  }
+
+  // R49: No admin activity
+  const adminRole = byActorRole.find((r) => r.actorRole === 'practice_admin' || r.actorRole === 'admin');
+  if (!adminRole && days >= 7 && total > 50) {
+    info.push(`No practice admin activity recorded over ${days} days — confirm admin oversight is occurring outside this window.`);
+  }
+
+  // R50: Single actor dominates
+  if (sampleSize >= 10) {
+    const actorCounts = new Map();
+    for (const e of events) if (e.actorId) actorCounts.set(e.actorId, (actorCounts.get(e.actorId) ?? 0) + 1);
+    const topActorCount = Math.max(...actorCounts.values());
+    if (topActorCount / sampleSize > 0.70) {
+      warnings.push(`A single actor accounts for ${samplePct(topActorCount)}% of sampled events (${topActorCount} of ${sampleSize}) — verify this is expected for a single-user session.`);
+    }
+  }
+
+  // R51: Single role dominates
+  const topRole = byActorRole[0];
+  if (topRole && total > 0 && topRole.total / total > 0.85) {
+    info.push(`Role "${topRole.actorRole}" generated ${((topRole.total / total) * 100).toFixed(1)}% of all events (${topRole.total.toLocaleString()}) — usage is concentrated in one role.`);
+  }
+
+  // R52: Multiple distinct roles active (healthy)
+  if (byActorRole.length >= 4) {
+    info.push(`${byActorRole.length} distinct actor roles are active — healthy multi-role engagement across the platform.`);
+  }
+
+  // R53: System actors dominant
+  const systemActors = byActorRole.filter((r) => r.actorRole === 'system' || r.actorRole === 'service' || r.actorRole === 'worker');
+  const systemTotal  = systemActors.reduce((s, r) => s + r.total, 0);
+  if (systemTotal > 0 && total > 0 && systemTotal / total > 0.60) {
+    info.push(`System/automated actors generated ${((systemTotal / total) * 100).toFixed(1)}% of events (${systemTotal.toLocaleString()}) — high automation activity. Confirm background jobs are operating correctly.`);
+  }
+
+  // R54: Anonymous actors present
+  const anonRole = byActorRole.find((r) => r.actorRole === 'anonymous' || r.actorRole === 'unknown');
+  if (anonRole && anonRole.total > 0) {
+    const anonShare = anonRole.total / total;
+    if (anonShare >= 0.05) {
+      warnings.push(`${anonRole.total.toLocaleString()} event${anonRole.total !== 1 ? 's' : ''} (${((anonShare) * 100).toFixed(1)}% of total) from anonymous or unknown actors — review unauthenticated activity.`);
+    } else {
+      info.push(`${anonRole.total.toLocaleString()} event${anonRole.total !== 1 ? 's' : ''} from anonymous/unknown actors (${((anonShare) * 100).toFixed(1)}% of total).`);
+    }
+  }
+
+  // R55: Only one role active in window
+  if (byActorRole.length === 1 && total > 20) {
+    info.push(`All ${total.toLocaleString()} events in this window originated from a single role ("${byActorRole[0].actorRole}") — usage is narrow.`);
+  }
+
+  // ── RULES 56–63: Action distribution ────────────────────────────────────
+  // R56: Single action dominates
+  if (topAction && total > 0 && topAction.total / total > 0.60) {
+    info.push(`Action "${topAction.action}" accounts for ${((topAction.total / total) * 100).toFixed(1)}% of all events (${topAction.total.toLocaleString()}) — activity is concentrated on one operation.`);
+  }
+
+  // R57: High action diversity
+  if (byAction.length >= 15) {
+    info.push(`${byAction.length} distinct action types recorded — broad platform usage across many workflows.`);
+  }
+
+  // R58: Very low action diversity
+  if (byAction.length <= 2 && total > 20) {
+    info.push(`Only ${byAction.length} distinct action type${byAction.length !== 1 ? 's' : ''} across ${total.toLocaleString()} events — very narrow usage pattern.`);
+  }
+
+  // R59: Read actions heavily dominate
+  const readActionTotal  = byAction.filter((a) => a.action?.includes('.read') || a.action?.includes('.list') || a.action?.includes('.view')).reduce((s, a) => s + a.total, 0);
+  const writeActionTotal = byAction.filter((a) => a.action?.includes('.create') || a.action?.includes('.update')).reduce((s, a) => s + a.total, 0);
+  if (readActionTotal > writeActionTotal * 5 && readActionTotal > 20) {
+    info.push(`Read-heavy period: ${readActionTotal.toLocaleString()} read events vs ${writeActionTotal.toLocaleString()} write events — mostly data retrieval, minimal creation/modification.`);
+  }
+
+  // R60: Delete actions in top 5
+  const topFiveActions = byAction.slice(0, 5);
+  const topFiveHasDelete = topFiveActions.some((a) => a.action?.includes('.delete') || a.action?.includes('.destroy'));
+  if (topFiveHasDelete) {
+    warnings.push(`Deletion actions appear in the top 5 most frequent operations — confirm this volume of deletions is expected.`);
+  }
+
+  // R61: Denied events concentrated in one action
+  if (sampleSize >= 5) {
+    const deniedByAction = new Map();
+    for (const e of events) if (e.result === 'denied' && e.action) deniedByAction.set(e.action, (deniedByAction.get(e.action) ?? 0) + 1);
+    if (deniedByAction.size > 0) {
+      const topDeniedAction = [...deniedByAction.entries()].sort((a, b) => b[1] - a[1])[0];
+      const deniedSample    = events.filter((e) => e.result === 'denied').length;
+      if (deniedSample > 0 && topDeniedAction[1] / deniedSample > 0.75) {
+        info.push(`${((topDeniedAction[1] / deniedSample) * 100).toFixed(0)}% of denied events in the sample share the same action ("${topDeniedAction[0]}") — targeted access restriction.`);
+      }
+    }
+  }
+
+  // R62: Errors concentrated in one action
+  if (sampleSize >= 5) {
+    const errorsByAction = new Map();
+    for (const e of events) if (e.result === 'error' && e.action) errorsByAction.set(e.action, (errorsByAction.get(e.action) ?? 0) + 1);
+    if (errorsByAction.size > 0) {
+      const topErrorAction = [...errorsByAction.entries()].sort((a, b) => b[1] - a[1])[0];
+      const errorSample    = events.filter((e) => e.result === 'error').length;
+      if (errorSample >= 3 && topErrorAction[1] / errorSample > 0.75) {
+        warnings.push(`${((topErrorAction[1] / errorSample) * 100).toFixed(0)}% of system errors in the sample are from action "${topErrorAction[0]}" — this specific operation may have a bug or misconfiguration.`);
+      }
+    }
+  }
+
+  // R63: Top action is a delete or destroy
+  if (topAction?.action?.includes('.delete') || topAction?.action?.includes('.destroy')) {
+    warnings.push(`The most frequent action in this window is "${topAction.action}" (${topAction.total} events) — deletion is the dominant operation. Verify retention policy compliance.`);
+  }
+
+  // ── RULES 64–68: Target type patterns ───────────────────────────────────
+  const topTarget = byTargetType[0];
+
+  // R64: Note/document most common
+  if (topTarget?.targetType === 'note' || topTarget?.targetType === 'document') {
+    info.push(`Clinical notes or documents are the most accessed resource type (${topTarget.total.toLocaleString()} events) — consistent with an active session documentation workflow.`);
+  }
+
+  // R65: Session/appointment most common
+  if (topTarget?.targetType === 'session' || topTarget?.targetType === 'appointment') {
+    info.push(`Session or appointment records are the most accessed resource type (${topTarget.total.toLocaleString()} events) — scheduling workflow is dominant.`);
+  }
+
+  // R66: User/settings most common target (admin focus)
+  if (topTarget?.targetType === 'user' || topTarget?.targetType === 'settings') {
+    info.push(`User or settings records are the most accessed resource type (${topTarget.total.toLocaleString()} events) — administrative operations are dominant in this window.`);
+  }
+
+  // R67: Only one target type
+  if (byTargetType.length === 1 && total > 20) {
+    info.push(`All events target a single resource type ("${byTargetType[0].targetType}") — very narrow scope for a ${days}-day window.`);
+  }
+
+  // R68: High target type diversity
+  if (byTargetType.length >= 8) {
+    info.push(`${byTargetType.length} distinct resource types targeted — broad cross-domain usage across the platform.`);
+  }
+
+  // ── RULES 69–75: Data quality ────────────────────────────────────────────
+  // R69: Denied events missing reasonCode
+  const deniedNoReason = events.filter((e) => e.result === 'denied' && (!e.reasonCode || e.reasonCode === 'unknown' || e.reasonCode === 'ok'));
+  if (deniedNoReason.length > 0) {
+    info.push(`${deniedNoReason.length} denied event${deniedNoReason.length !== 1 ? 's' : ''} are missing a specific reason code — improve callsite instrumentation to capture denial reasons.`);
+  }
+
+  // R70: Error events missing reasonCode
+  const errorNoReason = events.filter((e) => e.result === 'error' && (!e.reasonCode || e.reasonCode === 'unknown' || e.reasonCode === 'ok'));
+  if (errorNoReason.length > 0) {
+    info.push(`${errorNoReason.length} error event${errorNoReason.length !== 1 ? 's' : ''} lack a specific reason code — adding reason codes at error sites will improve diagnostic value.`);
+  }
+
+  // R71: Anonymous actorId with non-anonymous role (inconsistency)
+  const roleIdMismatch = events.filter((e) =>
+    e.actorId === 'anonymous' && e.actorRole && e.actorRole !== 'anonymous' && e.actorRole !== 'unknown',
+  );
+  if (roleIdMismatch.length > 0) {
+    warnings.push(`${roleIdMismatch.length} event${roleIdMismatch.length !== 1 ? 's' : ''} have an "anonymous" actor ID but a named role — actor context is inconsistent and may indicate an instrumentation bug.`);
+  }
+
+  // R72: Events missing sourceSurface
+  const noSurface = events.filter((e) => !e.sourceSurface || e.sourceSurface === 'unknown');
+  if (noSurface.length > sampleSize * 0.20 && noSurface.length > 5) {
+    info.push(`${noSurface.length} sampled events (${samplePct(noSurface.length)}%) lack a sourceSurface value — improve event instrumentation to track the originating UI or API surface.`);
+  }
+
+  // R73: Events missing sourceWorkflow
+  const noWorkflow = events.filter((e) => !e.sourceWorkflow || e.sourceWorkflow === 'unknown');
+  if (noWorkflow.length > sampleSize * 0.30 && noWorkflow.length > 5) {
+    info.push(`${noWorkflow.length} sampled events (${samplePct(noWorkflow.length)}%) lack a sourceWorkflow value — workflow tagging coverage could be improved.`);
+  }
+
+  // R74: High-frequency repeated actor-action-target combo (possible automation)
+  if (sampleSize >= 10) {
+    const comboMap = new Map();
+    for (const e of events) {
+      const key = `${e.actorId}|${e.action}|${e.targetId}`;
+      comboMap.set(key, (comboMap.get(key) ?? 0) + 1);
+    }
+    const topComboCount = Math.max(...comboMap.values());
+    if (topComboCount >= 5) {
+      info.push(`A single actor-action-target combination repeats ${topComboCount} times in the sample — may indicate polling, automation, or retry loops.`);
+    }
+  }
+
+  // R75: Off-hours events in sample (outside 06:00–21:00 local)
+  if (sampleSize >= 5) {
+    const offHours = events.filter((e) => {
+      const h = new Date(e.occurredAt).getHours();
+      return h < 6 || h >= 21;
+    });
+    if (offHours.length > 0 && offHours.length / sampleSize > 0.15) {
+      info.push(`${offHours.length} sampled events (${samplePct(offHours.length)}%) occurred outside typical hours (before 6 AM or after 9 PM) — verify this is expected for your practice schedule.`);
+    }
+  }
+
+  // ── Assemble final list, priority: critical → warning → info, max 8 ─────
+  const all = [...critical, ...warnings, ...info];
+  return all.slice(0, 8);
+}
+
+async function handleAuditObservations(request, response, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response, session)) return;
+
+  let body;
+  try {
+    body = await readJsonBody(request);
+  } catch {
+    writeJson(response, 400, { error: 'Invalid request body' });
+    return;
+  }
+
+  const { summary, events, filters } = body ?? {};
+  if (!summary || !Array.isArray(events)) {
+    writeJson(response, 400, { error: 'Request must include summary and events' });
+    return;
+  }
+
+  const observations = generateAuditObservations(summary, events, filters ?? {});
+
+  await emitAudit(request, 'audit.intelligence.observations.read', 'audit_event', 'collection', session);
+
+  writeJson(response, 200, { observations });
+}
+
 async function handlePlatformOverview(request, response, session) {
   if (request.method !== 'GET') {
     writeJson(response, 405, { error: 'Method not allowed' });
@@ -10177,7 +10794,6 @@ async function handleTenantProvisioning(request, response, session) {
       ownerEmail,
       status,
     });
-    telemetry.recordMutation('platform.tenant_provisioning.create');
     await emitAudit(request, 'platform.tenant_provisioning.create', 'tenant_provisioning_request', item.id, session);
     writeJson(response, 201, { item });
     return;
@@ -10195,7 +10811,6 @@ async function handleTenantProvisioning(request, response, session) {
   };
 
   tenantProvisioningRequests.push(item);
-  telemetry.recordMutation('platform.tenant_provisioning.create');
   await emitAudit(request, 'platform.tenant_provisioning.create', 'tenant_provisioning_request', item.id, session);
   writeJson(response, 201, { item });
 }
@@ -10247,7 +10862,6 @@ async function handleSupportImpersonationSessions(request, response, session) {
         status: 'active',
         startedAt: new Date().toISOString(),
       });
-      telemetry.recordMutation('platform.impersonation.start');
       emitAudit(request, 'platform.impersonation.start', 'support_impersonation_session', item.id, session);
       writeJson(response, 201, { item });
       return;
@@ -10266,7 +10880,6 @@ async function handleSupportImpersonationSessions(request, response, session) {
     };
 
     supportImpersonationSessions.push(item);
-    telemetry.recordMutation('platform.impersonation.start');
     emitAudit(request, 'platform.impersonation.start', 'support_impersonation_session', item.id);
     writeJson(response, 201, { item });
     return;
@@ -10277,7 +10890,6 @@ async function handleSupportImpersonationSessions(request, response, session) {
   if (process.env.DB_NAME) {
     const item = await endImpersonationSession(sessionId);
     if (!item) { writeJson(response, 404, { error: 'Impersonation session not found' }); return; }
-    telemetry.recordMutation('platform.impersonation.end');
     emitAudit(request, 'platform.impersonation.end', 'support_impersonation_session', item.id, session);
     writeJson(response, 200, { item });
     return;
@@ -10296,7 +10908,6 @@ async function handleSupportImpersonationSessions(request, response, session) {
   item.status = 'ended';
   item.endedAt = new Date().toISOString();
 
-  telemetry.recordMutation('platform.impersonation.end');
   emitAudit(request, 'platform.impersonation.end', 'support_impersonation_session', item.id);
   writeJson(response, 200, { item });
 }
@@ -10326,7 +10937,6 @@ async function handleSupportImpersonationSessionById(request, response, requestU
   if (process.env.DB_NAME) {
     const item = await endImpersonationSession(sessionId);
     if (!item) { writeJson(response, 404, { error: 'Impersonation session not found' }); return; }
-    telemetry.recordMutation('platform.impersonation.end');
     emitAudit(request, 'platform.impersonation.end', 'support_impersonation_session', item.id, session);
     writeJson(response, 200, { item });
     return;
@@ -10341,7 +10951,6 @@ async function handleSupportImpersonationSessionById(request, response, requestU
   item.status = 'ended';
   item.endedAt = new Date().toISOString();
 
-  telemetry.recordMutation('platform.impersonation.end');
   emitAudit(request, 'platform.impersonation.end', 'support_impersonation_session', item.id, session);
   writeJson(response, 200, { item });
 }
@@ -10390,7 +10999,6 @@ async function handleDataExportJobs(request, response, session) {
       completedAt: status === 'completed' ? new Date().toISOString() : null,
       format,
     });
-    telemetry.recordMutation('platform.data_export.create');
     emitAudit(request, 'platform.data_export.create', 'data_export_job', item.id, session);
     writeJson(response, 201, { item });
     return;
@@ -10408,7 +11016,6 @@ async function handleDataExportJobs(request, response, session) {
   };
 
   dataExportJobs.push(item);
-  telemetry.recordMutation('platform.data_export.create');
   emitAudit(request, 'platform.data_export.create', 'data_export_job', item.id);
   writeJson(response, 201, { item });
 }
@@ -10451,7 +11058,6 @@ async function handleRetentionPolicies(request, response, session) {
       includeDocumentVersions: payload.includeDocumentVersions !== false,
       legalHoldEnabled: Boolean(payload.legalHoldEnabled),
     });
-    telemetry.recordMutation('platform.retention_policy.upsert');
     emitAudit(request, 'platform.retention_policy.upsert', 'retention_policy', item.id, session);
     writeJson(response, 200, { item });
     return;
@@ -10473,7 +11079,6 @@ async function handleRetentionPolicies(request, response, session) {
 
   if (!existing) retentionPolicies.push(item);
 
-  telemetry.recordMutation('platform.retention_policy.upsert');
   emitAudit(request, 'platform.retention_policy.upsert', 'retention_policy', item.id);
   writeJson(response, 200, { item });
 }
@@ -10520,7 +11125,6 @@ async function handlePracticesCollection(request, response, session) {
       contactEmail: sanitizeStr(payload.contactEmail, 200) ?? '',
       contactPhone: sanitizeStr(payload.contactPhone, 80) ?? '',
     });
-    telemetry.recordMutation('practice.create');
     emitAudit(request, 'practice.create', 'practice', item.id, session);
     writeJson(response, 201, { item });
     return;
@@ -10538,9 +11142,78 @@ async function handlePracticesCollection(request, response, session) {
   }) };
 
   practices.push(item);
-  telemetry.recordMutation('practice.create');
   emitAudit(request, 'practice.create', 'practice', item.id);
   writeJson(response, 201, { item });
+}
+
+/**
+ * PATCH /v1/practices/:id/video-config
+ *
+ * Allows a practice admin to configure the JaaS credentials for their practice.
+ * The private key PEM is accepted as a plain-text PEM string and encrypted with
+ * AES-256-GCM before being stored — it is NEVER returned in any API response.
+ * All fields are optional; omitting a field leaves the existing value unchanged.
+ * Setting a field to null explicitly clears it (reverting to env-var fallback).
+ *
+ * Required role: practice_admin or admin.
+ * Returns the updated practice object (jaasPrivateKeyConfigured boolean only).
+ */
+async function handlePracticeVideoConfig(request, response, requestUrl, session) {
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (requirePracticeAdmin(request, response, session)) return;
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 501, { error: 'Video config requires database mode' });
+    return;
+  }
+
+  const practiceId = requestUrl.pathname
+    .replace(/\/video-config$/, '')
+    .replace('/v1/practices/', '');
+  const tenantId = callerTenant(request, session);
+  const practice = await getPracticeById(practiceId, tenantId);
+  if (!practice) {
+    writeJson(response, 404, { error: 'Practice not found' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const fields = {};
+
+  // appId — plain text identifier (e.g. "vpaas-magic-cookie-…")
+  if ('jaasAppId' in payload) {
+    fields.jaasAppId = payload.jaasAppId === null ? null : sanitizeStr(payload.jaasAppId, 255);
+  }
+  // API key ID from the JaaS dashboard Credentials page
+  if ('jaasApiKeyId' in payload) {
+    fields.jaasApiKeyId = payload.jaasApiKeyId === null ? null : sanitizeStr(payload.jaasApiKeyId, 255);
+  }
+  // JaaS domain — almost always "8x8.vc" for hosted; allow customisation for
+  // self-hosted Jitsi deployments.
+  if ('jaasDomain' in payload) {
+    fields.jaasDomain = payload.jaasDomain === null ? null : sanitizeStr(payload.jaasDomain, 128);
+  }
+  // Private key — accepted as plain PEM; encrypted before storage.
+  // Setting to null clears the stored key (falls back to env var).
+  if ('jaasPrivateKeyPem' in payload) {
+    if (payload.jaasPrivateKeyPem === null) {
+      fields.jaasPrivateKeyEnc = null;
+    } else {
+      const pem = String(payload.jaasPrivateKeyPem).trim();
+      if (!pem.startsWith('-----BEGIN')) {
+        writeJson(response, 400, { error: 'jaasPrivateKeyPem must be a valid PEM string' });
+        return;
+      }
+      fields.jaasPrivateKeyEnc = encrypt(pem);
+    }
+  }
+
+  const updated = await updatePractice(practiceId, tenantId, fields);
+  emitAudit(request, 'practice.video_config.update', 'practice', practiceId, session);
+  writeJson(response, 200, { item: updated });
 }
 
 async function handlePracticeById(request, response, requestUrl, session) {
@@ -10569,7 +11242,6 @@ async function handlePracticeById(request, response, requestUrl, session) {
       contactEmail: payload.contactEmail !== undefined ? sanitizeStr(payload.contactEmail, 200) ?? '' : undefined,
       contactPhone: payload.contactPhone !== undefined ? sanitizeStr(payload.contactPhone, 80) ?? '' : undefined,
     });
-    telemetry.recordMutation('practice.update');
     emitAudit(request, 'practice.update', 'practice', practiceId, session);
     writeJson(response, 200, { item: updated });
     return;
@@ -10610,7 +11282,6 @@ async function handlePracticeById(request, response, requestUrl, session) {
   if (typeof payload.contactPhone === 'string') item.contactPhone = sanitizeStr(payload.contactPhone, 80) ?? '';
   item.type = nextType;
 
-  telemetry.recordMutation('practice.update');
   emitAudit(request, 'practice.update', 'practice', item.id);
   writeJson(response, 200, { item });
 }
@@ -10651,7 +11322,6 @@ async function handleLocationsCollection(request, response, session) {
       capacity: Number.isFinite(Number(payload.capacity)) ? Number(payload.capacity) : 1,
       remoteEnabled: Boolean(payload.remoteEnabled),
     });
-    telemetry.recordMutation('location.create');
     emitAudit(request, 'location.create', 'location', item.id, session);
     writeJson(response, 201, { item });
     return;
@@ -10668,7 +11338,6 @@ async function handleLocationsCollection(request, response, session) {
   }) };
 
   locations.push(item);
-  telemetry.recordMutation('location.create');
   emitAudit(request, 'location.create', 'location', item.id);
   writeJson(response, 201, { item });
 }
@@ -10689,7 +11358,6 @@ async function handleLocationById(request, response, requestUrl, session) {
     if (request.method === 'DELETE') {
       if (requirePracticeAdmin(request, response, session)) return;
       await deleteLocation(locationId, tenantId);
-      telemetry.recordMutation('location.delete');
       emitAudit(request, 'location.delete', 'location', locationId, session);
       writeJson(response, 200, { deleted: true, id: locationId });
       return;
@@ -10709,7 +11377,6 @@ async function handleLocationById(request, response, requestUrl, session) {
       capacity: payload.capacity !== undefined ? Number(payload.capacity) : undefined,
       remoteEnabled: payload.remoteEnabled !== undefined ? Boolean(payload.remoteEnabled) : undefined,
     });
-    telemetry.recordMutation('location.update');
     emitAudit(request, 'location.update', 'location', item.id, session);
     writeJson(response, 200, { item: updated });
     return;
@@ -10733,7 +11400,6 @@ async function handleLocationById(request, response, requestUrl, session) {
     if (requirePracticeAdmin(request, response, session)) return;
     const index = locations.findIndex((record) => record.id === locationId);
     locations.splice(index, 1);
-    telemetry.recordMutation('location.delete');
     emitAudit(request, 'location.delete', 'location', locationId);
     writeJson(response, 200, { deleted: true, id: locationId });
     return;
@@ -10759,7 +11425,6 @@ async function handleLocationById(request, response, requestUrl, session) {
   }
   if (typeof payload.remoteEnabled === 'boolean') item.remoteEnabled = payload.remoteEnabled;
 
-  telemetry.recordMutation('location.update');
   emitAudit(request, 'location.update', 'location', item.id);
   writeJson(response, 200, { item });
 }
@@ -10861,11 +11526,11 @@ async function handleStaffCollection(request, response, session) {
       });
       accountProvisioning = {
         email: account.email,
-        temporaryPassword: initialPassword ? null : temporaryPassword,
+        // temporaryPassword intentionally excluded — deliver through a secure
+        // out-of-band channel (e.g. encrypted email or direct communication).
       };
     }
 
-    telemetry.recordMutation('staff.create');
     emitAudit(request, 'staff.create', 'staff', item.id, session);
     if (accountProvisioning) {
       await emitAudit(request, 'staff.account.create', 'staff_account', item.id, session);
@@ -10889,7 +11554,6 @@ async function handleStaffCollection(request, response, session) {
   }) };
 
   staffMembers.push(item);
-  telemetry.recordMutation('staff.create');
   emitAudit(request, 'staff.create', 'staff', item.id);
   writeJson(response, 201, { item });
 }
@@ -10943,7 +11607,6 @@ async function handleStaffById(request, response, requestUrl, session) {
         updatedFullName,
       });
     }
-    telemetry.recordMutation('staff.update');
     emitAudit(request, 'staff.update', 'staff', staffId, session);
     writeJson(response, 200, { item: updated });
     return;
@@ -11016,7 +11679,6 @@ async function handleStaffById(request, response, requestUrl, session) {
     });
   }
 
-  telemetry.recordMutation('staff.update');
   emitAudit(request, 'staff.update', 'staff', item.id);
   writeJson(response, 200, { item });
 }
@@ -11067,7 +11729,6 @@ async function handleStaffAvailability(request, response, requestUrl, session) {
       .map((entry) => ({ day: sanitizeStr(entry.day, 20)?.toLowerCase(), start: sanitizeStr(entry.start, 10), end: sanitizeStr(entry.end, 10) }))
       .filter((entry) => entry.day && entry.start && entry.end);
     await upsertAvailabilityTemplate(staffId, tenantId, normalizedTemplate);
-    telemetry.recordMutation('staff.availability.save');
     emitAudit(request, 'staff.availability.update', 'staff', staffId, session);
     writeJson(response, 200, { staffId, template: normalizedTemplate });
     return;
@@ -11105,7 +11766,6 @@ async function handleStaffAvailability(request, response, requestUrl, session) {
     .filter((entry) => entry.day && entry.start && entry.end);
 
   availabilityTemplates[staffId] = normalizedTemplate;
-  telemetry.recordMutation('staff.availability.save');
   emitAudit(request, 'staff.availability.update', 'staff', staffId);
   writeJson(response, 200, { staffId, template: normalizedTemplate });
 }
@@ -11137,18 +11797,17 @@ async function handleStaffAccountActions(request, response, requestUrl, session)
     const providedPassword = sanitizeStr(payload.newPassword, 128);
     const generatedPassword = providedPassword || generateTemporaryPassword();
     await adminResetStaffPassword({ tenantId, staffMemberId: staffId, newPassword: generatedPassword });
-    telemetry.recordMutation('staff.account.reset_password');
     await emitAudit(request, 'staff.password_reset', 'staff_account', staffId, session);
     writeJson(response, 200, {
       ok: true,
-      generatedTemporaryPassword: providedPassword ? null : generatedPassword,
+      // generatedTemporaryPassword intentionally excluded — deliver through a
+      // secure out-of-band channel.
     });
     return;
   }
 
   if (action === 'unlock') {
     await adminUnlockStaffAccount({ tenantId, staffMemberId: staffId });
-    telemetry.recordMutation('staff.account.unlock');
     await emitAudit(request, 'staff.account_unlock', 'staff_account', staffId, session);
     writeJson(response, 200, { ok: true });
     return;
@@ -11156,7 +11815,6 @@ async function handleStaffAccountActions(request, response, requestUrl, session)
 
   if (action === 'deactivate') {
     await adminDeactivateStaffAccount({ tenantId, staffMemberId: staffId });
-    telemetry.recordMutation('staff.account.deactivate');
     await emitAudit(request, 'staff.account_deactivate', 'staff_account', staffId, session);
     writeJson(response, 200, { ok: true });
     return;
@@ -11546,28 +12204,57 @@ async function handleStaffFaithProfile(request, response, requestUrl, session) {
   writeJson(response, 503, { error: 'Database not configured' });
 }
 
-async function handleLocales(request, response) {
+async function handleLocales(request, response, session) {
   if (request.method === 'GET') {
     writeJson(response, 200, { items: i18nStore.listLocales() });
     return;
   }
 
-  if (request.method !== 'POST') {
-    writeJson(response, 405, { error: 'Method not allowed' });
+  if (request.method === 'POST') {
+    if (requirePracticeAdmin(request, response, session)) return;
+    const payload = await readJsonBody(request);
+    const locale = (payload.locale ?? '').trim();
+    const label = (payload.label ?? '').trim();
+    if (!locale) {
+      writeJson(response, 400, { error: 'locale is required' });
+      return;
+    }
+    const catalog = await i18nStore.ensureLocale(locale, label);
+    writeJson(response, 201, catalog);
     return;
   }
 
-  const payload = await readJsonBody(request);
-  const locale = (payload.locale ?? '').trim().toLowerCase();
-  const label = (payload.label ?? '').trim();
+  // DELETE /v1/i18n/locales/:locale handled via the startsWith route below;
+  // bare /v1/i18n/locales only supports GET and POST.
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleI18nStatus(request, response, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (requirePracticeAdmin(request, response, session)) return;
+  writeJson(response, 200, i18nStore.getStatus());
+}
+
+async function handleDeleteLocale(request, response, requestUrl, session) {
+  if (request.method !== 'DELETE') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (requirePracticeAdmin(request, response, session)) return;
+  const locale = requestUrl.pathname.replace('/v1/i18n/locales/', '').trim();
   if (!locale) {
     writeJson(response, 400, { error: 'locale is required' });
     return;
   }
-
-  const catalog = await i18nStore.ensureLocale(locale, label);
-  telemetry.recordMutation('i18n.locale.create');
-  writeJson(response, 201, catalog);
+  try {
+    await i18nStore.deleteLocale(locale);
+    writeJson(response, 200, { deleted: locale });
+  } catch (err) {
+    writeJson(response, 409, { error: err.message });
+  }
 }
 
 async function handleCatalogByLocale(request, response, requestUrl) {
@@ -11579,7 +12266,6 @@ async function handleCatalogByLocale(request, response, requestUrl) {
   const locale = requestUrl.pathname.replace('/v1/i18n/catalog/', '');
   const payload = await readJsonBody(request);
   const catalog = await i18nStore.saveCatalog(locale, payload.messages ?? {});
-  telemetry.recordMutation('i18n.catalog.save');
   writeJson(response, 200, catalog);
 }
 
@@ -11590,19 +12276,19 @@ async function handleAutoTranslate(request, response) {
   }
 
   const payload = await readJsonBody(request);
-  const locale = (payload.locale ?? '').trim().toLowerCase();
+  const locale = (payload.locale ?? '').trim();
+  const scope  = (payload.scope  ?? 'missing');
   if (!locale) {
     writeJson(response, 400, { error: 'locale is required' });
     return;
   }
 
-  const catalog = await i18nStore.autoTranslate(locale, translateMessages);
-  telemetry.recordMutation('i18n.catalog.auto_translate');
+  const catalog = await i18nStore.autoTranslate(locale, translateMessages, { scope });
   writeJson(response, 200, catalog);
 }
 
 async function handleTranslationSettingsByLocale(request, response, requestUrl) {
-  const locale = requestUrl.pathname.replace('/v1/i18n/settings/', '').trim().toLowerCase();
+  const locale = requestUrl.pathname.replace('/v1/i18n/settings/', '').trim();
   if (!locale) {
     writeJson(response, 400, { error: 'locale is required' });
     return;
@@ -11623,83 +12309,9 @@ async function handleTranslationSettingsByLocale(request, response, requestUrl) 
 
   const payload = await readJsonBody(request);
   const settings = await i18nStore.saveSettings(locale, payload.settings ?? {});
-  telemetry.recordMutation('i18n.settings.save');
   writeJson(response, 200, {
     locale,
     settings,
-  });
-}
-
-async function handleFrontendVitals(request, response, session = null) {
-  if (request.method !== 'POST') {
-    writeJson(response, 405, { error: 'Method not allowed' });
-    return;
-  }
-
-  const payload = await readJsonBody(request);
-  if (!payload.name || typeof payload.value !== 'number') {
-    writeJson(response, 400, { error: 'name and value are required' });
-    return;
-  }
-
-  if (featureFlags.tenantTelemetry && !payload.tenantId && session) {
-    const identity = callerIdentity(request, session);
-    const tenantId = normalizeTenantId(identity.tenantId);
-    if (tenantId) {
-      payload.tenantId = tenantId;
-    }
-  }
-
-  telemetry.recordBrowserVital(payload);
-  writeJson(response, 202, { accepted: true });
-}
-
-async function handleFrontendTelemetryEvents(request, response, session = null) {
-  if (request.method !== 'POST') {
-    writeJson(response, 405, { error: 'Method not allowed' });
-    return;
-  }
-
-  const payload = await readJsonBody(request);
-  const events = Array.isArray(payload?.events)
-    ? payload.events
-    : payload && typeof payload === 'object'
-      ? [payload]
-      : [];
-
-  if (!events.length) {
-    writeJson(response, 400, { error: 'events payload is required' });
-    return;
-  }
-
-  let accepted = 0;
-  let dropped = 0;
-
-  for (const event of events.slice(0, 100)) {
-    if (!event || typeof event !== 'object') {
-      dropped += 1;
-      continue;
-    }
-
-    if (featureFlags.tenantTelemetry && !event.tenantId && session) {
-      const identity = callerIdentity(request, session);
-      const tenantId = normalizeTenantId(identity.tenantId);
-      if (tenantId) {
-        event.tenantId = tenantId;
-      }
-    }
-
-    if (telemetry.recordFrontendEvent(event)) {
-      accepted += 1;
-    } else {
-      dropped += 1;
-    }
-  }
-
-  writeJson(response, 202, {
-    accepted: true,
-    count: accepted,
-    dropped,
   });
 }
 
@@ -13830,41 +14442,6 @@ function sanitizeStr(raw, maxLen = 200) {
   return cleaned.slice(0, maxLen);
 }
 
-async function handleObservabilityStackHealth(response) {
-  const jaegerHost   = process.env.JAEGER_HOST   || 'localhost';
-  const jaegerPort   = process.env.JAEGER_PORT   || '16686';
-  const promHost     = process.env.PROMETHEUS_HOST || 'localhost';
-  const promPort     = process.env.PROMETHEUS_PORT || '9090';
-  const workerPort   = process.env.WORKER_METRICS_PORT || '9465';
-
-  async function probeUrl(url) {
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
-      return { up: true, status: res.status };
-    } catch {
-      return { up: false };
-    }
-  }
-
-  const [jaeger, prometheus, workerMetrics] = await Promise.all([
-    probeUrl(`http://${jaegerHost}:${jaegerPort}`),
-    probeUrl(`http://${promHost}:${promPort}/-/healthy`),
-    probeUrl(`http://localhost:${workerPort}/metrics`),
-  ]);
-
-  writeJson(response, 200, {
-    collectedAt: new Date().toISOString(),
-    jaeger,
-    prometheus,
-    workerMetrics,
-    endpoints: {
-      jaegerUi:       `http://${jaegerHost}:${jaegerPort}`,
-      prometheusUi:   `http://${promHost}:${promPort}`,
-      workerMetrics:  `http://localhost:${workerPort}/metrics`,
-    },
-  });
-}
-
 async function handleMonitoringDb(response) {
   if (!process.env.DB_NAME) {
     writeJson(response, 200, { collectedAt: new Date().toISOString(), mode: 'unavailable', reason: 'DB_NAME not configured' });
@@ -13943,8 +14520,361 @@ async function handleMonitoringDb(response) {
   });
 }
 
+// ─── Cosign workflow ─────────────────────────────────────────────────────────
+
+function extractCosignNoteId(requestUrl) {
+  // /v1/clients/:cId/progress-notes/:nId/submit-for-review  OR  .../cosign
+  const parts = requestUrl.pathname.split('/');
+  const pnIdx = parts.indexOf('progress-notes');
+  const cIdx = parts.indexOf('clients');
+  if (pnIdx === -1 || cIdx === -1) return {};
+  return { clientId: parts[cIdx + 1] ?? null, noteId: parts[pnIdx + 1] ?? null };
+}
+
+async function handleProgressNoteCosignRequest(request, response, requestUrl, session) {
+  if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (session.role !== 'intern') { writeJson(response, 403, { error: 'Only interns may submit notes for review' }); return; }
+
+  const { clientId, noteId } = extractCosignNoteId(requestUrl);
+  if (!clientId || !noteId) { writeJson(response, 400, { error: 'Invalid path' }); return; }
+
+  if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+
+  const [rows] = await pool.query(
+    'SELECT id, tenant_id, locked, cosign_status FROM progress_notes WHERE id = ? AND client_id = ? AND tenant_id = ?',
+    [noteId, clientId, session.tenantId],
+  );
+  if (!rows[0]) { writeJson(response, 404, { error: 'Note not found' }); return; }
+  if (rows[0].locked) { writeJson(response, 409, { error: 'Note is already signed and locked' }); return; }
+  if (rows[0].cosign_status === 'pending_review') { writeJson(response, 409, { error: 'Note already pending review' }); return; }
+
+  await updateProgressNote(noteId, clientId, session.tenantId, {
+    cosignStatus: 'pending_review',
+    cosignRequestedBy: session.userId,
+    cosignRequestedAt: new Date().toISOString(),
+  });
+  emitAudit(request, 'session_note.submit_review', 'progress_note', noteId, session);
+  writeJson(response, 200, { status: 'pending_review' });
+}
+
+async function handleProgressNoteCosign(request, response, requestUrl, session) {
+  if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!['counselor', 'practice_admin', 'practice_owner'].includes(session.role)) {
+    writeJson(response, 403, { error: 'Insufficient privileges to cosign' });
+    return;
+  }
+
+  const { clientId, noteId } = extractCosignNoteId(requestUrl);
+  if (!clientId || !noteId) { writeJson(response, 400, { error: 'Invalid path' }); return; }
+
+  if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+
+  const [rows] = await pool.query(
+    'SELECT id, tenant_id, cosign_status, cosign_requested_by FROM progress_notes WHERE id = ? AND client_id = ? AND tenant_id = ?',
+    [noteId, clientId, session.tenantId],
+  );
+  if (!rows[0]) { writeJson(response, 404, { error: 'Note not found' }); return; }
+  if (rows[0].cosign_status !== 'pending_review') { writeJson(response, 409, { error: 'Note is not pending review' }); return; }
+
+  // Supervisor role check: counselor must be assigned as supervisor of the intern
+  if (session.role === 'counselor') {
+    const isAssigned = await isSupervisorOf(session.tenantId, session.userId, rows[0].cosign_requested_by);
+    if (!isAssigned) { writeJson(response, 403, { error: 'Not assigned as supervisor for this intern' }); return; }
+  }
+
+  const payload = await readJsonBody(request);
+  const action = payload.action === 'reject' ? 'rejected' : 'reviewed';
+  const comments = sanitizeStr(payload.comments, 2000) ?? null;
+
+  await updateProgressNote(noteId, clientId, session.tenantId, {
+    cosignStatus: action,
+    cosignedBy: session.userId,
+    cosignedAt: new Date().toISOString(),
+    cosignComments: comments,
+  });
+  emitAudit(request, 'session_note.cosigned', 'progress_note', noteId, session);
+  writeJson(response, 200, { status: action });
+}
+
+// ─── Supervisor assignments ──────────────────────────────────────────────────
+
+async function handleSupervisorAssignments(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+
+  if (request.method === 'GET') {
+    const params = requestUrl.searchParams;
+    if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+    const items = await listSupervisorAssignments(session.tenantId, {
+      supervisorId: params.get('supervisorId') ?? undefined,
+      internId: params.get('internId') ?? undefined,
+    });
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    if (!['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) {
+      writeJson(response, 403, { error: 'Insufficient privileges' });
+      return;
+    }
+    const payload = await readJsonBody(request);
+    const supervisorId = sanitizeStr(payload.supervisorId, 64);
+    const internId     = sanitizeStr(payload.internId, 64);
+    const practiceId   = sanitizeStr(payload.practiceId, 64);
+    if (!supervisorId || !internId || !practiceId) {
+      writeJson(response, 400, { error: 'supervisorId, internId, and practiceId are required' });
+      return;
+    }
+    if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+    const item = await createSupervisorAssignment({
+      id: genId('sa'), tenantId: session.tenantId, supervisorId, internId, practiceId,
+    });
+    emitAudit(request, 'supervisor_assignment.created', 'supervisor_assignment', item.id, session);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleSupervisorAssignmentById(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) {
+    writeJson(response, 403, { error: 'Insufficient privileges' });
+    return;
+  }
+  if (request.method !== 'DELETE') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+
+  const id = requestUrl.pathname.replace('/v1/supervisor-assignments/', '');
+  if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+  const deleted = await deleteSupervisorAssignment(id, session.tenantId);
+  if (!deleted) { writeJson(response, 404, { error: 'Assignment not found' }); return; }
+  emitAudit(request, 'supervisor_assignment.deleted', 'supervisor_assignment', id, session);
+  writeJson(response, 204, null);
+}
+
+// ─── Time tracking ───────────────────────────────────────────────────────────
+
+async function resolveTimeEntryUser(session, requestUrl) {
+  // Allows a supervisor or admin to view a specific intern's time entries
+  const forUser = requestUrl.searchParams.get('userId');
+  if (!forUser || forUser === session.userId) return session.userId;
+  if (['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) return forUser;
+  if (session.role === 'counselor') {
+    if (!process.env.DB_NAME) return null;
+    const ok = await isSupervisorOf(session.tenantId, session.userId, forUser);
+    return ok ? forUser : null;
+  }
+  return null;
+}
+
+async function handleTimeEntries(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+
+  if (request.method === 'GET') {
+    const userId = await resolveTimeEntryUser(session, requestUrl);
+    if (!userId) { writeJson(response, 403, { error: 'Not authorised to view those time entries' }); return; }
+    if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+    const items = await listTimeEntries(session.tenantId, userId, {
+      category: requestUrl.searchParams.get('category') ?? undefined,
+      dateFrom: requestUrl.searchParams.get('date_from') ?? undefined,
+      dateTo:   requestUrl.searchParams.get('date_to') ?? undefined,
+    });
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    const category  = sanitizeStr(payload.category, 64);
+    const startTime = sanitizeStr(payload.startTime, 40);
+    const endTime   = sanitizeStr(payload.endTime, 40);
+    if (!category || !startTime || !endTime) {
+      writeJson(response, 400, { error: 'category, startTime, endTime are required' });
+      return;
+    }
+    const durationMinutes = Math.round((new Date(endTime) - new Date(startTime)) / 60000);
+    if (durationMinutes <= 0) { writeJson(response, 400, { error: 'endTime must be after startTime' }); return; }
+    if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+    const item = await createTimeEntry({
+      id: genId('te'), tenantId: session.tenantId, userId: session.userId,
+      category, startTime, endTime, durationMinutes,
+      description: sanitizeStr(payload.description, 2000) ?? null,
+    });
+    emitAudit(request, 'time_entry.created', 'time_entry', item.id, session);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleTimeEntriesSummary(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+
+  const userId = await resolveTimeEntryUser(session, requestUrl);
+  if (!userId) { writeJson(response, 403, { error: 'Not authorised' }); return; }
+  if (!process.env.DB_NAME) { writeJson(response, 200, { summary: [] }); return; }
+  const summary = await getTimeEntrySummary(session.tenantId, userId, {
+    dateFrom: requestUrl.searchParams.get('date_from') ?? undefined,
+    dateTo:   requestUrl.searchParams.get('date_to') ?? undefined,
+  });
+  writeJson(response, 200, { summary });
+}
+
+// PHI-safe CSV export — omits descriptions, client IDs, and free-text fields.
+// Exports only: entry_id, date (UTC date only), category, duration_minutes.
+async function handleTimeEntriesExport(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+
+  const userId = await resolveTimeEntryUser(session, requestUrl);
+  if (!userId) { writeJson(response, 403, { error: 'Not authorised' }); return; }
+  if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+
+  const entries = await listTimeEntries(session.tenantId, userId, {
+    category: requestUrl.searchParams.get('category') ?? undefined,
+    dateFrom: requestUrl.searchParams.get('date_from') ?? undefined,
+    dateTo:   requestUrl.searchParams.get('date_to') ?? undefined,
+    limit:    5000,
+  });
+
+  // Build CSV — no descriptions, no names, no client IDs
+  const SAFE_CATEGORIES = new Set([
+    'direct_clinical', 'indirect_admin', 'supervision_individual',
+    'supervision_group', 'ce_spiritual', 'ministry_coordination',
+  ]);
+  const csvRows = ['entry_id,date,category,duration_minutes'];
+  for (const entry of entries) {
+    const date = entry.startTime ? entry.startTime.slice(0, 10) : '';
+    const cat  = SAFE_CATEGORIES.has(entry.category) ? entry.category : 'other';
+    csvRows.push(`${entry.id},${date},${cat},${entry.durationMinutes ?? 0}`);
+  }
+  const csv = csvRows.join('\r\n');
+
+  emitAudit(request, 'time_entry.export', 'time_entry', null, session);
+
+  response.writeHead(200, {
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="time-entries.csv"',
+    'Cache-Control': 'no-store',
+  });
+  response.end(csv);
+}
+
+async function handleTimeEntryById(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  const id = requestUrl.pathname.replace('/v1/time-entries/', '');
+
+  if (request.method === 'PATCH') {
+    if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+    const entry = await getTimeEntry(id, session.tenantId);
+    if (!entry) { writeJson(response, 404, { error: 'Not found' }); return; }
+    if (entry.userId !== session.userId) { writeJson(response, 403, { error: 'Forbidden' }); return; }
+    if (entry.isLocked) { writeJson(response, 409, { error: 'Time entry is locked' }); return; }
+
+    const payload = await readJsonBody(request);
+    const fields = {};
+    if (payload.category !== undefined)    fields.category = sanitizeStr(payload.category, 64);
+    if (payload.startTime !== undefined)   fields.startTime = sanitizeStr(payload.startTime, 40);
+    if (payload.endTime !== undefined)     fields.endTime   = sanitizeStr(payload.endTime, 40);
+    if (payload.description !== undefined) fields.description = sanitizeStr(payload.description, 2000) ?? null;
+    if (fields.startTime || fields.endTime) {
+      const s = new Date(fields.startTime ?? entry.startTime);
+      const e = new Date(fields.endTime ?? entry.endTime);
+      fields.durationMinutes = Math.round((e - s) / 60000);
+      if (fields.durationMinutes <= 0) { writeJson(response, 400, { error: 'endTime must be after startTime' }); return; }
+    }
+    await updateTimeEntry(id, session.tenantId, fields);
+    const updated = await getTimeEntry(id, session.tenantId);
+    emitAudit(request, 'time_entry.updated', 'time_entry', id, session);
+    writeJson(response, 200, { item: updated });
+    return;
+  }
+
+  if (request.method === 'DELETE') {
+    if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+    const entry = await getTimeEntry(id, session.tenantId);
+    if (!entry) { writeJson(response, 404, { error: 'Not found' }); return; }
+    if (entry.userId !== session.userId && !['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) {
+      writeJson(response, 403, { error: 'Forbidden' }); return;
+    }
+    if (entry.isLocked) { writeJson(response, 409, { error: 'Locked time entry cannot be deleted' }); return; }
+    await deleteTimeEntry(id, session.tenantId);
+    emitAudit(request, 'time_entry.deleted', 'time_entry', id, session);
+    writeJson(response, 204, null);
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleAppointmentSyncTime(request, response, requestUrl, session) {
+  if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+
+  const appointmentId = requestUrl.pathname
+    .replace('/v1/appointments/', '').replace('/sync-time', '');
+
+  if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+
+  const [apptRows] = await pool.query(
+    'SELECT id, tenant_id, staff_id, start_time, end_time FROM appointments WHERE id = ? AND tenant_id = ?',
+    [appointmentId, session.tenantId],
+  );
+  if (!apptRows[0]) { writeJson(response, 404, { error: 'Appointment not found' }); return; }
+  const appt = apptRows[0];
+  const durationMinutes = appt.start_time && appt.end_time
+    ? Math.round((new Date(appt.end_time) - new Date(appt.start_time)) / 60000)
+    : 0;
+
+  const { created, entry } = await syncTimeEntryFromAppointment({
+    id: genId('te'), tenantId: session.tenantId, userId: appt.staff_id,
+    appointmentId: appt.id, startTime: appt.start_time, endTime: appt.end_time, durationMinutes,
+  });
+  if (created) emitAudit(request, 'time_entry.synced', 'time_entry', entry.id, session);
+  writeJson(response, created ? 201 : 200, { created, item: entry });
+}
+
+// ─── Licensure goals ─────────────────────────────────────────────────────────
+
+async function handleLicensureGoals(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+
+  if (request.method === 'GET') {
+    if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+    const items = await listLicensureGoals(session.tenantId, session.userId);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    const label         = sanitizeStr(payload.label, 120);
+    const targetMinutes = Number(payload.targetMinutes);
+    const effectiveFrom = sanitizeStr(payload.effectiveFrom, 20);
+    if (!label || !targetMinutes || !effectiveFrom) {
+      writeJson(response, 400, { error: 'label, targetMinutes, effectiveFrom are required' });
+      return;
+    }
+    if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+    const item = await createLicensureGoal({
+      id: genId('lg'), tenantId: session.tenantId, userId: session.userId,
+      label, targetMinutes, effectiveFrom,
+      effectiveTo: sanitizeStr(payload.effectiveTo, 20) ?? null,
+      categoryFilter: Array.isArray(payload.categoryFilter) ? payload.categoryFilter : null,
+    });
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
 function resolveRoute(pathname) {
-  if (pathname === '/metrics') return '/metrics';
   if (pathname === '/health' || pathname === '/health/live') return '/health/live';
   if (pathname === '/health/ready') return '/health/ready';
   if (pathname === '/openapi.yaml') return '/openapi.yaml';
@@ -13975,7 +14905,6 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/operations/summary') return '/v1/operations/summary';
   if (pathname === '/v1/reference/dsm5-tr') return '/v1/reference/dsm5-tr';
   if (pathname === '/v1/monitoring/db') return '/v1/monitoring/db';
-  if (pathname === '/v1/monitoring/observability-stack') return '/v1/monitoring/observability-stack';
   if (pathname === '/v1/billing/service-codes') return '/v1/billing/service-codes';
   if (pathname === '/v1/billing/fee-schedules') return '/v1/billing/fee-schedules';
   if (pathname === '/v1/billing/invoices') return '/v1/billing/invoices';
@@ -14018,7 +14947,9 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/platform/data-exports') return '/v1/platform/data-exports';
   if (pathname === '/v1/platform/retention-policies') return '/v1/platform/retention-policies';
   if (pathname.startsWith('/v1/clients/')) return '/v1/clients/:id';
+  if (pathname.endsWith('/video-session') && pathname.startsWith('/v1/appointments/')) return '/v1/appointments/:id/video-session';
   if (pathname.startsWith('/v1/appointments/')) return '/v1/appointments/:id';
+  if (pathname.endsWith('/video-config') && pathname.startsWith('/v1/practices/')) return '/v1/practices/:id/video-config';
   if (pathname.startsWith('/v1/practices/')) return '/v1/practices/:id';
   if (pathname.startsWith('/v1/locations/')) return '/v1/locations/:id';
   if (pathname.startsWith('/v1/staff/') && pathname.endsWith('/availability')) return '/v1/staff/:id/availability';
@@ -14058,25 +14989,6 @@ async function buildReadinessHealthResponse() {
       detail: 'DB_NAME is not configured; API is running in memory-only mode',
     };
 
-    telemetry.recordHealthCheck('db', durationMs, 'degraded', { configured: 'false' });
-    telemetry.updateHealth({
-      serviceStatus: 1,
-      dependencies: {
-        db: {
-          status: 1,
-          observedAt: timestamp,
-        },
-      },
-      checks: {
-        db: {
-          status: 1,
-          observedAt: timestamp,
-          durationMs,
-          detail: checks.db.detail,
-        },
-      },
-    });
-
     return {
       httpStatus: 200,
       body: {
@@ -14105,25 +15017,6 @@ async function buildReadinessHealthResponse() {
       detail: 'database ping succeeded',
     };
 
-    telemetry.recordHealthCheck('db', durationMs, 'ok', { configured: 'true' });
-    telemetry.updateHealth({
-      serviceStatus: 2,
-      dependencies: {
-        db: {
-          status: 2,
-          observedAt: timestamp,
-        },
-      },
-      checks: {
-        db: {
-          status: 2,
-          observedAt: timestamp,
-          durationMs,
-          detail: checks.db.detail,
-        },
-      },
-    });
-
     return {
       httpStatus: 200,
       body: {
@@ -14148,25 +15041,6 @@ async function buildReadinessHealthResponse() {
       observedAt: timestamp,
       detail: error.message || 'database ping failed',
     };
-
-    telemetry.recordHealthCheck('db', durationMs, 'error', { configured: 'true' });
-    telemetry.updateHealth({
-      serviceStatus: 0,
-      dependencies: {
-        db: {
-          status: 0,
-          observedAt: timestamp,
-        },
-      },
-      checks: {
-        db: {
-          status: 0,
-          observedAt: timestamp,
-          durationMs,
-          detail: checks.db.detail,
-        },
-      },
-    });
 
     return {
       httpStatus: 503,
@@ -14223,7 +15097,6 @@ async function emitAudit(request, action, targetType, targetId, session = null) 
     const mutationAttributes = featureFlags.tenantTelemetry
       ? { tenantId: normalizeTenantId(metadata.tenantId) ?? 'unknown' }
       : {};
-    telemetry.recordMutation(`audit.${action}`, 'success', mutationAttributes);
 
     // Persist to DB when available (append-only, never update/delete).
     if (process.env.DB_NAME) {

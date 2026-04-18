@@ -738,6 +738,13 @@ export async function deleteAppointmentRecord(appointmentId) {
   return response.json();
 }
 
+export async function startVideoSession(appointmentId) {
+  return apiFetch(`/api/v1/appointments/${appointmentId}/video-session`, {
+    method: 'POST',
+    headers: csrfHeaders(),
+  });
+}
+
 // ── Phase 4 — ScheduleOps ─────────────────────────────────────────────────
 
 export function fetchAvailabilityOverrides({ staffId, from, to } = {}) {

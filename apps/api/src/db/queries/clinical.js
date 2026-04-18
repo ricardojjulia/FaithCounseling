@@ -94,6 +94,20 @@ function rowToProgressNote(row) {
     signedBy: row.signed_by,
     signedAt: row.signed_at,
     createdAt: row.created_at,
+    // Phase 2 faith-integrated clinical fields
+    scriptureReference: row.scripture_reference ?? null,
+    spiritualPractices: row.spiritual_practices
+      ? (typeof row.spiritual_practices === 'string'
+          ? JSON.parse(row.spiritual_practices)
+          : row.spiritual_practices)
+      : null,
+    // Phase 3 cosign workflow
+    cosignStatus: row.cosign_status ?? null,
+    cosignRequestedBy: row.cosign_requested_by ?? null,
+    cosignRequestedAt: row.cosign_requested_at ?? null,
+    cosignedBy: row.cosigned_by ?? null,
+    cosignedAt: row.cosigned_at ?? null,
+    cosignComments: row.cosign_comments_enc ? decrypt(row.cosign_comments_enc) : null,
   };
 }
 
@@ -383,16 +397,23 @@ export async function createProgressNote({
   lockedNote,
   signedBy,
   signedAt,
+  scriptureReference = null,
+  spiritualPractices = null,
 }) {
   const summaryEnc = summary ? encrypt(summary) : null;
   const interventionsEnc = interventions ? encrypt(interventions) : null;
   const signedAtSql = toSqlTimestamp(signedAt);
   const apptId = appointmentId ?? null;
+  const spiritualPracticesJson = spiritualPractices
+    ? JSON.stringify(spiritualPractices)
+    : null;
   await pool.query(
     `INSERT INTO progress_notes
-       (id, client_id, tenant_id, appointment_id, note_type, summary_enc, interventions_enc, locked, signed_by, signed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, clientId, tenantId, apptId, noteType, summaryEnc, interventionsEnc, lockedNote ? 1 : 0, signedBy, signedAtSql],
+       (id, client_id, tenant_id, appointment_id, note_type, summary_enc, interventions_enc,
+        locked, signed_by, signed_at, scripture_reference, spiritual_practices)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, clientId, tenantId, apptId, noteType, summaryEnc, interventionsEnc,
+     lockedNote ? 1 : 0, signedBy, signedAtSql, scriptureReference ?? null, spiritualPracticesJson],
   );
   const [rows] = await pool.query(
     'SELECT * FROM progress_notes WHERE id = ? AND client_id = ? AND tenant_id = ?',
@@ -412,6 +433,19 @@ export async function updateProgressNote(id, clientId, tenantId, fields) {
   if (fields.lockedNote !== undefined) pairs.push(['locked = ?', fields.lockedNote ? 1 : 0]);
   if (fields.signedBy !== undefined) pairs.push(['signed_by = ?', fields.signedBy]);
   if (fields.signedAt !== undefined) pairs.push(['signed_at = ?', toSqlTimestamp(fields.signedAt)]);
+  // Phase 2 faith fields
+  if (fields.scriptureReference !== undefined)
+    pairs.push(['scripture_reference = ?', fields.scriptureReference ?? null]);
+  if (fields.spiritualPractices !== undefined)
+    pairs.push(['spiritual_practices = ?', fields.spiritualPractices ? JSON.stringify(fields.spiritualPractices) : null]);
+  // Phase 3 cosign workflow
+  if (fields.cosignStatus !== undefined) pairs.push(['cosign_status = ?', fields.cosignStatus ?? null]);
+  if (fields.cosignRequestedBy !== undefined) pairs.push(['cosign_requested_by = ?', fields.cosignRequestedBy ?? null]);
+  if (fields.cosignRequestedAt !== undefined) pairs.push(['cosign_requested_at = ?', toSqlTimestamp(fields.cosignRequestedAt)]);
+  if (fields.cosignedBy !== undefined) pairs.push(['cosigned_by = ?', fields.cosignedBy ?? null]);
+  if (fields.cosignedAt !== undefined) pairs.push(['cosigned_at = ?', toSqlTimestamp(fields.cosignedAt)]);
+  if (fields.cosignComments !== undefined)
+    pairs.push(['cosign_comments_enc = ?', fields.cosignComments ? encrypt(fields.cosignComments) : null]);
 
   if (!pairs.length) return;
 

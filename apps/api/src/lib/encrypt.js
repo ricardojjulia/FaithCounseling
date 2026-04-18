@@ -39,6 +39,38 @@ function key() {
 }
 
 /**
+ * HMAC key used exclusively for deterministic lookup hashes (e.g. email lookup).
+ *
+ * Configure via DB_ENCRYPTION_HMAC_KEY (64 hex chars / 32 bytes).
+ * Falls back to the AES key when the variable is absent so that existing
+ * deployments remain functional without a migration.
+ *
+ * IMPORTANT: Changing this key invalidates every existing lookup hash.
+ * Run a full rehash migration before switching to a new HMAC key in production.
+ */
+function loadHmacKey() {
+  const hex = process.env.DB_ENCRYPTION_HMAC_KEY;
+  if (hex) {
+    if (hex.length !== 64) {
+      throw new Error(
+        'DB_ENCRYPTION_HMAC_KEY must be a 64-character hex string (32 bytes). ' +
+        'Generate with: openssl rand -hex 32',
+      );
+    }
+    return Buffer.from(hex, 'hex');
+  }
+  // Backward-compatible fallback — use the AES key until a dedicated HMAC key
+  // is provisioned.  Operators should set DB_ENCRYPTION_HMAC_KEY in production.
+  return key();
+}
+
+let _hmacKey = null;
+function hmacKey() {
+  if (!_hmacKey) _hmacKey = loadHmacKey();
+  return _hmacKey;
+}
+
+/**
  * Encrypt a plaintext string.  Returns null if plaintext is null/undefined.
  * @param {string|null|undefined} plaintext
  * @returns {string|null}  Base64 encoded "iv:tag:ciphertext"
@@ -117,5 +149,5 @@ function normalizeLookupInput(value, { lowercase = false } = {}) {
 export function deriveLookupHash(value, options = {}) {
   const normalized = normalizeLookupInput(value, options);
   if (!normalized) return null;
-  return crypto.createHmac('sha256', key()).update(normalized, 'utf8').digest('hex');
+  return crypto.createHmac('sha256', hmacKey()).update(normalized, 'utf8').digest('hex');
 }

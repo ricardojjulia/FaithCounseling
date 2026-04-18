@@ -19,10 +19,7 @@ async function apiFetch(url, options = {}) {
   return res.json();
 }
 
-function formatCurrency(cents) {
-  if (typeof cents !== 'number') return '$0.00';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
-}
+// formatCurrency is provided by useI18n() — imported at component level
 
 function formatDate(iso) {
   if (!iso) return '—';
@@ -30,7 +27,7 @@ function formatDate(iso) {
 }
 
 export default function OfferingsPage({ clients = [] }) {
-  const { t } = useI18n();
+  const { t, formatCurrency } = useI18n();
   useSurfaceTelemetry('offerings', { surfaceKind: 'view', workflow: 'navigation' });
 
   const [loading, setLoading] = useState(true);

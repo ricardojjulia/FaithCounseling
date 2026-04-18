@@ -15,7 +15,6 @@ let authStatus = {
   canViewAdminMonitoring: false,
 };
 
-window.faithTelemetry?.start({ surfaceId: 'monitor', surfaceKind: 'page' });
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -272,116 +271,6 @@ function updateVitals(vitals) {
   }).join('');
 }
 
-function renderIssueList(containerId, items, emptyMessage, valueLabel) {
-  const container = $(containerId);
-  if (!items?.length) {
-    container.innerHTML = `<div class="empty-state">${emptyMessage}</div>`;
-    return;
-  }
-
-  container.innerHTML = items.map((item) => `
-    <div class="issue-row">
-      <div>
-        <div class="issue-name">${escapeHtml(item.name)}</div>
-        <div class="issue-sub">${escapeHtml(item.sub)}</div>
-      </div>
-      <div class="issue-value">${escapeHtml(item.value)}${valueLabel ? ` ${escapeHtml(valueLabel)}` : ''}</div>
-    </div>
-  `).join('');
-}
-
-function describeSurfaceIssue(surface) {
-  if (!surface) return 'No issue data available.';
-  if (surface.issueStatus === 'current') {
-    return `Current issue on ${surface.currentIssueCount ?? 0} request path(s) · last failure ${fmtShortAgo(surface.lastIssueAt)}`;
-  }
-  if (surface.issueStatus === 'recent') {
-    return `Recovered recently · ${surface.recentIssueCount ?? 0} issue event(s) in the recent window · last failure ${fmtShortAgo(surface.lastIssueAt)}`;
-  }
-  if (surface.issueStatus === 'historical') {
-    return `Historical only · no recent issue in the active window · last failure ${fmtShortAgo(surface.lastIssueAt)}`;
-  }
-  return 'Healthy in the current telemetry window.';
-}
-
-function formatSurfaceIssueValue(surface) {
-  return `current ${surface.currentIssueCount ?? 0} · recent ${surface.recentIssueCount ?? 0} · total ${surface.issueCount ?? 0}`;
-}
-
-function summarizeEmptyStates(emptyStates) {
-  return Object.values(emptyStates || {}).reduce((sum, count) => sum + count, 0);
-}
-
-function metricClass(value, warnAt, badAt) {
-  if (!Number.isFinite(value)) return '';
-  if (value >= badAt) return 'metric-bad';
-  if (value >= warnAt) return 'metric-warn';
-  return '';
-}
-
-function updateUiSummary(overall, frontend, surfaces, exportedViaOtel) {
-  setText('uiViews', overall?.totalViews ?? 0);
-  setText('uiErrors', overall?.totalUiErrors ?? 0);
-  setText('uiFetchErrors', overall?.totalFetchErrors ?? 0);
-  setText('uiValidationErrors', overall?.totalValidationErrors ?? 0);
-  setText('uiActionSuccess', fmtPercent(overall?.actionSuccessRate));
-  setText('uiActionSuccessSub', `${overall?.totalActions ?? 0} tracked actions`);
-  setText('uiSlowSurfaces', overall?.slowSurfaceCount ?? 0);
-  setText('uiSummaryLastSeen', overall?.lastEventAt ? `Last event ${fmtTime(overall.lastEventAt)}` : 'Waiting for frontend telemetry');
-
-  setText('uiActiveSurfaces', overall?.activeSurfaceCount ?? 0);
-  setText('uiTrackedSurfaces', surfaces?.length ?? 0);
-  setText('uiLastEvent', overall?.lastEventAt ? fmtTime(overall.lastEventAt) : '—');
-  setText('uiOtelExport', exportedViaOtel ? 'Enabled' : 'Local only');
-  setText('uiExportState', exportedViaOtel ? 'External OTEL export enabled' : 'Local monitoring only');
-  setText('surfaceSummaryCount', `${surfaces?.length ?? 0} surfaces`);
-  setText('surfaceTableNote', `Top ${Math.min(surfaces?.length ?? 0, 12)} by views · issue state = current / recent / total`);
-
-  renderIssueList(
-    'topSurfaceIssues',
-    (frontend?.topFailingSurfaces ?? []).map((surface) => ({
-      name: surface.surfaceId,
-      sub: describeSurfaceIssue(surface),
-      value: formatSurfaceIssueValue(surface),
-    })),
-    'No current or recent surface failures recorded yet.',
-    '',
-  );
-
-  renderIssueList(
-    'topWorkflowIssues',
-    (frontend?.topFailingWorkflows ?? []).map((workflow) => ({
-      name: workflow.workflow,
-      sub: `${workflow.actionCount ?? 0} tracked actions`,
-      value: workflow.errorCount ?? 0,
-    })),
-    'No workflow failures recorded yet.',
-    'errors',
-  );
-}
-
-function updateUiSummaryRestricted() {
-  setText('uiViews', '—');
-  setText('uiErrors', '—');
-  setText('uiFetchErrors', '—');
-  setText('uiValidationErrors', '—');
-  setText('uiActionSuccess', '—');
-  setText('uiActionSuccessSub', 'Sign in as a practice admin to view shared telemetry');
-  setText('uiSlowSurfaces', '—');
-  setText('uiSummaryLastSeen', 'Sign in as a practice admin to view shared telemetry');
-
-  setText('uiActiveSurfaces', '—');
-  setText('uiTrackedSurfaces', '—');
-  setText('uiLastEvent', '—');
-  setText('uiOtelExport', 'Sign in required');
-  setText('uiExportState', 'Admin session required for API monitoring data');
-  setText('surfaceSummaryCount', 'Admin session required');
-  setText('surfaceTableNote', 'Shared API and surface telemetry is available after practice-admin sign-in');
-
-  renderIssueList('topSurfaceIssues', [], 'Sign in as a practice admin to view shared surface failures.', '');
-  renderIssueList('topWorkflowIssues', [], 'Sign in as a practice admin to view workflow failures.', 'errors');
-  renderSurfaceTable([]);
-}
 
 function updateHealthChecks(health) {
   const checks = Object.entries(health?.checks ?? {});
@@ -426,51 +315,6 @@ function updateHealthChecksRestricted() {
   }
 }
 
-function renderSurfaceTable(surfaces) {
-  const tbody = $('surfaceTableBody');
-  if (!surfaces?.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No surface telemetry recorded yet.</td></tr>';
-    return;
-  }
-
-  const topSurfaces = surfaces.slice(0, 12);
-  tbody.innerHTML = topSurfaces.map((surface) => {
-    const emptyStateTotal = summarizeEmptyStates(surface.emptyStates);
-    const loadP95Class = metricClass(surface.loadDurationMs?.p95, 600, 1000);
-    const fetchP95Class = metricClass(surface.fetchDurationMs?.p95, 600, 1000);
-    const issueStatusClass = surface.issueStatus === 'current'
-      ? 'metric-bad'
-      : surface.issueStatus === 'recent'
-        ? 'metric-warn'
-        : '';
-    const issueStateLabel = surface.issueStatus === 'current'
-      ? 'Current'
-      : surface.issueStatus === 'recent'
-        ? 'Recent'
-        : surface.issueStatus === 'historical'
-          ? 'Historical'
-          : 'Healthy';
-
-    return `
-      <tr>
-        <td>
-          <div class="surface-id">${escapeHtml(surface.surfaceId)}</div>
-          <div class="surface-kind">${escapeHtml(surface.surfaceKind)}</div>
-        </td>
-        <td>${surface.viewCount ?? 0}</td>
-        <td class="${loadP95Class}">${fmtMs(surface.loadDurationMs?.p95)}</td>
-        <td class="${fetchP95Class}">${fmtMs(surface.fetchDurationMs?.p95)}</td>
-        <td>${surface.actionCounts?.success ?? 0}/${Object.values(surface.actionCounts ?? {}).reduce((sum, count) => sum + count, 0)} (${fmtPercent(surface.actionSuccessRate)})</td>
-        <td class="${issueStatusClass}">
-          <div>${surface.currentIssueCount ?? 0} / ${surface.recentIssueCount ?? 0} / ${surface.totalIssueCount ?? 0}</div>
-          <div style="font-size:11px;color:var(--muted)">${issueStateLabel}${surface.lastIssueAt ? ` · ${fmtShortAgo(surface.lastIssueAt)}` : ''}</div>
-        </td>
-        <td>${emptyStateTotal}</td>
-        <td>${surface.lastSeenAt ? fmtTime(surface.lastSeenAt) : '—'}</td>
-      </tr>
-    `;
-  }).join('');
-}
 
 // ─── Drill-down ───────────────────────────────────────────────────────────────
 function openDrill(filter) {
@@ -520,211 +364,6 @@ function initDrillToggle() {
   });
 }
 
-// ─── Observability stack probe ────────────────────────────────────────────────
-
-async function probeEndpoint(url, cors = true) {
-  try {
-    await fetch(url, {
-      method: 'GET',
-      mode: cors ? 'cors' : 'no-cors',
-      credentials: 'omit',
-      signal: AbortSignal.timeout(3000),
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function setObsBadge(id, state) {
-  const el = $(id);
-  if (!el) return;
-  el.className = `obs-badge ${state === 'restricted' ? 'checking' : state}`;
-  el.textContent = state === 'up'
-    ? 'Online'
-    : state === 'down'
-      ? 'Offline'
-      : state === 'restricted'
-        ? 'Sign in'
-        : 'Checking…';
-}
-
-async function checkObsStack() {
-  const btn = $('checkStackBtn');
-  if (btn) { btn.disabled = true; btn.textContent = '↻ Checking…'; }
-
-  ['jaegerBadge','promBadge','apiMetricsBadge','webMetricsBadge','workerMetricsBadge'].forEach(
-    id => setObsBadge(id, 'checking')
-  );
-  setText('obsStackTitle', 'Checking…');
-  setText('obsStackSub',   'Probing Jaeger, Prometheus, and metrics endpoints.');
-
-  // Same-origin probes: these work fine from the browser (no CSP restriction)
-  const [apiM, webM] = await Promise.all([
-    probeEndpoint('/api/metrics', true),   // faith-api routed via web proxy
-    probeEndpoint('/metrics',    true),    // faith-web (same origin)
-  ]);
-
-  // Cross-origin probes (Jaeger :16686, Prometheus :9090, worker :9465) are
-  // blocked by connect-src 'self' CSP, so we ask the API server to probe them.
-  let jaeger = false, prom = false, workerM = false;
-  if (authStatus.canViewAdminMonitoring) {
-    try {
-      const obsRes = await fetch('/api/v1/monitoring/observability-stack', {
-        credentials: 'include',
-        signal: AbortSignal.timeout(8000),
-      });
-      if (obsRes.ok) {
-        const data = await obsRes.json();
-        jaeger  = data.jaeger?.up        ?? false;
-        prom    = data.prometheus?.up    ?? false;
-        workerM = data.workerMetrics?.up ?? false;
-      }
-    } catch { /* API unreachable — leave all false */ }
-  }
-
-  setObsBadge('jaegerBadge',        authStatus.canViewAdminMonitoring ? (jaeger ? 'up' : 'down') : 'restricted');
-  setObsBadge('promBadge',          authStatus.canViewAdminMonitoring ? (prom ? 'up' : 'down') : 'restricted');
-  setObsBadge('apiMetricsBadge',    apiM    ? 'up' : 'down');
-  setObsBadge('webMetricsBadge',    webM    ? 'up' : 'down');
-  setObsBadge('workerMetricsBadge', authStatus.canViewAdminMonitoring ? (workerM ? 'up' : 'down') : 'restricted');
-
-  const stackUp   = jaeger && prom;
-  const metricsUp = apiM && webM;
-  const anyUp     = jaeger || prom || apiM || webM || workerM;
-
-  const banner       = $('obsStackBanner');
-  const instructions = $('obsInstructions');
-  const shutdownHint = $('obsShutdownHint');
-
-  if (!authStatus.canViewAdminMonitoring) {
-    banner.className = 'otel-status-banner inactive';
-    setText('obsStackIcon',  '🔒');
-    setText('obsStackTitle', 'Admin Sign-In Required');
-    setText('obsStackSub',   'API metrics stay visible publicly. Sign in as a practice admin to probe Jaeger, Prometheus, worker metrics, and protected monitoring details.');
-    if (instructions) instructions.style.display = 'block';
-    if (shutdownHint) shutdownHint.style.display = 'none';
-  } else if (stackUp && metricsUp) {
-    banner.className = 'otel-status-banner active';
-    setText('obsStackIcon',  '🟢');
-    setText('obsStackTitle', 'Observability Stack Active');
-    setText('obsStackSub',   'Jaeger and Prometheus are running. All metrics endpoints are reachable.');
-    if (instructions)  instructions.style.display  = 'none';
-    if (shutdownHint)  shutdownHint.style.display   = 'block';
-  } else if (anyUp) {
-    banner.className = 'otel-status-banner active';
-    setText('obsStackIcon',  '🟡');
-    setText('obsStackTitle', 'Observability Stack Partially Active');
-    setText('obsStackSub',   'Some services are reachable. Check individual service status below.');
-    if (instructions)  instructions.style.display  = 'block';
-    if (shutdownHint)  shutdownHint.style.display   = 'none';
-  } else {
-    banner.className = 'otel-status-banner inactive';
-    setText('obsStackIcon',  '⭕');
-    setText('obsStackTitle', 'Observability Stack Inactive');
-    setText('obsStackSub',   'Jaeger and Prometheus are not running. Start the Docker stack to enable full observability.');
-    if (instructions)  instructions.style.display  = 'block';
-    if (shutdownHint)  shutdownHint.style.display   = 'none';
-  }
-
-  const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  setText('obsStackLastChecked', `checked ${now}`);
-
-  if (btn) { btn.disabled = false; btn.textContent = '↻ Check'; }
-}
-
-// ─── OTEL trace export banner (driven by API summary) ────────────────────────
-function updateOtelBanner(isActive) {
-  const banner = $('otelBanner');
-  if (isActive === 'restricted') {
-    banner.className = 'otel-status-banner inactive';
-    setText('otelBannerTitle', 'Admin Sign-In Required');
-    setText('otelBannerSub',   'Sign in as a practice admin to view OTLP trace-export configuration and protected API monitoring details.');
-    $('otelCurrentStatus').value = 'Restricted — practice-admin session required';
-  } else if (isActive) {
-    banner.className = 'otel-status-banner active';
-    setText('otelBannerTitle', 'Trace Export Active — sending to Jaeger');
-    setText('otelBannerSub',   'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is configured. Traces are flowing to Jaeger.');
-    $('otelCurrentStatus').value = 'Exporting traces via OTLP → Jaeger';
-  } else {
-    banner.className = 'otel-status-banner inactive';
-    setText('otelBannerTitle', 'Trace Export Not Configured');
-    setText('otelBannerSub',   'Set OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:4318/v1/traces in .env and restart.');
-    $('otelCurrentStatus').value = 'Not configured — no OTLP traces endpoint set';
-  }
-}
-
-function initOtelSettings() {
-  // Observability stack check button
-  const checkBtn = $('checkStackBtn');
-  if (checkBtn) checkBtn.addEventListener('click', () => checkObsStack());
-
-  // Copy-command buttons
-  const START_CMD = 'docker compose --profile observability up -d';
-  const STOP_CMD  = 'docker compose --profile observability down';
-
-  function copyText(text, label) {
-    navigator.clipboard?.writeText(text).then(
-      () => toast(`${label} copied to clipboard`),
-      () => toast('Copy failed — paste manually from the snippet below'),
-    );
-  }
-
-  const copyStart = $('copyStartCmd');
-  if (copyStart) copyStart.addEventListener('click', () => copyText(START_CMD, 'Start command'));
-
-  const copyStop = $('copyStopCmd');
-  if (copyStop) copyStop.addEventListener('click', () => copyText(STOP_CMD, 'Stop command'));
-
-  const copyStopActive = $('copyStopCmdActive');
-  if (copyStopActive) copyStopActive.addEventListener('click', () => copyText(STOP_CMD, 'Stop command'));
-
-  // Test Jaeger OTLP connection
-  $('testOtelBtn').addEventListener('click', async () => {
-    const endpoint = $('otelEndpoint').value.trim() || $('otelTracesEndpoint').value.trim()
-      || 'http://localhost:4318/v1/traces';
-    const result = $('otelTestResult');
-    $('testOtelBtn').disabled = true;
-    $('testOtelBtn').textContent = 'Testing…';
-    result.className = 'otel-test-result visible';
-    result.textContent = 'Sending test trace to Jaeger…';
-    try {
-      const url = endpoint.replace(/\/$/, '') + (endpoint.includes('/v1/') ? '' : '/v1/traces');
-      const res = await fetch(url, {
-        method: 'POST', mode: 'cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resourceSpans: [] }),
-        signal: AbortSignal.timeout(5000),
-      });
-      result.className = 'otel-test-result visible ok';
-      result.textContent = `✓ Jaeger OTLP responded with ${res.status}. Traces will flow when OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is set.`;
-    } catch (err) {
-      result.className = 'otel-test-result visible fail';
-      result.textContent = `✗ ${err.name === 'AbortError' ? 'Timed out (5s)' : err.message}. Is Jaeger running? Try: docker compose --profile observability up -d`;
-    } finally {
-      $('testOtelBtn').disabled = false;
-      $('testOtelBtn').textContent = 'Test Jaeger Connection';
-    }
-  });
-
-  $('genEnvBtn').addEventListener('click', () => {
-    const ep  = $('otelEndpoint').value.trim();
-    const tr  = $('otelTracesEndpoint').value.trim() || 'http://localhost:4318/v1/traces';
-    const met = $('otelMetricsEndpoint').value.trim();
-    const svc = $('otelServiceName').value.trim() || 'faith-counseling';
-    const lines = [];
-    if (ep)  lines.push(`OTEL_EXPORTER_OTLP_ENDPOINT=${ep}`);
-    lines.push(`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${tr}`);
-    if (met) lines.push(`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=${met}`);
-    lines.push(`OTEL_SERVICE_NAME=${svc}`);
-    lines.push(`WORKER_METRICS_PORT=9465`);
-    lines.push(`# Restart app after adding these to .env`);
-    const snip = $('envSnippet');
-    snip.textContent = lines.join('\n');
-    snip.style.display = 'block';
-    toast('Snippet generated — copy and add to your .env file');
-  });
-}
 
 // ─── DB panel ─────────────────────────────────────────────────────────────────
 function updateDbPanel(data) {
@@ -818,7 +457,6 @@ async function doRefresh() {
   try {
     const requests = [
       fetch('/api/health', { credentials: 'include' }).then((r) => r.json()),
-      fetch('/telemetry/summary', { credentials: 'include' }).then((r) => r.json()).catch(() => ({})),
     ];
 
     if (authStatus.canViewAdminMonitoring) {
@@ -829,10 +467,9 @@ async function doRefresh() {
     }
 
     const settled = await Promise.allSettled(requests);
-    const [apiHealth, webSummaryResp, apiSummaryResp, dbStatsResp] = settled;
+    const [apiHealth, apiSummaryResp, dbStatsResp] = settled;
 
     const health = apiHealth.status === 'fulfilled' ? apiHealth.value : null;
-    const webData = webSummaryResp.status === 'fulfilled' ? webSummaryResp.value : null;
     const apiData = authStatus.canViewAdminMonitoring && apiSummaryResp?.status === 'fulfilled' ? apiSummaryResp.value : null;
     const dbStats = authStatus.canViewAdminMonitoring && dbStatsResp?.status === 'fulfilled' ? dbStatsResp.value : null;
     const sum = apiData?.summary ?? {};
@@ -872,65 +509,33 @@ async function doRefresh() {
     updateMemory(sum.process);
 
     // Vitals
-    const vitals = { ...(sum.browserVitals ?? {}), ...(webData?.summary?.browserVitals ?? {}) };
+    const vitals = { ...(sum.browserVitals ?? {}) };
     updateVitals(vitals);
 
-    // UI / surface monitoring
+    // Health checks and DB panel (admin only)
     if (authStatus.canViewAdminMonitoring) {
-      updateUiSummary(sum.overall ?? {}, sum.frontend ?? {}, sum.surfaces ?? [], apiData?.exportedViaOtel ?? false);
       updateHealthChecks(sum.health ?? {});
-      renderSurfaceTable(sum.surfaces ?? []);
       updateDbPanel(dbStats);
-      updateOtelBanner(apiData?.exportedViaOtel ?? false);
       lastErrors = sum.recentErrors ?? [];
       setText('errorCount', lastErrors.length);
       if (drillOpen) renderErrorTable();
     } else {
-      updateUiSummaryRestricted();
       updateHealthChecksRestricted();
       updateDbPanel({ mode: 'restricted' });
-      updateOtelBanner('restricted');
       lastErrors = [];
       setText('errorCount', '—');
       if (drillOpen) renderErrorTable();
     }
 
-    if (!Object.keys(vitals).length) {
-      window.faithTelemetry?.trackEmptyState('no_vitals', { workflow: 'monitor' });
-    }
-
-    window.faithTelemetry?.trackInteraction('monitor.refresh', performance.now() - startedAt, {
-      workflow: 'monitor',
-      result: 'success',
-    });
-    window.faithTelemetry?.trackAction('monitor.refresh', 'success', { workflow: 'monitor' });
-
-    // Record heartbeat vital
-    recordHeartbeat();
-
   } catch (err) {
     chip.className = 'status-chip degraded';
     $('healthText').textContent = 'Error';
     toast(`Refresh failed: ${err.message}`, 'err');
-    window.faithTelemetry?.trackInteraction('monitor.refresh', performance.now() - startedAt, {
-      workflow: 'monitor',
-      result: 'failure',
-    });
-    window.faithTelemetry?.trackAction('monitor.refresh', 'failure', { workflow: 'monitor' });
-    window.faithTelemetry?.trackError('monitor.refresh', { workflow: 'monitor' });
   } finally {
     $('refreshBtn').disabled = false;
   }
 }
 
-async function recordHeartbeat() {
-  const memMb = Math.round((performance?.memory?.usedJSHeapSize ?? 0) / 1048576);
-  await fetch('/api/v1/telemetry/vitals', {
-    method: 'POST', credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: 'monitor.heartbeat.memory_mb', value: memMb, rating: 'good', page: 'monitor', timestamp: new Date().toISOString(), navigationType: 'navigate' }),
-  }).catch(() => {});
-}
 
 // ─── Auto-refresh countdown ───────────────────────────────────────────────────
 function resetCountdown() {
@@ -966,8 +571,5 @@ $('refreshBtn').addEventListener('click', async () => {
 
 initDrillToggle();
 initColorSchemeToggle();
-initOtelSettings();
 loadAuthStatus()
-  .then(() => checkObsStack())
-  .then(() => doRefresh())
   .then(() => { resetCountdown(); scheduleRefresh(); });

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { VideoSessionModal } from './VideoSession/VideoSessionModal.jsx';
 import { useForm } from '@mantine/form';
 import { DatePickerInput, MonthPickerInput, TimePicker } from '@mantine/dates';
 import {
@@ -634,6 +635,7 @@ function AppointmentTable({
   onEdit,
   onDelete,
   onStatusChange,
+  onJoinVideo,
   emptyMessage = 'No appointments scheduled for this day.',
 }) {
   if (!appointments.length) {
@@ -678,6 +680,11 @@ function AppointmentTable({
                 >
                   Open
                 </Button>
+                {appointment.remoteSession && onJoinVideo ? (
+                  <Button size="xs" color="blue" variant="filled" onClick={() => onJoinVideo(appointment)}>
+                    Join Video
+                  </Button>
+                ) : null}
                 <Button size="xs" variant="default" onClick={() => onEdit?.(appointment)}>Edit</Button>
                 {appointment.status !== 'completed' ? (
                   <Button size="xs" color="green" variant="light" onClick={() => onStatusChange?.(appointment, 'completed')}>
@@ -1840,6 +1847,7 @@ export default function SchedulingPage({
   const [composerOpen, setComposerOpen] = useState(initialComposerOpen);
   const [composerMode, setComposerMode] = useState('create');
   const [editingAppointment, setEditingAppointment] = useState(null);
+  const [videoSessionAppt, setVideoSessionAppt] = useState(null);
   const [composerClientId, setComposerClientId] = useState(initialClientId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -2336,6 +2344,7 @@ export default function SchedulingPage({
                     onEdit={handleEdit}
                     onDelete={handleDelete}
                     onStatusChange={handleStatusChange}
+                    onJoinVideo={(appt) => setVideoSessionAppt(appt)}
                     emptyMessage="No appointments scheduled for this day."
                   />
                   </Paper>
@@ -2352,6 +2361,7 @@ export default function SchedulingPage({
                     onEdit={handleEdit}
                     onDelete={handleDelete}
                     onStatusChange={handleStatusChange}
+                    onJoinVideo={(appt) => setVideoSessionAppt(appt)}
                     emptyMessage={scheduleScope === 'month'
                       ? 'No appointments scheduled for this month.'
                       : 'No appointments scheduled for this day.'}
@@ -2394,6 +2404,13 @@ export default function SchedulingPage({
           <ClientSessionsPanel clients={clients} onViewChart={onViewChart} />
         </Tabs.Panel>
       </Tabs>
+
+      <VideoSessionModal
+        opened={videoSessionAppt !== null}
+        onClose={() => setVideoSessionAppt(null)}
+        appointmentId={videoSessionAppt?.id ?? ''}
+        clientName={videoSessionAppt?.clientName ?? ''}
+      />
     </Stack>
   );
 }

@@ -1,11 +1,4 @@
-export const defaultLocale = 'en';
-
-export const localeLabels = Object.freeze({
-  en: 'English',
-  es: 'Spanish',
-  fr: 'French',
-  pt: 'Portuguese',
-});
+export { DEFAULT_LOCALE, DEFAULT_LOCALE as defaultLocale, localeLabels, SUPPORTED_LOCALES, LOCALE_MAP, LEGACY_ALIASES, resolveLocaleCode } from './locales.js';
 
 export const baseMessages = Object.freeze({
   'app.name': 'Faith Counseling',
@@ -21,6 +14,7 @@ export const baseMessages = Object.freeze({
   'nav.scheduling': 'Scheduling',
   'nav.charting': 'Charting',
   'nav.tasks': 'My Tasks',
+  'nav.timeTracking': 'Time Tracking',
   'nav.clinical': 'Clinical Chart',
   'nav.documents': 'Documents',
   'nav.offerings': 'Offerings',
@@ -87,6 +81,13 @@ export const baseMessages = Object.freeze({
   'chart.note.addIntervention': 'Add Intervention',
   'chart.note.noNotes': 'No session notes yet. Start by creating a new note.',
   'chart.note.internalNotice': 'Internal notes are private to authorized staff and are not part of the legal clinical record.',
+  'chart.note.scriptureReference': 'Scripture Reference',
+  'chart.note.spiritualPractices': 'Spiritual Practices',
+  'chart.note.submitForReview': 'Submit for Supervisor Review',
+  'chart.note.cosign': 'Cosign Note',
+  'chart.note.cosignStatus.pending_review': 'Pending Review',
+  'chart.note.cosignStatus.reviewed': 'Cosigned',
+  'chart.note.cosignStatus.returned': 'Returned for Revision',
 
   'chart.plan.status': 'Plan Status',
   'chart.plan.status.draft': 'Draft',
@@ -237,6 +238,11 @@ export const baseMessages = Object.freeze({
   'scheduling.col.status': 'Status',
   'scheduling.col.counselor': 'Counselor',
   'scheduling.col.duration': 'Duration',
+  'telehealth.join_session': 'Join Video Session',
+  'telehealth.leave_session': 'Leave Session',
+  'telehealth.session_started': 'Video session started',
+  'telehealth.session_ended': 'Video session ended',
+  'telehealth.error_joining': 'Could not start video session. Please try again.',
   'priority.allCleared': 'All items cleared',
   'compliance.noIssues': 'No issues detected',
   'dashboard.schedule.totalAppointments': 'Appointments today',
@@ -768,9 +774,111 @@ export function buildLocaleCatalog(overrides = {}) {
   };
 }
 
-export function formatMessage(messages, key, values = {}) {
-  const template = messages[key] ?? baseMessages[key] ?? key;
+export { selectPluralKey, selectPluralForm } from './plural.js';
+import { selectPluralKey } from './plural.js';
+import { LOCALE_MAP, DEFAULT_LOCALE } from './locales.js';
+
+/**
+ * Plural-aware message formatter.
+ *
+ * If values.count is provided, resolves the best plural sibling key
+ * (e.g. key_one, key_other) before substituting {placeholder} tokens.
+ *
+ * @param {Record<string,string>} messages
+ * @param {string} key
+ * @param {Record<string,*>} values
+ * @param {string} [locale]
+ * @returns {string}
+ */
+export function formatMessage(messages, key, values = {}, locale = DEFAULT_LOCALE) {
+  const resolvedKey = typeof values.count === 'number'
+    ? selectPluralKey(messages, key, values.count, locale)
+    : key;
+  const template = messages[resolvedKey] ?? messages[key] ?? baseMessages[resolvedKey] ?? baseMessages[key] ?? key;
   return Object.entries(values).reduce((result, [name, value]) => {
     return result.replaceAll(`{${name}}`, String(value));
   }, template);
+}
+
+// ---------------------------------------------------------------------------
+// Intl.* formatting utilities
+// ---------------------------------------------------------------------------
+
+const dateFormatCache = new Map();
+const numberFormatCache = new Map();
+
+function getDateFormatter(locale, opts) {
+  const cacheKey = `${locale}:${JSON.stringify(opts)}`;
+  if (!dateFormatCache.has(cacheKey)) {
+    dateFormatCache.set(cacheKey, new Intl.DateTimeFormat(locale, opts));
+  }
+  return dateFormatCache.get(cacheKey);
+}
+
+function getNumberFormatter(locale, opts) {
+  const cacheKey = `${locale}:${JSON.stringify(opts)}`;
+  if (!numberFormatCache.has(cacheKey)) {
+    numberFormatCache.set(cacheKey, new Intl.NumberFormat(locale, opts));
+  }
+  return numberFormatCache.get(cacheKey);
+}
+
+const DATE_STYLE_OPTS = {
+  short:    { dateStyle: 'short' },
+  medium:   { dateStyle: 'medium' },
+  long:     { dateStyle: 'long' },
+  time:     { timeStyle: 'short' },
+  datetime: { dateStyle: 'medium', timeStyle: 'short' },
+};
+
+/**
+ * Format a date/time value using Intl.DateTimeFormat.
+ *
+ * @param {Date|string|number} date
+ * @param {'short'|'medium'|'long'|'time'|'datetime'} [style='medium']
+ * @param {string} [locale]
+ * @returns {string}
+ */
+export function formatDate(date, style = 'medium', locale = DEFAULT_LOCALE) {
+  try {
+    const d = date instanceof Date ? date : new Date(date);
+    const opts = DATE_STYLE_OPTS[style] ?? DATE_STYLE_OPTS.medium;
+    return getDateFormatter(locale, opts).format(d);
+  } catch {
+    return String(date);
+  }
+}
+
+/**
+ * Format a number using Intl.NumberFormat.
+ *
+ * @param {number} n
+ * @param {Intl.NumberFormatOptions} [opts]
+ * @param {string} [locale]
+ * @returns {string}
+ */
+export function formatNumber(n, opts = {}, locale = DEFAULT_LOCALE) {
+  try {
+    return getNumberFormatter(locale, opts).format(n);
+  } catch {
+    return String(n);
+  }
+}
+
+/**
+ * Format a cent-denominated amount as locale-correct currency.
+ * Looks up the currency code from the locale registry.
+ *
+ * @param {number} cents  integer cent amount (e.g. 500 → $5.00)
+ * @param {string} [locale]
+ * @returns {string}
+ */
+export function formatCurrency(cents, locale = DEFAULT_LOCALE) {
+  try {
+    const meta = LOCALE_MAP[locale];
+    const currency = meta?.currencyCode ?? 'USD';
+    return getNumberFormatter(locale, { style: 'currency', currency }).format(cents / 100);
+  } catch {
+    return `${(cents / 100).toFixed(2)}`;
+  }
 }

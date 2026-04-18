@@ -1,12 +1,11 @@
 {
   "name": "@faith/api",
-  "version": "5.7.0",
+  "version": "5.8.0",
   "private": true,
   "type": "module",
   "main": "src/index.js",
   "dependencies": {
     "@faith/i18n": "workspace:*",
-    "@faith/telemetry": "workspace:*",
     "argon2": "^0.31.2",
     "mysql2": "^3.11.0"
   },

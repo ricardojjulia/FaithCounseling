@@ -42,6 +42,13 @@ function rowToPractice(row) {
     faithTradition: row.faith_tradition,
     contactEmail: row.contact_email,
     contactPhone: row.contact_phone,
+    // JaaS per-practice video config. jaasPrivateKeyConfigured is a boolean
+    // sentinel so callers can know if a key exists without ever returning the
+    // ciphertext over the wire.
+    jaasAppId: row.jaas_app_id ?? null,
+    jaasApiKeyId: row.jaas_api_key_id ?? null,
+    jaasPrivateKeyConfigured: Boolean(row.jaas_private_key_enc),
+    jaasDomain: row.jaas_domain ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -233,6 +240,22 @@ export async function getPracticeById(id, tenantId) {
 }
 
 /**
+ * Returns the raw jaas_private_key_enc ciphertext for a practice — only used
+ * server-side inside the video session handler. The plaintext private key is
+ * NEVER returned over the API.
+ * @param {string} id
+ * @param {string} tenantId
+ * @returns {Promise<string|null>}
+ */
+export async function getPracticeVideoKeyEnc(id, tenantId) {
+  const [rows] = await pool.query(
+    'SELECT jaas_private_key_enc FROM practices WHERE id = ? AND tenant_id = ?',
+    [id, tenantId],
+  );
+  return rows.length ? (rows[0].jaas_private_key_enc ?? null) : null;
+}
+
+/**
  * Inserts a new practice and returns the created object.
  * @param {{
  *   id: string, tenantId: string, name: string, type?: string,
@@ -295,6 +318,22 @@ export async function updatePractice(id, tenantId, fields) {
   if (fields.contactPhone !== undefined) {
     setClauses.push('contact_phone = ?');
     values.push(fields.contactPhone);
+  }
+  if (fields.jaasAppId !== undefined) {
+    setClauses.push('jaas_app_id = ?');
+    values.push(fields.jaasAppId);
+  }
+  if (fields.jaasApiKeyId !== undefined) {
+    setClauses.push('jaas_api_key_id = ?');
+    values.push(fields.jaasApiKeyId);
+  }
+  if (fields.jaasPrivateKeyEnc !== undefined) {
+    setClauses.push('jaas_private_key_enc = ?');
+    values.push(fields.jaasPrivateKeyEnc);
+  }
+  if (fields.jaasDomain !== undefined) {
+    setClauses.push('jaas_domain = ?');
+    values.push(fields.jaasDomain);
   }
 
   if (setClauses.length === 0) return getPracticeById(id, tenantId);

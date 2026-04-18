@@ -95,23 +95,7 @@ function formatDate(value) {
   });
 }
 
-function formatCurrency(value) {
-  const amount = Number(value ?? 0);
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  }).format(Number.isFinite(amount) ? amount : 0);
-}
-
-function formatCurrencyFromCents(value) {
-  const amount = Number(value ?? 0);
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  }).format(Number.isFinite(amount) ? amount / 100 : 0);
-}
+// formatCurrency and formatCurrencyFromCents are provided via useI18n() at component level
 
 function formatBytes(value) {
   const size = Number(value ?? 0);
@@ -235,7 +219,11 @@ export default function ClientPortalPage({
   onBackToClient = null,
   onAssignForms = null,
 }) {
-  const { t } = useI18n();
+  const { t, formatCurrency: _fmtCurrency } = useI18n();
+  // formatCurrency receives whole dollar amounts (the portal overview returns dollars, not cents)
+  const formatCurrency = (value) => _fmtCurrency(Math.round(Number(value ?? 0) * 100));
+  // formatCurrencyFromCents receives cent amounts
+  const formatCurrencyFromCents = (cents) => _fmtCurrency(Number(cents ?? 0));
   const userRole = currentUser?.role ?? null;
   const isClientRole = userRole === 'client';
   const [activeTab, setActiveTab] = useState('dashboard');

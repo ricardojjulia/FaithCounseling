@@ -317,6 +317,21 @@ export async function login(email, password, response) {
     throw { statusCode: 401, error: 'Invalid credentials' };
   }
 
+  // MFA gate: if mfa_enabled is set the account requires a second factor, but
+  // full TOTP/WebAuthn enforcement is not yet implemented.  We clear lockout
+  // state (password was correct) then block session issuance so the flag is
+  // never silently bypassed.
+  if (portalAccount.mfa_enabled) {
+    await pool.query(
+      'UPDATE portal_accounts SET failed_attempts = 0, locked_until = NULL WHERE id = ?',
+      [portalAccount.id],
+    );
+    throw {
+      statusCode: 403,
+      error: 'This account requires multi-factor authentication. Please contact the practice for assistance.',
+    };
+  }
+
   await pool.query(
     'UPDATE portal_accounts SET failed_attempts = 0, locked_until = NULL, last_login = NOW() WHERE id = ?',
     [portalAccount.id],
@@ -531,7 +546,9 @@ export async function requestPortalPasswordReset(email) {
   return {
     issued: true,
     expiresAt: expiresAt.toISOString(),
-    resetToken: process.env.NODE_ENV === 'production' ? undefined : rawToken,
+    // Raw token is intentionally never returned — it must be delivered via an
+    // out-of-band channel (e.g. email).  Returning it in the API response would
+    // expose an authentication secret to logs, proxies, and browser history.
   };
 }
 

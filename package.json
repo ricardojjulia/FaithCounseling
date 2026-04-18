@@ -1,6 +1,6 @@
 {
   "name": "faith-counseling",
-  "version": "6.0.0",
+  "version": "6.1.0",
   "private": true,
   "packageManager": "pnpm@10.7.0",
   "engines": {
@@ -18,6 +18,8 @@
     "start:api:standalone": "pnpm --filter @faith/api start:standalone",
     "start:worker": "pnpm --filter @faith/worker start",
     "reset:language": "node ops/reset-language-settings.mjs && node ops/push-clean-messages.mjs",
+    "i18n:status": "node --env-file=.env ops/i18n-status.mjs",
+    "i18n:translate": "node --env-file=.env ops/translate-locale.mjs",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "test:step12": "node ops/step12-validate.mjs",

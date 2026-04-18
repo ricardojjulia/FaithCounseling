@@ -54,14 +54,13 @@ def _create_chat_client():
     if openai_key:
         return OpenAIChatClient(model=openai_model, api_key=openai_key)
 
-    raise RuntimeError(
-        "No model configuration found. Set FOUNDRY_PROJECT_ENDPOINT + FOUNDRY_MODEL_DEPLOYMENT_NAME "
-        "or OPENAI_API_KEY (+ optional OPENAI_MODEL)."
-    )
+    return None
 
 
 def create_agent() -> Agent:
     client = _create_chat_client()
+    if client is None:
+        raise RuntimeError("No model client available — call main() which handles the unconfigured case.")
 
     return Agent(
         client=client,
@@ -93,6 +92,21 @@ def create_agent() -> Agent:
 
 def main() -> None:
     load_dotenv(override=False)
+    client = _create_chat_client()
+    if client is None:
+        print(
+            "\n  Translation Guardian: no model configured — skipping startup.\n"
+            "\n"
+            "  To enable, set one of the following in .env:\n"
+            "    OPENAI_API_KEY=sk-...                          (+ optional OPENAI_MODEL)\n"
+            "    FOUNDRY_PROJECT_ENDPOINT + FOUNDRY_MODEL_DEPLOYMENT_NAME\n"
+            "\n"
+            "  The Translation Guardian provides browser-level visual verification\n"
+            "  before promoting a locale to 'complete'. It is not required for\n"
+            "  machine translation — use `pnpm i18n:translate <locale>` instead.\n"
+        )
+        sys.exit(0)
+
     agent = create_agent()
     print("Starting Translation Guardian on HTTP server mode...")
     from_agent_framework(agent).run()

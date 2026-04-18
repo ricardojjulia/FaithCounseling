@@ -1,26 +1,26 @@
 {
-  "en": {
+  "en-US": {
     "sourceLocale": "en",
     "tone": "neutral",
     "fallbackMode": "copy",
     "useGlossary": true,
     "glossary": {}
   },
-  "es": {
+  "es-MX": {
+    "sourceLocale": "en-US",
+    "tone": "pastoral",
+    "fallbackMode": "copy",
+    "useGlossary": true,
+    "glossary": {}
+  },
+  "fr-FR": {
     "sourceLocale": "en",
     "tone": "neutral",
     "fallbackMode": "copy",
     "useGlossary": true,
     "glossary": {}
   },
-  "fr": {
-    "sourceLocale": "en",
-    "tone": "neutral",
-    "fallbackMode": "copy",
-    "useGlossary": true,
-    "glossary": {}
-  },
-  "pt": {
+  "pt-BR": {
     "sourceLocale": "en",
     "tone": "neutral",
     "fallbackMode": "copy",

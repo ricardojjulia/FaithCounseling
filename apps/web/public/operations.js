@@ -809,13 +809,53 @@ async function runAuditQuery() {
     const count = Array.isArray(data.events) ? data.events.length : 0;
     if (count === 0) {
       clearStatus('auditStatus');
+      hideAuditObservations();
     } else {
       setStatus('auditStatus', `Query returned ${count} event(s) · window: last ${days} day(s).`, 'success');
+      generateAuditObservations(data);
     }
   } catch (err) {
     setStatus('auditStatus', `Error: ${err.message}`, 'error');
   } finally {
     setBusy(btn, false);
+  }
+}
+
+function hideAuditObservations() {
+  const card = el('auditObservationsCard');
+  if (card) card.style.display = 'none';
+}
+
+async function generateAuditObservations(data) {
+  const card    = el('auditObservationsCard');
+  const content = el('auditObservationsContent');
+  if (!card || !content) return;
+
+  card.style.display = '';
+  content.innerHTML = '<div class="audit-obs-loading"><div class="audit-obs-spinner"></div>Analyzing audit records…</div>';
+
+  try {
+    const result = await apiPost('/v1/audit/intelligence/observations', {
+      summary: data.summary ?? {},
+      events:  data.events  ?? [],
+      filters: data.filters ?? {},
+    });
+
+    const observations = Array.isArray(result.observations) ? result.observations : [];
+    if (!observations.length) {
+      content.innerHTML = '<div class="audit-obs-error">No observations returned.</div>';
+      return;
+    }
+
+    content.innerHTML = `<ul class="audit-obs-list">${
+      observations.map((obs, i) => `
+        <li class="audit-obs-item">
+          <span class="audit-obs-bullet">${i + 1}</span>
+          <span>${escapeHtml(obs)}</span>
+        </li>`).join('')
+    }</ul>`;
+  } catch (err) {
+    content.innerHTML = `<div class="audit-obs-error">Could not analyze audit records: ${escapeHtml(err.message)}</div>`;
   }
 }
 

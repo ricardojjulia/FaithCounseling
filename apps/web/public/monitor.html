@@ -221,79 +221,6 @@
 
     .empty-state { color: var(--muted); font-size: 13px; text-align: center; padding: 24px 0; }
 
-    /* ── OTEL settings ──────────────────────────────────────── */
-    .otel-status-banner {
-      display: flex; align-items: center; gap: 12px;
-      padding: 12px 16px; border-radius: 8px; margin-bottom: 20px;
-      border: 1px solid;
-    }
-    .otel-status-banner.active   { background: rgba(79,70,229,.08); border-color: rgba(79,70,229,.24); box-shadow: inset 0 1px 0 rgba(255,255,255,0.65); }
-    .otel-status-banner.inactive { background: rgba(255,255,255,.68); border-color: var(--border); box-shadow: inset 0 1px 0 rgba(255,255,255,0.65); }
-    .otel-icon { font-size: 20px; }
-    .otel-text-primary { font-weight: 700; font-size: 14px; }
-    .otel-text-sub     { font-size: 12px; color: var(--muted); margin-top: 1px; }
-
-    .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    @media (max-width: 700px) { .settings-grid { grid-template-columns: 1fr; } }
-
-    .setting-group { margin-bottom: 14px; }
-    .setting-label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .05em; }
-    .setting-input {
-      width: 100%; padding: 8px 12px; background: rgba(255,255,255,0.84);
-      border: 1px solid var(--border); border-radius: 6px; color: var(--text);
-      font-size: 13px; font-family: 'Menlo', 'Monaco', monospace;
-      transition: border-color .15s;
-    }
-    .setting-input:focus { outline: none; border-color: var(--indigo); box-shadow: 0 0 0 3px rgba(99,102,241,.2); }
-    .setting-input::placeholder { color: var(--dim); }
-    .setting-input:read-only { color: var(--muted); cursor: default; }
-
-    .otel-test-result {
-      margin-top: 12px; padding: 10px 14px; border-radius: 6px; font-size: 12px;
-      border: 1px solid; display: none;
-    }
-    .otel-test-result.visible { display: block; }
-    .otel-test-result.ok    { background: rgba(16,185,129,.08); border-color: rgba(16,185,129,.3); color: var(--green); }
-    .otel-test-result.fail  { background: rgba(239,68,68,.08);  border-color: rgba(239,68,68,.3);  color: var(--red); }
-
-    .env-snippet {
-      background: rgba(247,249,255,0.96); border: 1px solid var(--border); border-radius: 12px;
-      padding: 14px 16px; font-family: 'Menlo','Monaco', monospace; font-size: 12px;
-      color: #2451a6; white-space: pre; overflow-x: auto; margin-top: 12px;
-    }
-
-    /* ── Observability stack ────────────────────────────────── */
-    .obs-services-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
-    @media (max-width: 700px) { .obs-services-grid { grid-template-columns: 1fr; } }
-    .obs-service-card {
-      border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
-      background: rgba(247,249,255,0.7);
-    }
-    .obs-service-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
-    .obs-service-name { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
-    .obs-service-desc { font-size: 11px; color: var(--muted); }
-    .obs-badge {
-      display: inline-block; padding: 2px 10px; border-radius: 999px;
-      font-size: 11px; font-weight: 700; border: 1px solid; white-space: nowrap; flex-shrink: 0;
-    }
-    .obs-badge.up       { background: rgba(16,185,129,.10); border-color: rgba(16,185,129,.30); color: var(--green); }
-    .obs-badge.down     { background: rgba(239,68,68,.08);  border-color: rgba(239,68,68,.28);  color: var(--red); }
-    .obs-badge.checking { background: rgba(100,116,139,.06); border-color: var(--border); color: var(--dim); }
-    .obs-endpoints { border-top: 1px solid var(--border); padding-top: 14px; }
-    .obs-endpoints-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 10px; }
-    .obs-endpoint-row {
-      display: flex; align-items: center; gap: 10px; padding: 7px 0;
-      border-bottom: 1px solid var(--border); font-size: 12px;
-    }
-    .obs-endpoint-row:last-child { border-bottom: none; }
-    .obs-endpoint-label { width: 120px; font-weight: 600; color: var(--muted); flex-shrink: 0; }
-    .obs-endpoint-link { flex: 1; color: var(--indigo); text-decoration: none; font-family: 'Menlo','Monaco',monospace; font-size: 11px; }
-    .obs-endpoint-link:hover { text-decoration: underline; }
-    .obs-instructions { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 16px; }
-    .obs-instructions-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
-    .obs-stack-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-    .otel-status-banner .btn-sm { margin-left: auto; flex-shrink: 0; }
-
     /* ── Vitals row ─────────────────────────────────────────── */
     .vitals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
     .vital-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; text-align: center; box-shadow: inset 0 1px 0 rgba(255,255,255,0.62); }
@@ -304,66 +231,6 @@
     .vital-needs-improvement { color: var(--amber); }
     .vital-poor    { color: var(--red); }
 
-    /* ── UI monitoring ─────────────────────────────────────── */
-    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
-    .summary-pill {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 12px;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.62);
-    }
-    .summary-pill-label {
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-    .summary-pill-value {
-      font-size: 22px;
-      font-weight: 800;
-      color: var(--ink-strong);
-      line-height: 1;
-    }
-    .summary-pill-sub {
-      font-size: 11px;
-      color: var(--muted);
-      margin-top: 6px;
-    }
-    .issue-list {
-      display: grid;
-      gap: 10px;
-    }
-    .issue-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 10px 12px;
-      border-radius: 12px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.58);
-    }
-    .issue-name {
-      color: var(--ink-strong);
-      font-weight: 600;
-      font-family: 'Menlo', 'Monaco', monospace;
-      font-size: 12px;
-    }
-    .issue-sub {
-      color: var(--muted);
-      font-size: 11px;
-      margin-top: 2px;
-    }
-    .issue-value {
-      color: var(--red);
-      font-weight: 800;
-      font-size: 13px;
-      white-space: nowrap;
-    }
     .health-check-list {
       display: grid;
       gap: 10px;
@@ -420,50 +287,6 @@
       color: var(--red);
       background: rgba(239,68,68,.1);
       border-color: rgba(239,68,68,.3);
-    }
-    .surface-table-wrap { overflow-x: auto; }
-    .surface-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-    }
-    .surface-table th {
-      text-align: left;
-      color: var(--muted);
-      font-weight: 600;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: .05em;
-      padding: 8px 10px;
-      border-bottom: 1px solid var(--border);
-      white-space: nowrap;
-    }
-    .surface-table td {
-      padding: 10px;
-      border-bottom: 1px solid var(--border);
-      vertical-align: top;
-      white-space: nowrap;
-    }
-    .surface-table tr:last-child td { border-bottom: none; }
-    .surface-id {
-      color: var(--ink-strong);
-      font-weight: 700;
-      font-family: 'Menlo', 'Monaco', monospace;
-    }
-    .surface-kind {
-      color: var(--muted);
-      font-size: 11px;
-      margin-top: 2px;
-      text-transform: uppercase;
-      letter-spacing: .05em;
-    }
-    .metric-bad {
-      color: var(--red);
-      font-weight: 700;
-    }
-    .metric-warn {
-      color: var(--amber);
-      font-weight: 700;
     }
 
     /* ── Toast ──────────────────────────────────────────────── */
@@ -596,112 +419,13 @@
     </div>
   </div>
 
-  <div class="section-label">Surface Monitoring</div>
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-title">Overall UI Summary <span id="uiSummaryLastSeen">Waiting for frontend telemetry</span></div>
-      <div class="summary-grid" id="uiSummaryGrid">
-        <div class="summary-pill">
-          <div class="summary-pill-label">Views</div>
-          <div class="summary-pill-value" id="uiViews">—</div>
-          <div class="summary-pill-sub">screen and page views</div>
-        </div>
-        <div class="summary-pill">
-          <div class="summary-pill-label">UI Errors</div>
-          <div class="summary-pill-value" id="uiErrors">—</div>
-          <div class="summary-pill-sub">runtime and unhandled errors</div>
-        </div>
-        <div class="summary-pill">
-          <div class="summary-pill-label">Fetch Errors</div>
-          <div class="summary-pill-value" id="uiFetchErrors">—</div>
-          <div class="summary-pill-sub">failed or error API calls</div>
-        </div>
-        <div class="summary-pill">
-          <div class="summary-pill-label">Validation</div>
-          <div class="summary-pill-value" id="uiValidationErrors">—</div>
-          <div class="summary-pill-sub">form friction signals</div>
-        </div>
-        <div class="summary-pill">
-          <div class="summary-pill-label">Action Success</div>
-          <div class="summary-pill-value" id="uiActionSuccess">—</div>
-          <div class="summary-pill-sub" id="uiActionSuccessSub">overall workflow outcome rate</div>
-        </div>
-        <div class="summary-pill">
-          <div class="summary-pill-label">Slow Surfaces</div>
-          <div class="summary-pill-value" id="uiSlowSurfaces">—</div>
-          <div class="summary-pill-sub">p95 load or fetch >= 1000 ms</div>
-        </div>
-      </div>
-    </div>
 
-    <div class="card">
-      <div class="card-title">Surface Failure State &amp; Workflows <span id="uiExportState">Local monitoring</span></div>
-      <div class="issue-list" id="topSurfaceIssues">
-        <div class="empty-state">No surface failures recorded yet.</div>
-      </div>
-      <div style="height:12px"></div>
-      <div class="card-title" style="margin-bottom:12px">Workflow Failure Leaders</div>
-      <div class="issue-list" id="topWorkflowIssues">
-        <div class="empty-state">No workflow failures recorded yet.</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-title">Health Probes &amp; Dependencies <span id="healthSummaryStatus">Loading…</span></div>
-      <div class="health-check-list" id="healthChecksList">
-        <div class="empty-state">No health checks available yet.</div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Monitored Surfaces <span id="surfaceSummaryCount">0 surfaces</span></div>
-      <div class="summary-grid">
-        <div class="summary-pill">
-          <div class="summary-pill-label">Active</div>
-          <div class="summary-pill-value" id="uiActiveSurfaces">—</div>
-          <div class="summary-pill-sub">recently seen surfaces</div>
-        </div>
-        <div class="summary-pill">
-          <div class="summary-pill-label">Tracked</div>
-          <div class="summary-pill-value" id="uiTrackedSurfaces">—</div>
-          <div class="summary-pill-sub">registered in current summary</div>
-        </div>
-        <div class="summary-pill">
-          <div class="summary-pill-label">Last Event</div>
-          <div class="summary-pill-value" id="uiLastEvent">—</div>
-          <div class="summary-pill-sub">latest frontend telemetry ingest</div>
-        </div>
-        <div class="summary-pill">
-          <div class="summary-pill-label">OTEL Export</div>
-          <div class="summary-pill-value" id="uiOtelExport">—</div>
-          <div class="summary-pill-sub">local summary vs external export</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
+  <!-- Health Probes -->
+  <div class="section-label">Health &amp; Dependencies</div>
   <div class="card" style="margin-bottom:20px">
-      <div class="card-title">Per-Surface Breakdown <span id="surfaceTableNote">Top 12 by views · issue state = current / recent / total</span></div>
-    <div class="surface-table-wrap">
-      <table class="surface-table">
-        <thead>
-          <tr>
-            <th>Surface</th>
-            <th>Views</th>
-            <th>Load p95</th>
-            <th>Fetch p95</th>
-            <th>Actions</th>
-            <th>Issue State</th>
-            <th>Empty States</th>
-            <th>Last Seen</th>
-          </tr>
-        </thead>
-        <tbody id="surfaceTableBody">
-          <tr><td colspan="8" class="empty-state">No surface telemetry recorded yet.</td></tr>
-        </tbody>
-      </table>
+    <div class="card-title">Health Probes &amp; Dependencies <span id="healthSummaryStatus">Loading…</span></div>
+    <div class="health-check-list" id="healthChecksList">
+      <div class="empty-state">No health checks available yet.</div>
     </div>
   </div>
 
@@ -986,149 +710,11 @@
     </div>
   </div>
 
-  <!-- Observability section -->
-  <div class="section-label">Observability</div>
-
-  <!-- ── Observability stack status card ──────────────────────── -->
-  <div class="card" style="margin-bottom:16px">
-    <div class="card-title">
-      Observability Stack — Jaeger &amp; Prometheus
-      <span id="obsStackLastChecked"></span>
-    </div>
-
-    <div id="obsStackBanner" class="otel-status-banner inactive">
-      <span class="otel-icon" id="obsStackIcon">🔭</span>
-      <div style="flex:1">
-        <div class="otel-text-primary" id="obsStackTitle">Checking stack status…</div>
-        <div class="otel-text-sub"    id="obsStackSub">Probing Jaeger and Prometheus availability.</div>
-      </div>
-      <button class="btn-sm" id="checkStackBtn" style="margin-left:auto;flex-shrink:0">↻ Check</button>
-    </div>
-
-    <!-- Jaeger + Prometheus service cards -->
-    <div class="obs-services-grid">
-      <div class="obs-service-card">
-        <div class="obs-service-row">
-          <div>
-            <div class="obs-service-name">🔍 Jaeger</div>
-            <div class="obs-service-desc">Distributed trace visualization · port 16686</div>
-          </div>
-          <span class="obs-badge checking" id="jaegerBadge">—</span>
-        </div>
-        <a href="http://localhost:16686" target="_blank" rel="noopener" class="btn-sm">Open Jaeger UI →</a>
-      </div>
-      <div class="obs-service-card">
-        <div class="obs-service-row">
-          <div>
-            <div class="obs-service-name">📊 Prometheus</div>
-            <div class="obs-service-desc">Metrics time-series collection · port 9090</div>
-          </div>
-          <span class="obs-badge checking" id="promBadge">—</span>
-        </div>
-        <a href="http://localhost:9090" target="_blank" rel="noopener" class="btn-sm">Open Prometheus →</a>
-      </div>
-    </div>
-
-    <!-- Metrics endpoints -->
-    <div class="obs-endpoints">
-      <div class="obs-endpoints-title">Metrics Endpoints · Prometheus scrapes these via GET /metrics</div>
-      <div class="obs-endpoint-row">
-        <span class="obs-endpoint-label">faith-api</span>
-        <a href="http://localhost:3001/metrics" target="_blank" rel="noopener" class="obs-endpoint-link">localhost:3001/metrics</a>
-        <span class="obs-badge checking" id="apiMetricsBadge">—</span>
-      </div>
-      <div class="obs-endpoint-row">
-        <span class="obs-endpoint-label">faith-web</span>
-        <a href="http://localhost:3002/metrics" target="_blank" rel="noopener" class="obs-endpoint-link">localhost:3002/metrics</a>
-        <span class="obs-badge checking" id="webMetricsBadge">—</span>
-      </div>
-      <div class="obs-endpoint-row">
-        <span class="obs-endpoint-label">reminder-worker</span>
-        <a href="http://localhost:9465/metrics" target="_blank" rel="noopener" class="obs-endpoint-link">localhost:9465/metrics</a>
-        <span class="obs-badge checking" id="workerMetricsBadge">—</span>
-      </div>
-    </div>
-
-    <!-- Enable / disable instructions -->
-    <div id="obsInstructions" class="obs-instructions" style="display:none">
-      <div class="obs-instructions-label">To enable the observability stack:</div>
-      <div class="obs-stack-actions">
-        <button class="btn-sm primary" id="copyStartCmd">📋 Copy start command</button>
-        <button class="btn-sm" id="copyStopCmd">Copy stop command</button>
-      </div>
-      <pre class="env-snippet" id="obsEnvSnippet"># Start Jaeger + Prometheus:
-docker compose --profile observability up -d
-
-# Add to .env and restart pnpm start:
-OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:4318/v1/traces
-WORKER_METRICS_PORT=9465</pre>
-    </div>
-
-    <!-- Shutdown reminder (shown when stack is active) -->
-    <div id="obsShutdownHint" class="obs-instructions" style="display:none">
-      <div class="obs-instructions-label">To stop the observability stack:</div>
-      <div class="obs-stack-actions">
-        <button class="btn-sm" id="copyStopCmdActive">📋 Copy stop command</button>
-      </div>
-      <pre class="env-snippet">docker compose --profile observability down</pre>
-    </div>
-  </div>
-
-  <!-- ── OpenTelemetry configuration card ─────────────────────── -->
-  <div class="card" style="margin-bottom:40px">
-    <div class="card-title">OpenTelemetry Configuration</div>
-
-    <div id="otelBanner" class="otel-status-banner inactive">
-      <span class="otel-icon">📡</span>
-      <div>
-        <div class="otel-text-primary" id="otelBannerTitle">OTEL Trace Export Not Configured</div>
-        <div class="otel-text-sub"  id="otelBannerSub">Set OTEL_EXPORTER_OTLP_TRACES_ENDPOINT in .env to send traces to Jaeger.</div>
-      </div>
-    </div>
-
-    <div class="settings-grid">
-      <div>
-        <div class="setting-group">
-          <label class="setting-label">OTLP General Endpoint</label>
-          <input class="setting-input" id="otelEndpoint" type="url" placeholder="http://localhost:4318" />
-        </div>
-        <div class="setting-group">
-          <label class="setting-label">Traces Endpoint → Jaeger :4318</label>
-          <input class="setting-input" id="otelTracesEndpoint" type="url" placeholder="http://localhost:4318/v1/traces" />
-        </div>
-        <div class="setting-group">
-          <label class="setting-label">Metrics Endpoint (optional OTLP)</label>
-          <input class="setting-input" id="otelMetricsEndpoint" type="url" placeholder="leave blank — Prometheus scrapes /metrics directly" />
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn-sm primary" id="testOtelBtn">Test Jaeger Connection</button>
-          <button class="btn-sm" id="genEnvBtn">Generate .env Snippet</button>
-        </div>
-        <div id="otelTestResult" class="otel-test-result"></div>
-      </div>
-      <div>
-        <div class="setting-group">
-          <label class="setting-label">Trace Export Status (from API)</label>
-          <input class="setting-input" id="otelCurrentStatus" type="text" readonly placeholder="Loading…" />
-        </div>
-        <div class="setting-group">
-          <label class="setting-label">Service Name</label>
-          <input class="setting-input" id="otelServiceName" type="text" placeholder="faith-api" />
-        </div>
-        <div class="setting-group">
-          <label class="setting-label">Metric Export Interval (ms)</label>
-          <input class="setting-input" id="otelExportInterval" type="number" value="10000" min="1000" />
-        </div>
-        <div id="envSnippet" class="env-snippet" style="display:none"></div>
-      </div>
-    </div>
-  </div>
 
 </main>
 
 <div id="toast"></div>
 
-<script src="/telemetry.js"></script>
 <script src="/monitor.js"></script>
 </body>
 </html>

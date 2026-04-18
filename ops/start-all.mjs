@@ -6,7 +6,6 @@ const cwd = process.cwd();
 
 const apiPort = Number(process.env.API_PORT || process.env.PORT || 3001);
 const webPort = Number(process.env.WEB_PORT || 3002);
-const workerPort = Number(process.env.WORKER_METRICS_PORT || 9465);
 const apiBaseUrl = process.env.API_BASE_URL || `http://127.0.0.1:${apiPort}`;
 
 const children = [];
@@ -219,27 +218,7 @@ async function main() {
     });
   }
 
-  const workerProcess = getListeningProcess(workerPort);
-  if (isRepoManagedProcess(workerProcess, 'apps/worker/src/index.js')) {
-    await restartRepoManagedProcessIfNeeded('worker', workerPort, 'apps/worker/src/index.js');
-  }
-
-  const workerAlreadyRunning = isRepoManagedProcess(getListeningProcess(workerPort), 'apps/worker/src/index.js');
-  if (workerAlreadyRunning) {
-    console.log(`[start-all] Worker already running on http://127.0.0.1:${workerPort}/metrics (reusing existing process).`);
-  } else {
-    const conflictingProcess = getListeningProcess(workerPort);
-    if (conflictingProcess) {
-      console.error(
-        `[start-all] Worker metrics port ${workerPort} is already in use by a non-repo process: ${conflictingProcess.command}`
-      );
-      process.exit(1);
-    }
-    console.log(`[start-all] Starting worker metrics on http://127.0.0.1:${workerPort}/metrics`);
-    spawnService('worker', ['apps/worker/src/index.js'], {
-      WORKER_METRICS_PORT: String(workerPort),
-    });
-  }
+  spawnService('worker', ['apps/worker/src/index.js']);
 
   console.log('[start-all] Services started:');
   console.log(`  - Web app:     http://127.0.0.1:${webPort}/index.html`);
@@ -248,7 +227,6 @@ async function main() {
   console.log(`  - Swagger UI:  http://127.0.0.1:${webPort}/api/docs`);
   console.log(`  - OpenAPI:     http://127.0.0.1:${webPort}/api/openapi.yaml`);
   console.log(`  - API direct:  http://127.0.0.1:${apiPort}/docs`);
-  console.log(`  - Worker:      http://127.0.0.1:${workerPort}/metrics`);
 }
 
 main().catch((error) => {

@@ -1,4 +1,4 @@
-import { Burger, Group, Select, Text, Box, Button, ActionIcon, Tooltip } from '@mantine/core';
+import { Burger, Group, Select, Text, Box, Button, ActionIcon, Tooltip, Badge } from '@mantine/core';
 import { useMantineColorScheme, useComputedColorScheme } from '@mantine/core';
 import { useI18n } from '../lib/i18nContext.jsx';
 
@@ -96,8 +96,23 @@ export default function TopBar({ opened, onMenuToggle, onSignOut, currentUser, c
           onChange={(value) => value && setLocale(value)}
           disabled={loading}
           size="xs"
-          w={120}
+          w={140}
           aria-label={t('header.language')}
+          renderOption={({ option }) => {
+            const completion = option.completion ?? 100;
+            const status = option.status ?? 'complete';
+            return (
+              <Group gap={6} wrap="nowrap" style={{ width: '100%' }}>
+                <Text size="xs" style={{ flex: 1 }}>{option.label}</Text>
+                {status === 'stub' && (
+                  <Badge size="xs" color="gray" variant="light">stub</Badge>
+                )}
+                {status === 'partial' && (
+                  <Badge size="xs" color="violet" variant="light">{completion}%</Badge>
+                )}
+              </Group>
+            );
+          }}
         />
         <Button size="xs" variant="default" onClick={onSignOut}>
           {t('header.signOut')}

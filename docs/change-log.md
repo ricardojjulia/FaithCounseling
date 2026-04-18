@@ -2,6 +2,126 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 17, 2026 — Licensure progress bars on Counselor Home + PHI-safe CSV export
+
+### feat: wire LicensureProgressBars into CounselorHomePage and add PHI-safe CSV export
+
+**Date:** April 17, 2026
+**Affected area:** `apps/web/src/components/CounselorHomePage.jsx`, `apps/web/src/components/TimeTracking/TimeTrackingPage.jsx`, `apps/api/src/index.js`
+
+**What changed:**
+- **Counselor Home dashboard:** `LicensureProgressBars` component is now rendered below the main dashboard panels so counselors see live licensure-hours progress without navigating to the Time Tracking page.
+- **PHI-safe CSV export:** `GET /api/v1/time-entries/export` returns a downloadable CSV containing only `entry_id`, `date`, `category`, and `duration_minutes` — no descriptions, no client identifiers, no free-text fields. The endpoint is auth-gated, role-scoped, and emits a `time_entry.export` audit event.
+- **Export button:** `TimeTrackingPage` now includes an "Export CSV" button (respects the current category filter).
+
+---
+
+## April 17, 2026 — Telehealth Phase 2+3, Supervision Cosign, Time Tracking
+
+### feat: faith-integrated clinical notes, supervision cosign workflow, licensure time tracking
+
+**Date:** April 17, 2026
+**Affected area:** `apps/api/src/db/migrate.js`, `apps/api/src/db/queries/clinical.js`, `apps/api/src/db/queries/timeTracking.js` (new), `apps/api/src/index.js`, `apps/web/src/components/ClinicalChart/tabs/SessionNotesTab.jsx`, `apps/web/src/components/TimeTracking/` (new), `apps/web/src/App.jsx`, `apps/web/src/components/Sidebar.jsx`, `packages/domain/src/index.js`, `packages/i18n/src/index.js`
+
+**What changed:**
+- **Telehealth Phase 2 (Faith-integrated clinical notes):** Session notes now include scripture reference and spiritual practices checkboxes (prayer journaling, scripture reading, church attendance, small group, spiritual direction, fasting, sabbath practice).
+- **Telehealth Phase 3 (Supervision cosign):** Intern counselors can submit notes for supervisor review; supervisors can cosign or return notes for revision. `supervisor_assignments` table tracks supervision relationships. Audit ledger records all cosign events.
+- **Time Tracking:** New `TimeTrackingPage` with Quick Log modal for direct clinical, indirect/admin, individual/group supervision, CE/spiritual formation, and ministry coordination hours. Summary cards and category filter. Delete unlocked entries.
+- **Licensure Progress Bars:** `LicensureProgressBars` component fetches goals and time-entry summary and renders per-goal progress bars with hours achieved/target.
+- **Supervision appointment type:** `supervision` added to domain `appointmentTypes`.
+- **Form catalog:** `FaithIntegratedAdultIntake` and `PreMaritalChristianIntake` templates added.
+- **Counselor nav:** `Time Tracking` nav link added to counselor sidebar.
+- **i18n:** `nav.timeTracking`, `chart.note.scriptureReference`, `chart.note.spiritualPractices`, `chart.note.submitForReview`, cosign status keys added.
+
+**Migration steps:** Auto-applied on next API startup — idempotent migrations add columns and tables only if missing.
+
+---
+
+## April 17, 2026 — JaaS Telehealth Video Sessions (Phase 1)
+
+### feat: integrated JaaS telehealth video sessions with JWT auth, audit ledger, and scheduling UI
+
+**Date:** April 17, 2026
+**Affected area:** `apps/api/src/db/migrate.js`, `apps/api/src/db/queries/appointments.js`, `apps/api/src/index.js`, `apps/api/src/lib/i18n-store.js`, `apps/web/src/lib/clientApi.js`, `apps/web/src/components/VideoSession/`, `apps/web/src/components/SchedulingPage.jsx`, `packages/i18n/src/index.js`, `.env.example`
+
+Phase 1 of the telehealth integration. Remote appointments now show a **Join Video Session** button that opens an embedded JaaS/Jitsi meeting directly in the scheduling page.
+
+**What changed:**
+
+- **DB migration:** Added `video_room_id VARCHAR(255) NULL` column to `appointments` table (idempotent `addColumnIfMissing`)
+- **DB migration:** Added `time_entries` and `licensure_goals` tables for the future time-tracking feature
+- **appointments.js:** `APPOINTMENT_SELECT` and `rowToAppointment` now include `video_room_id`; added `updateAppointmentVideoRoom(id, tenantId, videoRoomId)` export
+- **index.js:** Added `POST /v1/appointments/:id/video-session` route and `handleVideoSession` handler — generates a stable opaque room name, signs an RS256 JWT using `node:crypto` (`createSign('RSA-SHA256')`), writes a `session.video_started` audit event, returns `{ jwt, domain, roomName, appointmentId }`
+- **index.js:** Route dispatch places video-session sub-route check before the generic `startsWith('/v1/appointments/')` catch-all
+- **clientApi.js:** Added `startVideoSession(appointmentId)` export
+- **VideoSession/useJitsiSession.js:** Custom React hook — dynamically loads JaaS External API script, instantiates `JitsiMeetExternalAPI`, and exposes lifecycle callbacks
+- **VideoSession/VideoSessionModal.jsx:** Mantine Modal wrapping the Jitsi container with pre-launch CTA, spinner, and error states
+- **SchedulingPage.jsx:** Added "Join Video" button for remote appointments; wired `VideoSessionModal`
+- **i18n:** Added 5 `telehealth.*` keys to `packages/i18n/src/index.js` (`join_session`, `leave_session`, `session_started`, `session_ended`, `error_joining`); added `telehealth` namespace to `i18n-store.js`
+- **.env.example:** Added `JITSI_APP_ID`, `JITSI_API_KEY_ID`, `JITSI_PRIVATE_KEY_BASE64`, `JITSI_DOMAIN`, `VITE_JITSI_DOMAIN`
+
+**Privacy and security controls:**
+
+- JWT `user.name` is `'Counselor'` or `'Client'` only — no PII in JWT claims
+- Room name is a random 32-hex token with no semantic content
+- Private key is only loaded from environment; never committed
+- Audit event `session.video_started` is written to the ledger on every session start
+
+**Why:** Platform differentiation via integrated telehealth; enables faith-based practices to conduct HIPAA-conscious video sessions without leaving the platform.
+
+
+
+### fix: commit referenced public web bundle artifacts and publish the latest es-MX locale status
+
+**Date:** April 11, 2026
+**Affected area:** `apps/web/public/assets/*`, `docs/i18n/es-MX-status.md`, `README.md`
+
+Corrected the checked-out repository state so the committed public HTML shell points at bundle files that are actually present in the worktree, and added the latest generated Spanish locale status snapshot to the documentation set.
+
+**What changed:**
+
+- Added the current web bundle chunk set under `apps/web/public/assets/` so the hashed entry bundle referenced by `apps/web/public/index.html` is present after checkout
+- Published `docs/i18n/es-MX-status.md` with the latest generated translation status summary for the Spanish locale
+- Added the `docs/i18n/` status docs location to the README documentation index so maintainers can find locale readiness snapshots directly
+
+**Why:**
+
+The repository had a committed HTML entrypoint that referenced an untracked hashed web bundle, which left the local checked-out app state incomplete. Committing the active bundle artifacts and the matching locale status documentation restores a consistent local baseline and preserves the latest i18n review output.
+
+## April 9, 2026 — v6.1.0: Deterministic Audit Observations Engine
+
+### refactor(audit): replace AI-based audit observations with 75 deterministic rules
+
+**Date:** April 9, 2026
+**Affected area:** `apps/api/src/index.js`, `apps/web/public/operations.js`
+
+The `POST /v1/audit/intelligence/observations` endpoint no longer calls the Claude API. In its place, a self-contained `generateAuditObservations()` function evaluates 75 deterministic, severity-tiered rules against the same `{ summary, events, filters }` payload and returns up to 8 prioritized callouts instantly — no `ANTHROPIC_API_KEY` required.
+
+**What changed:**
+
+- New `generateAuditObservations(summary, events, filters)` function in `apps/api/src/index.js` — pure synchronous computation, no external dependencies
+- All Claude API fetch code, prompt construction, and `ANTHROPIC_API_KEY` guard removed from `handleAuditObservations`
+- 75 rules organized across 9 categories and three severity tiers (critical → warning → info):
+  - **Volume & throughput (R1–R8):** zero events, burst detection, high/low daily averages, truncated sample warnings, narrow or wide window context
+  - **Error & denial rates (R9–R20):** critical/elevated/clean denial and error rates, simultaneous spikes, `failure` result type, error-vs-denial dominance
+  - **Authentication events (R21–R26):** brute-force pattern detection (≥10 auth failures), distributed failure actors, auth-heavy windows, password/token events
+  - **Administrative actions (R27–R33):** impersonation sessions, role/permission changes, platform admin activity, settings changes, user lifecycle events, tenant-scope operations, onboarding invitations
+  - **Data operations (R34–R40):** exports/downloads, bulk/batch ops, high-volume deletion activity, backup/restore events, report generation, write-vs-read ratio analysis
+  - **PHI & client data (R41–R47):** client record access concentration, PHI-target error events, intake and form workflow activity, clinical note volume, portal usage, anonymous actors accessing client resources (critical tier)
+  - **Actor & role patterns (R48–R55):** missing counselor/admin activity, single-actor dominance, single-role concentration, multi-role health indicator, system actor saturation, anonymous/unknown role share
+  - **Action distribution (R56–R63):** single-action dominance, high/low action diversity, read-vs-write ratio, delete in top-5 actions, denied and error events concentrated in one action
+  - **Data quality (R69–R75):** denied/error events missing reason codes, actor-ID/role inconsistency, sourceSurface coverage gaps, sourceWorkflow tagging gaps, repeated actor-action-target combos, off-hours event detection (before 6 AM or after 9 PM)
+- Results are sorted critical-first, capped at 8 observations per response
+- Frontend loading text updated: "Generating AI observations…" → "Analyzing audit records…"
+- Frontend error handling simplified: removed the `ANTHROPIC_API_KEY` not-configured 503 branch
+- `POST /v1/audit/intelligence/observations` API contract is unchanged — same request/response shape, same auth requirement, same audit trail emission
+
+**Why:**
+
+Real-time rule evaluation over the data already returned by `GET /v1/audit/intelligence` is faster, always available, and produces consistent, auditable callouts without external service dependency. The 75 rules cover the same patterns a compliance analyst would look for: access denial spikes, PHI exposure signals, anomalous actor behavior, data quality gaps, and operational volume irregularities.
+
+---
+
 ## April 9, 2026 — Future Ministry Integration Readiness
 
 ### feat(docs): add Church Management integration-readiness plan for ChurchForge-style ministry platforms
@@ -157,6 +277,37 @@ Public web bundle rebuilt and committed.
 
 ---
 
+## April 6, 2026 — Security Findings Remediation
+
+### fix(security): mitigate all six findings from the 2026-04-06 manual security review
+
+**Date:** April 6, 2026
+**Affected areas:** `apps/api/src/lib/auth.js`, `apps/api/src/lib/encrypt.js`, `apps/api/src/index.js`, `apps/worker/src/index.js`, `docs/SecurityChecks/findings.md`, `README.md`
+
+Addressed all findings from the manual security review (F-001 through F-006):
+
+- **F-001 (Critical → Fixed):** Removed `temporaryPassword` from every API response body — public portal signup (instant_activation), admin portal account creation, staff provisioning, and staff password reset. Credentials must now be delivered out-of-band.
+- **F-002 (High → Fixed):** `requestPortalPasswordReset()` never returns the raw reset token in any environment. The HTTP handler no longer serialises any `resetToken` field.
+- **F-003 (Medium → Mitigated):** Portal login now blocks session creation if `mfa_enabled=true` (prevents silent bypass). Setting `mfaEnabled: true` via the portal accounts API returns HTTP 400. Full TOTP/WebAuthn is a planned follow-up.
+- **F-004 (Medium → Fixed):** Worker no longer dumps raw audit-event JSON or user-linked identifiers (`appointment_id`, `client_id`) to stdout. `createAuditEvent` import removed.
+- **F-005 (Medium → Mitigated):** Portal upload handler now enforces a file-extension allowlist, a MIME-type allowlist, and magic-bytes signature verification. Active-content formats are blocked. Malware scanning remains a future infrastructure item.
+- **F-006 (Low → Fixed):** `encrypt.js` loads a dedicated HMAC key (`DB_ENCRYPTION_HMAC_KEY`) for `deriveLookupHash()` when set, separating it from the AES-256-GCM encryption key. Falls back to the main key for backward compatibility.
+
+---
+
+## April 6, 2026 — Manual Security Review Refresh
+
+### fix: publish strict manual security findings and remediation documents
+
+**Date:** April 6, 2026
+**Affected area:** `docs/SecurityChecks/findings.md`, `docs/SecurityChecks/recommendations.md`, `README.md`
+
+Performed a strict code-based security review across the API, web proxy, worker, schema, migrations, security tests, and existing security documentation. Published a refreshed manual findings register and mapped remediation plan under `docs/SecurityChecks/`, then linked the review from the README so maintainers can distinguish automated nightly scan output from the current evidence-based manual review.
+
+The refreshed review flags critical/high concerns around portal credential disclosure paths, non-production reset-token exposure, MFA control drift, raw identifier logging in the worker, and missing upload hardening.
+
+---
+
 ## April 6, 2026 — Jaeger + Prometheus Observability Stack (v5.7.0)
 
 ### feat(observability): Jaeger distributed tracing, Prometheus metrics scraping, monitoring page stack panel
@@ -211,6 +362,7 @@ Added full production-grade observability infrastructure across all three servic
 Resolves all genuine findings from the initial nightly scan (PR #64) and eliminates scanner false positives:
 
 **Genuine issues fixed:**
+
 - `migrate.js`: Replaced explicit email/password console.log lines in dev seed with a single redacted message pointing to `apps/api/README.md` (removes AppSec HIGH `debug-console-log-phi` findings)
 - `superbills.diagnosis_codes`: Added `diagnosis_codes_enc MEDIUMTEXT` column to schema, schema migration to encrypt all existing rows via AES-256-GCM, and updated all read/write paths in `billing.js` to use the encrypted column (removes DB Security CRITICAL finding; PHI coverage now 100%)
 - `auth.js`: Removed legacy `OR email = ?` fallback from login and account-creation queries — all rows have been migrated to `email_lookup_hash`
@@ -218,10 +370,12 @@ Resolves all genuine findings from the initial nightly scan (PR #64) and elimina
 - `security-regression.mjs`: Replaced `Math.random()` in `requestId()` with `crypto.randomInt()` from Node built-in `crypto`
 
 **Scanner false positives corrected:**
+
 - `db-security-scan.mjs`: Fixed "NOT PHI" comment detection (was checking `non-phi`, schema uses "NOT PHI"); added `migration compatibility` comment detection for legacy plaintext columns; added `npi` and `referral_date` to `KNOWN_PLAINTEXT_EXCEPTIONS`; fixed `portal_public_requests` → `portal_registration_requests` table name; added portal_settings text columns to `SAFE_TEXT_COLUMNS`
 - `appsec-scan.mjs`: Excluded `ops/` files from `cookie-not-secure` check (scanner was flagging its own source); extended `http://` negative lookahead to exclude template literals (`${`); improved dependency audit to try multiple pnpm flag formats and handle missing pnpm gracefully
 
 **New infrastructure:**
+
 - Added `ops/appsec-scan.mjs`, `ops/db-security-scan.mjs`, `ops/nightly-security-runner.mjs` (from PR #64)
 - Added `.github/workflows/nightly-security-check.yml` cron workflow at 23:00 UTC
 - Added `docs/SecurityChecks/` with README and initial report
@@ -250,6 +404,7 @@ Implemented a comprehensive nightly security check system that runs automaticall
 - **`docs/SecurityChecks/README.md`** — Documentation of the scan system, coverage, severity levels, and manual run instructions.
 
 **Initial findings (2026-04-06):**
+
 - AppSec: HIGH status — dev credential logging in migrate.js, Math.random() in UI components
 - DB Security: CRITICAL status — 5 PHI/PII fields without encryption (90% coverage)
 
@@ -275,7 +430,6 @@ The architecture overview and Mermaid diagram were also updated to reflect the c
 
 Local startup was re-creating the seeded `c-001` portal client on every `pnpm start` because migration always ran the dev portal backfill after schema setup. Added `SEED_DEV_PORTAL_DATA` so local environments can opt out of that behavior and keep the database staff-only across repeated startup and migration runs.
 
-
 ## April 5, 2026 — Faith Workflows Evaluation Dimension Expansion
 
 ### feat(workflows): add 5 new evaluation dimensions; replace insurance rule with gift arrangement
@@ -286,9 +440,11 @@ Local startup was re-creating the seeded `c-001` portal client on every `pnpm st
 Expanded the Faith Workflows evaluation engine with 5 new rule dimensions and removed the practice-incompatible insurance check:
 
 **Removed:**
+
 - `ruleNoInsurance` — removed because the practice operates by gift-giving only and has no insurance billing model.
 
 **Added:**
+
 - `ruleGiftArrangementNote` (coordination, priority 3) — fires when an active client has no documented gift or financial arrangement. Replaces the insurance rule with one aligned to the gift-giving practice model. Surfaces a reminder to document the stewardship arrangement.
 - `rulePcl5Worsening` (clinical_caution, priority 8) — fires when PCL-5 scores show a worsening trend across 2 or more assessments. Prompts session agenda prep and treatment plan review.
 - `ruleGad7Worsening` (clinical_caution, priority 7) — fires when GAD-7 scores show a worsening trend across 2 or more assessments.
@@ -1680,7 +1836,6 @@ Updated package versions from `4.6.0` to `4.7.0`:
 - `packages/i18n/package.json`
 - `packages/telemetry/package.json`
 
-
 ## v4.7.0 — SchedulingPage Recurring Series Modal Fix
 
 **Date:** April 6, 2026
@@ -1703,7 +1858,6 @@ Fixes a ReferenceError (`seriesApptsLoading is not defined`) in the SchedulingPa
 - `pnpm test:e2e` — passed
 
 ---
-
 
 **Date:** March 29, 2026
 **Type:** Critical fix

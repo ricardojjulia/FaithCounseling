@@ -26,6 +26,7 @@ const APPOINTMENT_SELECT = `
     l.name AS resolved_location_name,
     a.series_id,
     a.remote_session,
+    a.video_room_id,
     a.created_at,
     a.updated_at
   FROM appointments a
@@ -78,6 +79,7 @@ function rowToAppointment(row) {
     locationName: row.stored_location_name ?? row.resolved_location_name ?? (row.remote_session ? 'Remote Session' : null),
     seriesId: row.series_id ?? null,
     remoteSession: Boolean(row.remote_session),
+    videoRoomId: row.video_room_id ?? null,
     durationMinutes,
     timezone: row.timezone ?? 'UTC',
     createdAt: row.created_at,
@@ -764,4 +766,11 @@ async function resolveLocationId(tenantId, locationName) {
     [tenantId, locationName.trim()],
   );
   return rows[0]?.id ?? null;
+}
+
+export async function updateAppointmentVideoRoom(id, tenantId, videoRoomId) {
+  await pool.query(
+    'UPDATE appointments SET video_room_id = ? WHERE id = ? AND tenant_id = ?',
+    [videoRoomId, id, tenantId],
+  );
 }

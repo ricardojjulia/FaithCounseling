@@ -1,6 +1,6 @@
 # Plan Tracker
 
-Last evaluated: April 2, 2026
+Last evaluated: April 9, 2026
 
 ---
 
@@ -33,6 +33,16 @@ Last evaluated: April 2, 2026
 | Plan | Remaining Work |
 |---|---|
 | [PROJECT-CLEANUP.md](PROJECT-CLEANUP.md) | `__pycache__` in agents/translation_guardian, stale `.github/agents/translation_guardian/` copy, `.venv/` duplicate, test-results artifacts |
+
+---
+
+## 🗂 Planning
+
+| Plan | Summary |
+| ---- | ------- |
+| [TELEHEALTH-AND-DIFFERENTIATION.md](TELEHEALTH-AND-DIFFERENTIATION.md) | FaithCounseling-meet (Jitsi) integration + faith-integrated clinical features + supervision workflows + SaaS multi-tenant infra. 4 phases; Phase 1 starts April 18, 2026. |
+| [TIME-TRACKING-COUNSELORS.md](TIME-TRACKING-COUNSELORS.md) | Counselor clinical hour & licensure tracking. Auto-sync from appointments, manual indirect logging, supervisor verification, PHI-safe CSV export for state boards. Target start April 20, 2026. |
+| [I18N-REWRITE.md](I18N-REWRITE.md) | Full i18n system rewrite: BCP 47 locale codes, plural support, Intl.* formatting, `/translate-locale` Claude Code skill, 6 phases |
 
 ---
 
