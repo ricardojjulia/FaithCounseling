@@ -4,7 +4,7 @@
 
 Welcome to **Faith Counseling** — a practice management platform built from the ground up for Christian counseling organizations. Whether you run a solo ministry practice, a group clinic, or a multi-location operation, Faith Counseling is designed to feel like a tool made specifically for you.
 
-From the moment a new client submits a care request to the session note signed after their last appointment, every workflow in this platform carries your practice's values forward — with structured clinical support, faith-integrated care tools, and an operational foundation ready for Monday morning.
+From the moment a new client submits a care request to the session note cosigned after their last telehealth appointment, every workflow in this platform carries your practice's values forward — with structured clinical support, faith-integrated care tools, built-in video sessions, licensure time tracking, and an operational foundation ready for Monday morning.
 
 📖 **New to the platform?** Start with the [User Manual →](docs/User%20Manual/README.md)
 
@@ -27,6 +27,10 @@ Want a fully loaded local tour instead of a blank shell? The repo now includes a
 ## Core Capabilities
 
 - **Faithful Workflows:** counselor-facing recommendation workspace powered by 27 deterministic clinical rules across 8 care categories, with explainable rationale, trend analysis, three interchangeable canvas views (Classic List, Radial Hub, Priority Matrix), and shared operational urgency cues that keep banner counts and visible client severity aligned
+- **Faith-Integrated Clinical Notes:** session notes include a scripture reference field and spiritual practice checkboxes (prayer journaling, scripture reading, church attendance, small group, spiritual direction, fasting, sabbath) — structured and optional, never forced
+- **Integrated Telehealth (JaaS/Jitsi):** remote appointments have a live **Join Video Session** button that opens an embedded JaaS meeting without leaving the platform; short-lived RS256 JWTs, opaque room names, and a `session.video_started` audit event on every join
+- **Supervision Cosign Workflow:** intern counselors submit notes for supervisor review; supervisors cosign or return for revision; all actions flow through the audit ledger; `supervisor_assignments` tracks the supervision relationship
+- **Licensure Time Tracking:** counselors and interns log hours by category (direct clinical, individual/group supervision, CE/spiritual formation, ministry coordination) via a Quick Log modal; `LicensureProgressBars` shows live goal progress on both the Counselor Home dashboard and the Time Tracking page; PHI-safe CSV export available
 - **Clinical Chart:** session notes, internal notes, treatment plans, progress tracking, and homework
 - **Operations Dashboard:** live daily operations summary with counselor workload, note-gap compliance watch, portal request tracking, configurable operational alerts, and 7-day trend context
 - **Workspace Studio:** full-featured practice administration hub with tabs for Practice profile, Locations CRUD, Staff roster, Lifecycle caseload board, Appointments (service codes), Documents, Offerings, and Portal workflows
@@ -64,15 +68,19 @@ Behind that presentation, the recent work has made the platform easier to trust 
 
 ## Freshly Shipped
 
-The platform has moved quickly over the last few iterations, and the most recent work is aimed at making Faith Counseling easier to explore, easier to operate, and easier to present with confidence.
+The platform has moved fast. The latest work brings telehealth, faith-integrated charting, supervision cosign, and licensure tracking into the core counselor experience — making Faith Counseling feel less like a generic clinic tool and more like something built for the specific reality of Christian counseling practice.
 
-- **Integrated telehealth via JaaS/Jitsi (Phase 1):** Remote appointments now have a live **Join Video Session** button. Clicking it calls `POST /v1/appointments/:id/video-session`, which generates a short-lived RS256 JWT and returns the JaaS room credentials. The Jitsi External API is loaded on demand and the meeting is embedded directly in the scheduling page via `VideoSessionModal`. A `session.video_started` audit event is written to the ledger on every join. JaaS room names are stable opaque tokens stored in `appointments.video_room_id` — no PHI is embedded in the room name or JWT claims. Required env vars: `JITSI_APP_ID`, `JITSI_API_KEY_ID`, `JITSI_PRIVATE_KEY_BASE64`, `JITSI_DOMAIN=8x8.vc`.
+- **Licensure progress bars on the Counselor Home dashboard (April 18, 2026):** `LicensureProgressBars` now renders directly on the Counselor Home screen so counselors see live goal progress — hours logged vs. target, broken down by category — without navigating away. Previously available only on the dedicated Time Tracking page.
 
-- **Faith-integrated clinical notes (Telehealth Phase 2):** Session notes now include a scripture reference field and checkboxes for spiritual practices (prayer journaling, scripture reading, church attendance, small group, spiritual direction, fasting, sabbath practice). All fields appear in view and edit mode of `NoteCard` and are stored as structured data on `progress_notes`.
+- **PHI-safe CSV export for time entries (April 18, 2026):** `GET /api/v1/time-entries/export` returns a downloadable CSV with `entry_id`, `date`, `category`, and `duration_minutes` only — no descriptions, no client identifiers, no free-text fields. The endpoint is auth-gated, role-scoped, and emits a `time_entry.export` audit event. An **Export CSV** button in the Time Tracking page respects the active category filter.
 
-- **Supervision cosign workflow (Telehealth Phase 3):** Intern counselors can submit locked notes for supervisor review (`pending_review`). Supervisors assigned via `supervisor_assignments` can cosign or return notes for revision. Cosign status badges appear inline on note cards. All actions are written to the audit ledger. A `supervision` appointment type is available.
+- **Integrated telehealth via JaaS/Jitsi:** Remote appointments have a live **Join Video Session** button. Clicking it calls `POST /v1/appointments/:id/video-session`, which generates a short-lived RS256 JWT and returns JaaS room credentials. The meeting is embedded directly in the scheduling page via `VideoSessionModal`. A `session.video_started` audit event is written on every join. JaaS room names are stable opaque tokens — no PHI in room names or JWT claims. Required env vars: `JITSI_APP_ID`, `JITSI_API_KEY_ID`, `JITSI_PRIVATE_KEY_BASE64`, `JITSI_DOMAIN=8x8.vc`.
 
-- **Licensure time tracking:** Counselors and interns track direct clinical, indirect/administrative, individual/group supervision, CE/spiritual formation, and ministry coordination hours via the new **Time Tracking** nav link. A Quick Log modal creates entries in seconds. `LicensureProgressBars` shows per-goal hours achieved vs. target. All time entry descriptions are AES-256-GCM encrypted at rest.
+- **Faith-integrated clinical notes:** Session notes now include a scripture reference field and checkboxes for spiritual practices (prayer journaling, scripture reading, church attendance, small group, spiritual direction, fasting, sabbath practice). All fields appear in view and edit mode of `NoteCard` and are stored as structured data on `progress_notes`.
+
+- **Supervision cosign workflow:** Intern counselors submit locked notes for supervisor review (`pending_review`). Supervisors assigned via `supervisor_assignments` can cosign or return notes for revision. Cosign status badges appear inline on note cards. All actions are written to the audit ledger. A `supervision` appointment type is available.
+
+- **Licensure time tracking:** Counselors and interns track direct clinical, indirect/administrative, individual/group supervision, CE/spiritual formation, and ministry coordination hours via the **Time Tracking** nav link. A Quick Log modal creates entries in seconds. All time entry descriptions are AES-256-GCM encrypted at rest.
 
 - **Full API documentation is live (v6.0.0):** The OpenAPI spec has been fully regenerated from the actual implementation — growing from 12 documented endpoints to 150+, fixing the security scheme from Bearer JWT to the correct HttpOnly session cookie, removing phantom paths, and adding every surface: auth, clients and all sub-resources, scheduling, billing, portal, faith features, audit intelligence, platform admin, i18n, telemetry, and monitoring. Browsable at `http://localhost:3002/api/docs`.
 - **Deterministic Audit Intelligence observations (v6.1.0):** The Audit Intelligence tab in Practice Operations now generates instant, rule-based callouts after every query — no AI dependency required. A 75-rule engine evaluates volume patterns, denial and error rates, authentication anomalies, PHI access concentration, admin actions, actor behavior, action distribution, and data quality gaps. Results are severity-tiered (critical → warning → info) and always available without an `ANTHROPIC_API_KEY`.
@@ -481,6 +489,19 @@ If `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is unset, trace export is skipped and te
 ## Recent Updates
 
 Only the latest entries are listed here. Full release history is in `docs/change-log.md`.
+
+### Licensure Progress Bars on Counselor Home + PHI-Safe CSV Export (April 18, 2026)
+
+`LicensureProgressBars` is now embedded in the Counselor Home dashboard, giving counselors a live view of licensure-hours progress without leaving the home screen. The Time Tracking page also gained an **Export CSV** button that triggers a PHI-safe download containing only `entry_id`, `date`, `category`, and `duration_minutes` — no descriptions, no client identifiers. The export endpoint is auth-gated, role-scoped, and audited.
+
+### Telehealth, Faith-Integrated Notes, Supervision Cosign, and Licensure Time Tracking (April 17, 2026)
+
+A major feature push across three phases brought the platform's clinical and pastoral capabilities to a new level:
+
+- **Telehealth (Phase 1):** JaaS/Jitsi video sessions embedded in the scheduling page via RS256-signed JWTs. `session.video_started` audit event on every join. No PHI in room names or JWT claims.
+- **Faith-integrated notes (Phase 2):** Scripture reference and spiritual practice checkboxes on every session note — stored structurally, visible in view and edit mode.
+- **Supervision cosign (Phase 3):** Submit-for-review and cosign/return workflow for intern notes. `supervisor_assignments` table. Audit-ledger integration throughout.
+- **Licensure time tracking:** Full time-entry CRUD, Quick Log modal, per-category summary cards, and `LicensureProgressBars` progress component. AES-256-GCM encrypted descriptions.
 
 ### Browser Error Sweep (April 7, 2026)
 
