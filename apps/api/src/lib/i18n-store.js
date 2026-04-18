@@ -38,6 +38,7 @@ const NAMESPACES = {
   clients:      (k) => k.startsWith('clients.'),
   billing:      (k) => k.startsWith('billing.'),
   faith:        (k) => k.startsWith('faith.'),
+  telehealth:   (k) => k.startsWith('telehealth.'),
   portal:       (k) => k.startsWith('portal.'),
   offerings:    (k) => k.startsWith('offerings.'),
   forms:        (k) => k.startsWith('forms.'),

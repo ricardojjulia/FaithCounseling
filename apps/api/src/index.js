@@ -63,7 +63,7 @@ import {
 } from './lib/auth.js';
 import {
   listStaff, getStaffById, createStaff, updateStaff,
-  listPractices, getPracticeById, createPractice, updatePractice,
+  listPractices, getPracticeById, getPracticeVideoKeyEnc, createPractice, updatePractice,
   listLocations, getLocationById, createLocation, updateLocation, deleteLocation,
   listAvailabilityTemplates, upsertAvailabilityTemplate, deleteAvailabilityTemplate,
 } from './db/queries/staff.js';
@@ -80,7 +80,7 @@ import { getStaffEmployment, upsertStaffEmployment } from './db/queries/staffEmp
 import { getStaffFaithProfile, upsertStaffFaithProfile } from './db/queries/staffFaithProfiles.js';
 import {
   listAppointments, getAppointmentById, createAppointment, updateAppointment, deleteAppointment,
-  listAppointmentsByDateRange,
+  listAppointmentsByDateRange, updateAppointmentVideoRoom,
   listReminders, createReminder, updateReminder,
   listWaitlist, createWaitlistEntry, updateWaitlistEntry,
   listAvailabilityOverrides, createAvailabilityOverride, updateAvailabilityOverride, deleteAvailabilityOverride,
@@ -153,6 +153,12 @@ import { getClientClinicalHistory, upsertClientClinicalHistory } from './db/quer
 import { getClientFaithProfile, upsertClientFaithProfile } from './db/queries/clientFaithProfiles.js';
 import { getClientLegal, upsertClientLegal } from './db/queries/clientLegal.js';
 import { createClient as createClientRecord } from './db/queries/clients.js';
+import {
+  listTimeEntries, createTimeEntry, getTimeEntry, updateTimeEntry, deleteTimeEntry,
+  syncTimeEntryFromAppointment, getTimeEntrySummary,
+  listLicensureGoals, createLicensureGoal,
+  listSupervisorAssignments, createSupervisorAssignment, deleteSupervisorAssignment, isSupervisorOf,
+} from './db/queries/timeTracking.js';
 
 const port = Number(process.env.PORT || 3001);
 const currentFilePath = fileURLToPath(import.meta.url);
@@ -814,6 +820,8 @@ const DEFAULT_FORM_CATALOG = Object.freeze([
   { formKey: 'SpiritualWellnessInventory', title: 'Spiritual Wellness Inventory', category: 'faith', isStandardOnSignup: false },
   { formKey: 'FaithHistoryQuestionnaire', title: 'Faith History Questionnaire', category: 'faith', isStandardOnSignup: false },
   { formKey: 'ValuesAndBiblicalIdentityWorksheet', title: 'Values and Biblical Identity Worksheet', category: 'faith', isStandardOnSignup: false },
+  { formKey: 'FaithIntegratedAdultIntake', title: 'Faith-Integrated Adult Intake', category: 'intake', isStandardOnSignup: false },
+  { formKey: 'PreMaritalChristianIntake', title: 'Pre-Marital Christian Counseling Intake', category: 'intake', isStandardOnSignup: false },
   { formKey: 'FamilySystemsAssessment', title: 'Family Systems Assessment', category: 'family', isStandardOnSignup: false },
 ]);
 
@@ -1436,6 +1444,16 @@ export async function handleApiRequest(request, response) {
     }
 
     if (requestUrl.pathname.startsWith('/v1/clients/') && requestUrl.pathname.includes('/progress-notes/') && !requestUrl.pathname.endsWith('/progress-notes')) {
+      // Cosign sub-actions: /v1/clients/:cId/progress-notes/:nId/submit-for-review
+      //                     /v1/clients/:cId/progress-notes/:nId/cosign
+      if (requestUrl.pathname.endsWith('/submit-for-review')) {
+        await handleProgressNoteCosignRequest(request, response, requestUrl, session);
+        return;
+      }
+      if (requestUrl.pathname.endsWith('/cosign')) {
+        await handleProgressNoteCosign(request, response, requestUrl, session);
+        return;
+      }
       await handleClientProgressNoteById(request, response, requestUrl, session);
       return;
     }
@@ -1783,6 +1801,16 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname.endsWith('/video-session') && requestUrl.pathname.startsWith('/v1/appointments/')) {
+      await handleVideoSession(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname.endsWith('/sync-time') && requestUrl.pathname.startsWith('/v1/appointments/')) {
+      await handleAppointmentSyncTime(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname.startsWith('/v1/appointments/')) {
       await handleAppointmentById(request, response, requestUrl, session);
       return;
@@ -1790,6 +1818,11 @@ export async function handleApiRequest(request, response) {
 
     if (requestUrl.pathname === '/v1/practices') {
       await handlePracticesCollection(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname.endsWith('/video-config') && requestUrl.pathname.startsWith('/v1/practices/')) {
+      await handlePracticeVideoConfig(request, response, requestUrl, session);
       return;
     }
 
@@ -1860,6 +1893,40 @@ export async function handleApiRequest(request, response) {
 
     if (requestUrl.pathname.startsWith('/v1/staff/')) {
       await handleStaffById(request, response, requestUrl, session);
+      return;
+    }
+
+    // ─── Supervisor assignments ─────────────────────────────────────────────
+    if (requestUrl.pathname === '/v1/supervisor-assignments') {
+      await handleSupervisorAssignments(request, response, requestUrl, session);
+      return;
+    }
+    if (requestUrl.pathname.startsWith('/v1/supervisor-assignments/')) {
+      await handleSupervisorAssignmentById(request, response, requestUrl, session);
+      return;
+    }
+
+    // ─── Time entries ────────────────────────────────────────────────────────
+    if (requestUrl.pathname === '/v1/time-entries') {
+      await handleTimeEntries(request, response, requestUrl, session);
+      return;
+    }
+    if (requestUrl.pathname === '/v1/time-entries/summary') {
+      await handleTimeEntriesSummary(request, response, requestUrl, session);
+      return;
+    }
+    if (requestUrl.pathname === '/v1/time-entries/export') {
+      await handleTimeEntriesExport(request, response, requestUrl, session);
+      return;
+    }
+    if (requestUrl.pathname.startsWith('/v1/time-entries/')) {
+      await handleTimeEntryById(request, response, requestUrl, session);
+      return;
+    }
+
+    // ─── Licensure goals ─────────────────────────────────────────────────────
+    if (requestUrl.pathname === '/v1/licensure-goals') {
+      await handleLicensureGoals(request, response, requestUrl, session);
       return;
     }
 
@@ -3362,6 +3429,10 @@ async function handleClientProgressNotes(request, response, requestUrl, session)
     ? payload.interventions.map((entry) => sanitizeStr(String(entry), 300)).filter(Boolean)
     : [];
   const appointmentId = sanitizeStr(payload.appointmentId, 64) ?? null;
+  const scriptureReference = sanitizeStr(payload.scriptureReference, 255) ?? null;
+  const spiritualPractices = Array.isArray(payload.spiritualPractices)
+    ? payload.spiritualPractices.map((s) => sanitizeStr(String(s), 64)).filter(Boolean)
+    : null;
 
   if (process.env.DB_NAME) {
     const item = await createProgressNote({
@@ -3375,6 +3446,8 @@ async function handleClientProgressNotes(request, response, requestUrl, session)
       lockedNote: Boolean(payload.locked),
       signedBy: Boolean(payload.locked) ? sanitizeStr(payload.signedBy, 120) ?? callerRole(request, session) : null,
       signedAt: Boolean(payload.locked) ? new Date().toISOString() : null,
+      scriptureReference,
+      spiritualPractices,
     });
     emitAudit(request, 'chart.progress_note.create', 'progress_note', item.id, session);
     writeJson(response, 201, { item });
@@ -3458,6 +3531,14 @@ async function handleClientProgressNoteById(request, response, requestUrl, sessi
     fields.lockedNote = true;
     fields.signedBy = sanitizeStr(payload.signedBy, 120) ?? callerRole(request, session);
     fields.signedAt = new Date().toISOString();
+  }
+  // Phase 2 faith fields
+  if (payload.scriptureReference !== undefined)
+    fields.scriptureReference = sanitizeStr(payload.scriptureReference, 255) ?? null;
+  if (payload.spiritualPractices !== undefined) {
+    fields.spiritualPractices = Array.isArray(payload.spiritualPractices)
+      ? payload.spiritualPractices.map((s) => sanitizeStr(String(s), 64)).filter(Boolean)
+      : null;
   }
 
   if (!Object.keys(fields).length) {
@@ -5426,6 +5507,132 @@ async function handleAppointmentsCollection(request, response, session) {
     emitAudit(request, 'appointment.create', 'appointment', appointment.id);
     writeJson(response, 201, { item: appointment });
   }
+}
+
+async function handleVideoSession(request, response, requestUrl, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const appointmentId = requestUrl.pathname
+    .replace(/\/video-session$/, '')
+    .replace('/v1/appointments/', '');
+  const appointment = await resolveAuthorizedAppointment(
+    request, response, appointmentId, session, 'appointment.video_session.start',
+  );
+  if (!appointment) return;
+
+  const tenantId = callerTenant(request, session);
+  const role = callerRole(request, session);
+  const isModerator = role !== 'client';
+
+  // Persist a stable opaque room name for this appointment (not PHI).
+  let roomName = appointment.videoRoomId;
+  if (!roomName) {
+    roomName = crypto.randomBytes(16).toString('hex');
+    if (process.env.DB_NAME) {
+      await updateAppointmentVideoRoom(appointmentId, tenantId, roomName);
+    } else {
+      const appt = appointments.find((a) => a.id === appointmentId);
+      if (appt) appt.videoRoomId = roomName;
+    }
+  }
+
+  // Resolve JaaS config: per-practice DB config takes precedence over server-
+  // level env vars so that each counseling practice can bring its own free or
+  // paid JaaS account.
+  let appId = null;
+  let apiKeyId = null;
+  let privateKeyPem = null;
+  let domain = '8x8.vc';
+
+  if (process.env.DB_NAME) {
+    // Look up the practice for this tenant to find its JaaS credentials.
+    const [practices] = await pool.query(
+      'SELECT jaas_app_id, jaas_api_key_id, jaas_private_key_enc, jaas_domain FROM practices WHERE tenant_id = ? LIMIT 1',
+      [tenantId],
+    );
+    if (practices.length) {
+      const p = practices[0];
+      if (p.jaas_app_id) appId = p.jaas_app_id;
+      if (p.jaas_api_key_id) apiKeyId = p.jaas_api_key_id;
+      if (p.jaas_domain) domain = p.jaas_domain;
+      if (p.jaas_private_key_enc) {
+        // Decrypt the stored private key ciphertext (AES-256-GCM).
+        try {
+          privateKeyPem = decrypt(p.jaas_private_key_enc);
+        } catch {
+          // Corrupted key — fall through to env var fallback.
+        }
+      }
+    }
+  }
+
+  // Fall back to server-level env vars (single-tenant / self-hosted installs).
+  if (!appId) appId = process.env.JITSI_APP_ID ?? null;
+  if (!apiKeyId) apiKeyId = process.env.JITSI_API_KEY_ID ?? null;
+  if (!privateKeyPem && process.env.JITSI_PRIVATE_KEY_BASE64) {
+    privateKeyPem = Buffer.from(process.env.JITSI_PRIVATE_KEY_BASE64, 'base64').toString();
+  }
+  if (process.env.JITSI_DOMAIN) domain = process.env.JITSI_DOMAIN;
+
+  let jwt = null;
+  if (appId && apiKeyId && privateKeyPem) {
+    const now = Math.floor(Date.now() / 1000);
+    // Display name: role label only — no PII/PHI in JWT claims.
+    const displayName = isModerator ? 'Counselor' : 'Client';
+    const header = Buffer.from(
+      JSON.stringify({ alg: 'RS256', kid: apiKeyId, typ: 'JWT' }),
+    ).toString('base64url');
+    const payload = Buffer.from(
+      JSON.stringify({
+        aud: 'jitsi',
+        iss: 'chat',
+        iat: now,
+        exp: now + 7200,
+        nbf: now - 5,
+        sub: appId,
+        context: {
+          features: {
+            livestreaming: false,
+            'file-upload': false,
+            'outbound-call': false,
+            'sip-outbound-call': false,
+            transcription: false,
+            'list-visitors': false,
+            recording: false,
+            flip: false,
+          },
+          user: {
+            'hidden-from-recorder': false,
+            moderator: isModerator,
+            name: displayName,
+            id: session?.userId ?? 'anonymous',
+            avatar: '',
+            email: '',
+          },
+        },
+        room: `${appId}/${roomName}`,
+      }),
+    ).toString('base64url');
+
+    const signer = crypto.createSign('RSA-SHA256');
+    signer.update(`${header}.${payload}`);
+    const signature = signer.sign(privateKeyPem, 'base64url');
+    jwt = `${header}.${payload}.${signature}`;
+  }
+
+  const fullRoomName = appId ? `${appId}/${roomName}` : roomName;
+
+  await emitAudit(request, 'session.video_started', 'appointment', appointmentId, session);
+
+  writeJson(response, 200, {
+    jwt,
+    domain,
+    roomName: fullRoomName,
+    appointmentId,
+  });
 }
 
 async function handleAppointmentById(request, response, requestUrl, session) {
@@ -10939,6 +11146,76 @@ async function handlePracticesCollection(request, response, session) {
   writeJson(response, 201, { item });
 }
 
+/**
+ * PATCH /v1/practices/:id/video-config
+ *
+ * Allows a practice admin to configure the JaaS credentials for their practice.
+ * The private key PEM is accepted as a plain-text PEM string and encrypted with
+ * AES-256-GCM before being stored — it is NEVER returned in any API response.
+ * All fields are optional; omitting a field leaves the existing value unchanged.
+ * Setting a field to null explicitly clears it (reverting to env-var fallback).
+ *
+ * Required role: practice_admin or admin.
+ * Returns the updated practice object (jaasPrivateKeyConfigured boolean only).
+ */
+async function handlePracticeVideoConfig(request, response, requestUrl, session) {
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (requirePracticeAdmin(request, response, session)) return;
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 501, { error: 'Video config requires database mode' });
+    return;
+  }
+
+  const practiceId = requestUrl.pathname
+    .replace(/\/video-config$/, '')
+    .replace('/v1/practices/', '');
+  const tenantId = callerTenant(request, session);
+  const practice = await getPracticeById(practiceId, tenantId);
+  if (!practice) {
+    writeJson(response, 404, { error: 'Practice not found' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const fields = {};
+
+  // appId — plain text identifier (e.g. "vpaas-magic-cookie-…")
+  if ('jaasAppId' in payload) {
+    fields.jaasAppId = payload.jaasAppId === null ? null : sanitizeStr(payload.jaasAppId, 255);
+  }
+  // API key ID from the JaaS dashboard Credentials page
+  if ('jaasApiKeyId' in payload) {
+    fields.jaasApiKeyId = payload.jaasApiKeyId === null ? null : sanitizeStr(payload.jaasApiKeyId, 255);
+  }
+  // JaaS domain — almost always "8x8.vc" for hosted; allow customisation for
+  // self-hosted Jitsi deployments.
+  if ('jaasDomain' in payload) {
+    fields.jaasDomain = payload.jaasDomain === null ? null : sanitizeStr(payload.jaasDomain, 128);
+  }
+  // Private key — accepted as plain PEM; encrypted before storage.
+  // Setting to null clears the stored key (falls back to env var).
+  if ('jaasPrivateKeyPem' in payload) {
+    if (payload.jaasPrivateKeyPem === null) {
+      fields.jaasPrivateKeyEnc = null;
+    } else {
+      const pem = String(payload.jaasPrivateKeyPem).trim();
+      if (!pem.startsWith('-----BEGIN')) {
+        writeJson(response, 400, { error: 'jaasPrivateKeyPem must be a valid PEM string' });
+        return;
+      }
+      fields.jaasPrivateKeyEnc = encrypt(pem);
+    }
+  }
+
+  const updated = await updatePractice(practiceId, tenantId, fields);
+  emitAudit(request, 'practice.video_config.update', 'practice', practiceId, session);
+  writeJson(response, 200, { item: updated });
+}
+
 async function handlePracticeById(request, response, requestUrl, session) {
   const practiceId = requestUrl.pathname.replace('/v1/practices/', '');
 
@@ -14243,6 +14520,360 @@ async function handleMonitoringDb(response) {
   });
 }
 
+// ─── Cosign workflow ─────────────────────────────────────────────────────────
+
+function extractCosignNoteId(requestUrl) {
+  // /v1/clients/:cId/progress-notes/:nId/submit-for-review  OR  .../cosign
+  const parts = requestUrl.pathname.split('/');
+  const pnIdx = parts.indexOf('progress-notes');
+  const cIdx = parts.indexOf('clients');
+  if (pnIdx === -1 || cIdx === -1) return {};
+  return { clientId: parts[cIdx + 1] ?? null, noteId: parts[pnIdx + 1] ?? null };
+}
+
+async function handleProgressNoteCosignRequest(request, response, requestUrl, session) {
+  if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (session.role !== 'intern') { writeJson(response, 403, { error: 'Only interns may submit notes for review' }); return; }
+
+  const { clientId, noteId } = extractCosignNoteId(requestUrl);
+  if (!clientId || !noteId) { writeJson(response, 400, { error: 'Invalid path' }); return; }
+
+  if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+
+  const [rows] = await pool.query(
+    'SELECT id, tenant_id, locked, cosign_status FROM progress_notes WHERE id = ? AND client_id = ? AND tenant_id = ?',
+    [noteId, clientId, session.tenantId],
+  );
+  if (!rows[0]) { writeJson(response, 404, { error: 'Note not found' }); return; }
+  if (rows[0].locked) { writeJson(response, 409, { error: 'Note is already signed and locked' }); return; }
+  if (rows[0].cosign_status === 'pending_review') { writeJson(response, 409, { error: 'Note already pending review' }); return; }
+
+  await updateProgressNote(noteId, clientId, session.tenantId, {
+    cosignStatus: 'pending_review',
+    cosignRequestedBy: session.userId,
+    cosignRequestedAt: new Date().toISOString(),
+  });
+  emitAudit(request, 'session_note.submit_review', 'progress_note', noteId, session);
+  writeJson(response, 200, { status: 'pending_review' });
+}
+
+async function handleProgressNoteCosign(request, response, requestUrl, session) {
+  if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!['counselor', 'practice_admin', 'practice_owner'].includes(session.role)) {
+    writeJson(response, 403, { error: 'Insufficient privileges to cosign' });
+    return;
+  }
+
+  const { clientId, noteId } = extractCosignNoteId(requestUrl);
+  if (!clientId || !noteId) { writeJson(response, 400, { error: 'Invalid path' }); return; }
+
+  if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+
+  const [rows] = await pool.query(
+    'SELECT id, tenant_id, cosign_status, cosign_requested_by FROM progress_notes WHERE id = ? AND client_id = ? AND tenant_id = ?',
+    [noteId, clientId, session.tenantId],
+  );
+  if (!rows[0]) { writeJson(response, 404, { error: 'Note not found' }); return; }
+  if (rows[0].cosign_status !== 'pending_review') { writeJson(response, 409, { error: 'Note is not pending review' }); return; }
+
+  // Supervisor role check: counselor must be assigned as supervisor of the intern
+  if (session.role === 'counselor') {
+    const isAssigned = await isSupervisorOf(session.tenantId, session.userId, rows[0].cosign_requested_by);
+    if (!isAssigned) { writeJson(response, 403, { error: 'Not assigned as supervisor for this intern' }); return; }
+  }
+
+  const payload = await readJsonBody(request);
+  const action = payload.action === 'reject' ? 'rejected' : 'reviewed';
+  const comments = sanitizeStr(payload.comments, 2000) ?? null;
+
+  await updateProgressNote(noteId, clientId, session.tenantId, {
+    cosignStatus: action,
+    cosignedBy: session.userId,
+    cosignedAt: new Date().toISOString(),
+    cosignComments: comments,
+  });
+  emitAudit(request, 'session_note.cosigned', 'progress_note', noteId, session);
+  writeJson(response, 200, { status: action });
+}
+
+// ─── Supervisor assignments ──────────────────────────────────────────────────
+
+async function handleSupervisorAssignments(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+
+  if (request.method === 'GET') {
+    const params = requestUrl.searchParams;
+    if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+    const items = await listSupervisorAssignments(session.tenantId, {
+      supervisorId: params.get('supervisorId') ?? undefined,
+      internId: params.get('internId') ?? undefined,
+    });
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    if (!['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) {
+      writeJson(response, 403, { error: 'Insufficient privileges' });
+      return;
+    }
+    const payload = await readJsonBody(request);
+    const supervisorId = sanitizeStr(payload.supervisorId, 64);
+    const internId     = sanitizeStr(payload.internId, 64);
+    const practiceId   = sanitizeStr(payload.practiceId, 64);
+    if (!supervisorId || !internId || !practiceId) {
+      writeJson(response, 400, { error: 'supervisorId, internId, and practiceId are required' });
+      return;
+    }
+    if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+    const item = await createSupervisorAssignment({
+      id: genId('sa'), tenantId: session.tenantId, supervisorId, internId, practiceId,
+    });
+    emitAudit(request, 'supervisor_assignment.created', 'supervisor_assignment', item.id, session);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleSupervisorAssignmentById(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) {
+    writeJson(response, 403, { error: 'Insufficient privileges' });
+    return;
+  }
+  if (request.method !== 'DELETE') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+
+  const id = requestUrl.pathname.replace('/v1/supervisor-assignments/', '');
+  if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+  const deleted = await deleteSupervisorAssignment(id, session.tenantId);
+  if (!deleted) { writeJson(response, 404, { error: 'Assignment not found' }); return; }
+  emitAudit(request, 'supervisor_assignment.deleted', 'supervisor_assignment', id, session);
+  writeJson(response, 204, null);
+}
+
+// ─── Time tracking ───────────────────────────────────────────────────────────
+
+async function resolveTimeEntryUser(session, requestUrl) {
+  // Allows a supervisor or admin to view a specific intern's time entries
+  const forUser = requestUrl.searchParams.get('userId');
+  if (!forUser || forUser === session.userId) return session.userId;
+  if (['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) return forUser;
+  if (session.role === 'counselor') {
+    if (!process.env.DB_NAME) return null;
+    const ok = await isSupervisorOf(session.tenantId, session.userId, forUser);
+    return ok ? forUser : null;
+  }
+  return null;
+}
+
+async function handleTimeEntries(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+
+  if (request.method === 'GET') {
+    const userId = await resolveTimeEntryUser(session, requestUrl);
+    if (!userId) { writeJson(response, 403, { error: 'Not authorised to view those time entries' }); return; }
+    if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+    const items = await listTimeEntries(session.tenantId, userId, {
+      category: requestUrl.searchParams.get('category') ?? undefined,
+      dateFrom: requestUrl.searchParams.get('date_from') ?? undefined,
+      dateTo:   requestUrl.searchParams.get('date_to') ?? undefined,
+    });
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    const category  = sanitizeStr(payload.category, 64);
+    const startTime = sanitizeStr(payload.startTime, 40);
+    const endTime   = sanitizeStr(payload.endTime, 40);
+    if (!category || !startTime || !endTime) {
+      writeJson(response, 400, { error: 'category, startTime, endTime are required' });
+      return;
+    }
+    const durationMinutes = Math.round((new Date(endTime) - new Date(startTime)) / 60000);
+    if (durationMinutes <= 0) { writeJson(response, 400, { error: 'endTime must be after startTime' }); return; }
+    if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+    const item = await createTimeEntry({
+      id: genId('te'), tenantId: session.tenantId, userId: session.userId,
+      category, startTime, endTime, durationMinutes,
+      description: sanitizeStr(payload.description, 2000) ?? null,
+    });
+    emitAudit(request, 'time_entry.created', 'time_entry', item.id, session);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleTimeEntriesSummary(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+
+  const userId = await resolveTimeEntryUser(session, requestUrl);
+  if (!userId) { writeJson(response, 403, { error: 'Not authorised' }); return; }
+  if (!process.env.DB_NAME) { writeJson(response, 200, { summary: [] }); return; }
+  const summary = await getTimeEntrySummary(session.tenantId, userId, {
+    dateFrom: requestUrl.searchParams.get('date_from') ?? undefined,
+    dateTo:   requestUrl.searchParams.get('date_to') ?? undefined,
+  });
+  writeJson(response, 200, { summary });
+}
+
+// PHI-safe CSV export — omits descriptions, client IDs, and free-text fields.
+// Exports only: entry_id, date (UTC date only), category, duration_minutes.
+async function handleTimeEntriesExport(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+
+  const userId = await resolveTimeEntryUser(session, requestUrl);
+  if (!userId) { writeJson(response, 403, { error: 'Not authorised' }); return; }
+  if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+
+  const entries = await listTimeEntries(session.tenantId, userId, {
+    category: requestUrl.searchParams.get('category') ?? undefined,
+    dateFrom: requestUrl.searchParams.get('date_from') ?? undefined,
+    dateTo:   requestUrl.searchParams.get('date_to') ?? undefined,
+    limit:    5000,
+  });
+
+  // Build CSV — no descriptions, no names, no client IDs
+  const SAFE_CATEGORIES = new Set([
+    'direct_clinical', 'indirect_admin', 'supervision_individual',
+    'supervision_group', 'ce_spiritual', 'ministry_coordination',
+  ]);
+  const csvRows = ['entry_id,date,category,duration_minutes'];
+  for (const entry of entries) {
+    const date = entry.startTime ? entry.startTime.slice(0, 10) : '';
+    const cat  = SAFE_CATEGORIES.has(entry.category) ? entry.category : 'other';
+    csvRows.push(`${entry.id},${date},${cat},${entry.durationMinutes ?? 0}`);
+  }
+  const csv = csvRows.join('\r\n');
+
+  emitAudit(request, 'time_entry.export', 'time_entry', null, session);
+
+  response.writeHead(200, {
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="time-entries.csv"',
+    'Cache-Control': 'no-store',
+  });
+  response.end(csv);
+}
+
+async function handleTimeEntryById(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  const id = requestUrl.pathname.replace('/v1/time-entries/', '');
+
+  if (request.method === 'PATCH') {
+    if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+    const entry = await getTimeEntry(id, session.tenantId);
+    if (!entry) { writeJson(response, 404, { error: 'Not found' }); return; }
+    if (entry.userId !== session.userId) { writeJson(response, 403, { error: 'Forbidden' }); return; }
+    if (entry.isLocked) { writeJson(response, 409, { error: 'Time entry is locked' }); return; }
+
+    const payload = await readJsonBody(request);
+    const fields = {};
+    if (payload.category !== undefined)    fields.category = sanitizeStr(payload.category, 64);
+    if (payload.startTime !== undefined)   fields.startTime = sanitizeStr(payload.startTime, 40);
+    if (payload.endTime !== undefined)     fields.endTime   = sanitizeStr(payload.endTime, 40);
+    if (payload.description !== undefined) fields.description = sanitizeStr(payload.description, 2000) ?? null;
+    if (fields.startTime || fields.endTime) {
+      const s = new Date(fields.startTime ?? entry.startTime);
+      const e = new Date(fields.endTime ?? entry.endTime);
+      fields.durationMinutes = Math.round((e - s) / 60000);
+      if (fields.durationMinutes <= 0) { writeJson(response, 400, { error: 'endTime must be after startTime' }); return; }
+    }
+    await updateTimeEntry(id, session.tenantId, fields);
+    const updated = await getTimeEntry(id, session.tenantId);
+    emitAudit(request, 'time_entry.updated', 'time_entry', id, session);
+    writeJson(response, 200, { item: updated });
+    return;
+  }
+
+  if (request.method === 'DELETE') {
+    if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+    const entry = await getTimeEntry(id, session.tenantId);
+    if (!entry) { writeJson(response, 404, { error: 'Not found' }); return; }
+    if (entry.userId !== session.userId && !['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) {
+      writeJson(response, 403, { error: 'Forbidden' }); return;
+    }
+    if (entry.isLocked) { writeJson(response, 409, { error: 'Locked time entry cannot be deleted' }); return; }
+    await deleteTimeEntry(id, session.tenantId);
+    emitAudit(request, 'time_entry.deleted', 'time_entry', id, session);
+    writeJson(response, 204, null);
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleAppointmentSyncTime(request, response, requestUrl, session) {
+  if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+
+  const appointmentId = requestUrl.pathname
+    .replace('/v1/appointments/', '').replace('/sync-time', '');
+
+  if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+
+  const [apptRows] = await pool.query(
+    'SELECT id, tenant_id, staff_id, start_time, end_time FROM appointments WHERE id = ? AND tenant_id = ?',
+    [appointmentId, session.tenantId],
+  );
+  if (!apptRows[0]) { writeJson(response, 404, { error: 'Appointment not found' }); return; }
+  const appt = apptRows[0];
+  const durationMinutes = appt.start_time && appt.end_time
+    ? Math.round((new Date(appt.end_time) - new Date(appt.start_time)) / 60000)
+    : 0;
+
+  const { created, entry } = await syncTimeEntryFromAppointment({
+    id: genId('te'), tenantId: session.tenantId, userId: appt.staff_id,
+    appointmentId: appt.id, startTime: appt.start_time, endTime: appt.end_time, durationMinutes,
+  });
+  if (created) emitAudit(request, 'time_entry.synced', 'time_entry', entry.id, session);
+  writeJson(response, created ? 201 : 200, { created, item: entry });
+}
+
+// ─── Licensure goals ─────────────────────────────────────────────────────────
+
+async function handleLicensureGoals(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+
+  if (request.method === 'GET') {
+    if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+    const items = await listLicensureGoals(session.tenantId, session.userId);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    const label         = sanitizeStr(payload.label, 120);
+    const targetMinutes = Number(payload.targetMinutes);
+    const effectiveFrom = sanitizeStr(payload.effectiveFrom, 20);
+    if (!label || !targetMinutes || !effectiveFrom) {
+      writeJson(response, 400, { error: 'label, targetMinutes, effectiveFrom are required' });
+      return;
+    }
+    if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+    const item = await createLicensureGoal({
+      id: genId('lg'), tenantId: session.tenantId, userId: session.userId,
+      label, targetMinutes, effectiveFrom,
+      effectiveTo: sanitizeStr(payload.effectiveTo, 20) ?? null,
+      categoryFilter: Array.isArray(payload.categoryFilter) ? payload.categoryFilter : null,
+    });
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
 function resolveRoute(pathname) {
   if (pathname === '/health' || pathname === '/health/live') return '/health/live';
   if (pathname === '/health/ready') return '/health/ready';
@@ -14316,7 +14947,9 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/platform/data-exports') return '/v1/platform/data-exports';
   if (pathname === '/v1/platform/retention-policies') return '/v1/platform/retention-policies';
   if (pathname.startsWith('/v1/clients/')) return '/v1/clients/:id';
+  if (pathname.endsWith('/video-session') && pathname.startsWith('/v1/appointments/')) return '/v1/appointments/:id/video-session';
   if (pathname.startsWith('/v1/appointments/')) return '/v1/appointments/:id';
+  if (pathname.endsWith('/video-config') && pathname.startsWith('/v1/practices/')) return '/v1/practices/:id/video-config';
   if (pathname.startsWith('/v1/practices/')) return '/v1/practices/:id';
   if (pathname.startsWith('/v1/locations/')) return '/v1/locations/:id';
   if (pathname.startsWith('/v1/staff/') && pathname.endsWith('/availability')) return '/v1/staff/:id/availability';

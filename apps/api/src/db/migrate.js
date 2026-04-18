@@ -301,6 +301,69 @@ async function applyColumnMigrations(conn) {
   // Practice-level default content language
   await addColumnIfMissing('practices', 'default_content_language', "VARCHAR(35) NOT NULL DEFAULT 'en'");
 
+  // ── Telehealth (Phase 1) ──────────────────────────────────────────────────
+  // Persists the unique Jitsi room name for each appointment. Stored in plain
+  // text — it is a random opaque token, not PHI. The JWT is generated on-demand
+  // and never persisted.
+  await addColumnIfMissing('appointments', 'video_room_id', 'VARCHAR(255) NULL AFTER remote_session');
+
+  // Per-practice JaaS video config — each counseling practice brings its own
+  // free or paid JaaS account. The private key is AES-256-GCM encrypted at
+  // rest. All four columns are nullable so practices that have not yet
+  // configured video gracefully fall back to the server-level env vars (or
+  // simply return a null JWT and no-op the button).
+  await addColumnIfMissing('practices', 'jaas_app_id', 'VARCHAR(255) NULL');
+  await addColumnIfMissing('practices', 'jaas_api_key_id', 'VARCHAR(255) NULL');
+  await addColumnIfMissing('practices', 'jaas_private_key_enc', 'TEXT NULL');
+  await addColumnIfMissing('practices', 'jaas_domain', "VARCHAR(128) NULL DEFAULT '8x8.vc'");
+
+  // ── Time Tracking (Phase 1) ───────────────────────────────────────────────
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS \`time_entries\` (
+      \`id\`               CHAR(36)      NOT NULL,
+      \`tenant_id\`        VARCHAR(64)   NOT NULL,
+      \`user_id\`          VARCHAR(64)   NOT NULL,
+      \`appointment_id\`   VARCHAR(64)   NULL,
+      \`category\`         ENUM(
+                             'direct_clinical',
+                             'indirect_admin',
+                             'supervision_individual',
+                             'supervision_group',
+                             'ce_spiritual',
+                             'ministry_coordination'
+                           )             NOT NULL,
+      \`start_time\`       DATETIME      NOT NULL,
+      \`end_time\`         DATETIME      NOT NULL,
+      \`duration_minutes\` INT           NOT NULL,
+      \`is_locked\`        TINYINT(1)    NOT NULL DEFAULT 0,
+      \`verified_by\`      VARCHAR(64)   NULL,
+      \`verified_at\`      DATETIME      NULL,
+      \`description_enc\`  TEXT          NULL,
+      \`created_at\`       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`updated_at\`       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`),
+      INDEX \`idx_te_user_category\` (\`tenant_id\`, \`user_id\`, \`category\`),
+      INDEX \`idx_te_user_start\`    (\`tenant_id\`, \`user_id\`, \`start_time\`),
+      INDEX \`idx_te_appointment\`   (\`appointment_id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS \`licensure_goals\` (
+      \`id\`              CHAR(36)      NOT NULL,
+      \`tenant_id\`       VARCHAR(64)   NOT NULL,
+      \`user_id\`         VARCHAR(64)   NOT NULL,
+      \`label\`           VARCHAR(255)  NOT NULL,
+      \`category_filter\` VARCHAR(255)  NULL,
+      \`target_minutes\`  INT           NOT NULL,
+      \`effective_from\`  DATE          NOT NULL,
+      \`effective_to\`    DATE          NULL,
+      \`created_at\`      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`),
+      INDEX \`idx_lg_user\` (\`tenant_id\`, \`user_id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   // Create faith_pastoral_registers as the rename of faith_language_preferences
   await conn.query(`
     CREATE TABLE IF NOT EXISTS \`faith_pastoral_registers\` (
@@ -328,6 +391,34 @@ async function applyColumnMigrations(conn) {
            \`preferred_terminology\`, \`updated_at\`
     FROM \`faith_language_preferences\`
   `).catch(() => { /* old table may not exist in fresh installs — ignore */ });
+
+  // ── Phase 2: Faith-integrated clinical fields on progress notes ──────────
+  await addColumnIfMissing('progress_notes', 'scripture_reference', 'VARCHAR(255) NULL');
+  await addColumnIfMissing('progress_notes', 'spiritual_practices', 'JSON NULL');
+
+  // ── Phase 3: Cosign workflow columns on progress notes ────────────────────
+  await addColumnIfMissing('progress_notes', 'cosign_status', "VARCHAR(32) NULL DEFAULT NULL COMMENT 'pending_review|reviewed|rejected'");
+  await addColumnIfMissing('progress_notes', 'cosign_requested_by', 'VARCHAR(64) NULL');
+  await addColumnIfMissing('progress_notes', 'cosign_requested_at', 'DATETIME NULL');
+  await addColumnIfMissing('progress_notes', 'cosigned_by', 'VARCHAR(64) NULL');
+  await addColumnIfMissing('progress_notes', 'cosigned_at', 'DATETIME NULL');
+  await addColumnIfMissing('progress_notes', 'cosign_comments_enc', 'TEXT NULL');
+
+  // ── Phase 3: Supervisor assignments table ────────────────────────────────
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS \`supervisor_assignments\` (
+      \`id\`            CHAR(36)     NOT NULL,
+      \`tenant_id\`     VARCHAR(64)  NOT NULL,
+      \`supervisor_id\` VARCHAR(64)  NOT NULL,
+      \`intern_id\`     VARCHAR(64)  NOT NULL,
+      \`practice_id\`   VARCHAR(64)  NOT NULL,
+      \`assigned_at\`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`),
+      UNIQUE KEY \`uq_sup_intern\` (\`supervisor_id\`, \`intern_id\`, \`practice_id\`),
+      INDEX \`idx_sa_tenant_intern\` (\`tenant_id\`, \`intern_id\`),
+      INDEX \`idx_sa_supervisor\` (\`tenant_id\`, \`supervisor_id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
 
   console.log('Column migrations done.');
 }

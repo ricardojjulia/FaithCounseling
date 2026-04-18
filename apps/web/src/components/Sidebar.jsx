@@ -17,6 +17,7 @@ function getNavItemsForRole(role) {
       { key: 'scheduling', labelKey: 'nav.scheduling' },
       { key: 'clinical', labelKey: 'nav.charting' },
       { key: 'tasks', labelKey: 'nav.tasks' },
+      { key: 'time-tracking', labelKey: 'nav.timeTracking' },
       { key: 'documents', labelKey: 'nav.documents' },
     ];
   }

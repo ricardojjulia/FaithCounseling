@@ -2,7 +2,74 @@
 
 <!-- markdownlint-disable MD024 -->
 
-## April 11, 2026 — Bundle and Locale Status Sync
+## April 17, 2026 — Licensure progress bars on Counselor Home + PHI-safe CSV export
+
+### feat: wire LicensureProgressBars into CounselorHomePage and add PHI-safe CSV export
+
+**Date:** April 17, 2026
+**Affected area:** `apps/web/src/components/CounselorHomePage.jsx`, `apps/web/src/components/TimeTracking/TimeTrackingPage.jsx`, `apps/api/src/index.js`
+
+**What changed:**
+- **Counselor Home dashboard:** `LicensureProgressBars` component is now rendered below the main dashboard panels so counselors see live licensure-hours progress without navigating to the Time Tracking page.
+- **PHI-safe CSV export:** `GET /api/v1/time-entries/export` returns a downloadable CSV containing only `entry_id`, `date`, `category`, and `duration_minutes` — no descriptions, no client identifiers, no free-text fields. The endpoint is auth-gated, role-scoped, and emits a `time_entry.export` audit event.
+- **Export button:** `TimeTrackingPage` now includes an "Export CSV" button (respects the current category filter).
+
+---
+
+## April 17, 2026 — Telehealth Phase 2+3, Supervision Cosign, Time Tracking
+
+### feat: faith-integrated clinical notes, supervision cosign workflow, licensure time tracking
+
+**Date:** April 17, 2026
+**Affected area:** `apps/api/src/db/migrate.js`, `apps/api/src/db/queries/clinical.js`, `apps/api/src/db/queries/timeTracking.js` (new), `apps/api/src/index.js`, `apps/web/src/components/ClinicalChart/tabs/SessionNotesTab.jsx`, `apps/web/src/components/TimeTracking/` (new), `apps/web/src/App.jsx`, `apps/web/src/components/Sidebar.jsx`, `packages/domain/src/index.js`, `packages/i18n/src/index.js`
+
+**What changed:**
+- **Telehealth Phase 2 (Faith-integrated clinical notes):** Session notes now include scripture reference and spiritual practices checkboxes (prayer journaling, scripture reading, church attendance, small group, spiritual direction, fasting, sabbath practice).
+- **Telehealth Phase 3 (Supervision cosign):** Intern counselors can submit notes for supervisor review; supervisors can cosign or return notes for revision. `supervisor_assignments` table tracks supervision relationships. Audit ledger records all cosign events.
+- **Time Tracking:** New `TimeTrackingPage` with Quick Log modal for direct clinical, indirect/admin, individual/group supervision, CE/spiritual formation, and ministry coordination hours. Summary cards and category filter. Delete unlocked entries.
+- **Licensure Progress Bars:** `LicensureProgressBars` component fetches goals and time-entry summary and renders per-goal progress bars with hours achieved/target.
+- **Supervision appointment type:** `supervision` added to domain `appointmentTypes`.
+- **Form catalog:** `FaithIntegratedAdultIntake` and `PreMaritalChristianIntake` templates added.
+- **Counselor nav:** `Time Tracking` nav link added to counselor sidebar.
+- **i18n:** `nav.timeTracking`, `chart.note.scriptureReference`, `chart.note.spiritualPractices`, `chart.note.submitForReview`, cosign status keys added.
+
+**Migration steps:** Auto-applied on next API startup — idempotent migrations add columns and tables only if missing.
+
+---
+
+## April 17, 2026 — JaaS Telehealth Video Sessions (Phase 1)
+
+### feat: integrated JaaS telehealth video sessions with JWT auth, audit ledger, and scheduling UI
+
+**Date:** April 17, 2026
+**Affected area:** `apps/api/src/db/migrate.js`, `apps/api/src/db/queries/appointments.js`, `apps/api/src/index.js`, `apps/api/src/lib/i18n-store.js`, `apps/web/src/lib/clientApi.js`, `apps/web/src/components/VideoSession/`, `apps/web/src/components/SchedulingPage.jsx`, `packages/i18n/src/index.js`, `.env.example`
+
+Phase 1 of the telehealth integration. Remote appointments now show a **Join Video Session** button that opens an embedded JaaS/Jitsi meeting directly in the scheduling page.
+
+**What changed:**
+
+- **DB migration:** Added `video_room_id VARCHAR(255) NULL` column to `appointments` table (idempotent `addColumnIfMissing`)
+- **DB migration:** Added `time_entries` and `licensure_goals` tables for the future time-tracking feature
+- **appointments.js:** `APPOINTMENT_SELECT` and `rowToAppointment` now include `video_room_id`; added `updateAppointmentVideoRoom(id, tenantId, videoRoomId)` export
+- **index.js:** Added `POST /v1/appointments/:id/video-session` route and `handleVideoSession` handler — generates a stable opaque room name, signs an RS256 JWT using `node:crypto` (`createSign('RSA-SHA256')`), writes a `session.video_started` audit event, returns `{ jwt, domain, roomName, appointmentId }`
+- **index.js:** Route dispatch places video-session sub-route check before the generic `startsWith('/v1/appointments/')` catch-all
+- **clientApi.js:** Added `startVideoSession(appointmentId)` export
+- **VideoSession/useJitsiSession.js:** Custom React hook — dynamically loads JaaS External API script, instantiates `JitsiMeetExternalAPI`, and exposes lifecycle callbacks
+- **VideoSession/VideoSessionModal.jsx:** Mantine Modal wrapping the Jitsi container with pre-launch CTA, spinner, and error states
+- **SchedulingPage.jsx:** Added "Join Video" button for remote appointments; wired `VideoSessionModal`
+- **i18n:** Added 5 `telehealth.*` keys to `packages/i18n/src/index.js` (`join_session`, `leave_session`, `session_started`, `session_ended`, `error_joining`); added `telehealth` namespace to `i18n-store.js`
+- **.env.example:** Added `JITSI_APP_ID`, `JITSI_API_KEY_ID`, `JITSI_PRIVATE_KEY_BASE64`, `JITSI_DOMAIN`, `VITE_JITSI_DOMAIN`
+
+**Privacy and security controls:**
+
+- JWT `user.name` is `'Counselor'` or `'Client'` only — no PII in JWT claims
+- Room name is a random 32-hex token with no semantic content
+- Private key is only loaded from environment; never committed
+- Audit event `session.video_started` is written to the ledger on every session start
+
+**Why:** Platform differentiation via integrated telehealth; enables faith-based practices to conduct HIPAA-conscious video sessions without leaving the platform.
+
+
 
 ### fix: commit referenced public web bundle artifacts and publish the latest es-MX locale status
 

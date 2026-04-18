@@ -22,6 +22,7 @@ export const appointmentTypes = Object.freeze([
   'couples_therapy',
   'family_therapy',
   'group_therapy',
+  'supervision',
 ]);
 
 export const clientStatuses = Object.freeze([

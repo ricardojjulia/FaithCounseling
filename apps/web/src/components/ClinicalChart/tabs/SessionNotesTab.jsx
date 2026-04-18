@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Stack, Paper, Group, Title, Text, Button, Textarea, Select, Badge,
-  Loader, Alert, Divider,
+  Loader, Alert, Divider, TextInput, Checkbox,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useI18n } from '../../../lib/i18nContext.jsx';
@@ -21,7 +21,18 @@ const APPT_TYPE_LABELS = {
   couples_therapy:     'Couples Therapy',
   family_therapy:      'Family Therapy',
   group_therapy:       'Group Therapy',
+  supervision:         'Supervision',
 };
+
+const SPIRITUAL_PRACTICE_OPTIONS = [
+  { value: 'prayer_journaling',    label: 'Prayer / Journaling' },
+  { value: 'scripture_reading',    label: 'Scripture Reading' },
+  { value: 'church_attendance',    label: 'Church Attendance' },
+  { value: 'small_group',          label: 'Small Group' },
+  { value: 'spiritual_direction',  label: 'Spiritual Direction' },
+  { value: 'fasting',              label: 'Fasting' },
+  { value: 'sabbath_practice',     label: 'Sabbath Practice' },
+];
 
 const NOTE_TYPE_COLORS = {
   intake_note:           'violet',
@@ -147,14 +158,50 @@ function SessionTimeline({ appointments, notesByAppt }) {
   );
 }
 
-function NoteCard({ note, appointment, onSign, onUpdate }) {
+function FaithFieldsView({ note }) {
+  if (!note.scriptureReference && !(note.spiritualPractices?.length)) return null;
+  return (
+    <Stack gap={4} mt="xs">
+      {note.scriptureReference && (
+        <Text size="xs"><Text span fw={600}>Scripture: </Text>{note.scriptureReference}</Text>
+      )}
+      {note.spiritualPractices?.length > 0 && (
+        <Text size="xs">
+          <Text span fw={600}>Spiritual practices: </Text>
+          {note.spiritualPractices
+            .map((v) => SPIRITUAL_PRACTICE_OPTIONS.find((o) => o.value === v)?.label ?? v)
+            .join(', ')}
+        </Text>
+      )}
+    </Stack>
+  );
+}
+
+function CosignBadge({ note }) {
+  if (!note.cosignStatus) return null;
+  const colors = { pending_review: 'orange', reviewed: 'teal', rejected: 'red' };
+  const labels = { pending_review: 'Pending Cosign', reviewed: 'Cosigned', rejected: 'Returned' };
+  return (
+    <Badge color={colors[note.cosignStatus] ?? 'gray'} variant="light" size="xs">
+      {labels[note.cosignStatus] ?? note.cosignStatus}
+    </Badge>
+  );
+}
+
+function NoteCard({ note, appointment, onSign, onUpdate, onSubmitForReview, onCosign, currentUser }) {
   const { t } = useI18n();
+  const role = currentUser?.role;
   const [editing, setEditing] = useState(false);
+  const [cosignModal, setCosignModal] = useState(false);
+  const [cosignComments, setCosignComments] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
   const [draft, setDraft] = useState({
     summary: note.summary ?? '',
     interventions: Array.isArray(note.interventions)
       ? note.interventions.join('\n')
       : (note.interventions ?? ''),
+    scriptureReference: note.scriptureReference ?? '',
+    spiritualPractices: note.spiritualPractices ?? [],
   });
   const [saving, setSaving] = useState(false);
   const [signing, setSigning] = useState(false);
@@ -165,6 +212,8 @@ function NoteCard({ note, appointment, onSign, onUpdate }) {
       await onUpdate(note.id, {
         summary: draft.summary,
         interventions: draft.interventions.split('\n').map((s) => s.trim()).filter(Boolean),
+        scriptureReference: draft.scriptureReference.trim() || null,
+        spiritualPractices: draft.spiritualPractices.length ? draft.spiritualPractices : null,
       });
       setEditing(false);
       notifications.show({ title: 'Saved', message: 'Note updated.', color: 'green' });
@@ -172,6 +221,32 @@ function NoteCard({ note, appointment, onSign, onUpdate }) {
       notifications.show({ title: 'Error', message: err.message, color: 'red' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSubmitForReview = async () => {
+    setActionLoading(true);
+    try {
+      await onSubmitForReview(note.id);
+      notifications.show({ title: 'Submitted', message: 'Note submitted for supervisor review.', color: 'blue' });
+    } catch (err) {
+      notifications.show({ title: 'Error', message: err.message, color: 'red' });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCosignAction = async (action) => {
+    setActionLoading(true);
+    try {
+      await onCosign(note.id, action, cosignComments);
+      setCosignModal(false);
+      setCosignComments('');
+      notifications.show({ title: action === 'reject' ? 'Returned' : 'Cosigned', message: action === 'reject' ? 'Note returned with comments.' : 'Note cosigned successfully.', color: action === 'reject' ? 'orange' : 'teal' });
+    } catch (err) {
+      notifications.show({ title: 'Error', message: err.message, color: 'red' });
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -204,6 +279,7 @@ function NoteCard({ note, appointment, onSign, onUpdate }) {
           {note.locked
             ? <Badge color="teal" variant="filled" size="xs">{t('chart.note.locked')}</Badge>
             : <Badge color="yellow" variant="light" size="xs">{t('chart.note.draft')}</Badge>}
+          <CosignBadge note={note} />
         </Group>
         <Text size="xs" c="dimmed">{formatDateTime(note.createdAt)}</Text>
       </Group>
@@ -228,9 +304,13 @@ function NoteCard({ note, appointment, onSign, onUpdate }) {
               </Stack>
             </>
           )}
+          <FaithFieldsView note={note} />
           <Text size="xs" c="dimmed" mt="sm">
             {t('chart.note.signedOn')}: {formatDateTime(note.signedAt)}{note.signedBy ? ` · ${note.signedBy}` : ''}
           </Text>
+          {note.cosignStatus === 'reviewed' && (
+            <Text size="xs" c="teal" mt={4}>Cosigned by {note.cosignedBy ?? '—'} · {formatDateTime(note.cosignedAt)}</Text>
+          )}
         </>
       ) : editing ? (
         <Stack gap="sm">
@@ -250,6 +330,31 @@ function NoteCard({ note, appointment, onSign, onUpdate }) {
             minRows={2}
             autosize
           />
+          <TextInput
+            label="Scripture Reference"
+            placeholder="e.g. John 3:16"
+            maxLength={255}
+            value={draft.scriptureReference}
+            onChange={(e) => setDraft((d) => ({ ...d, scriptureReference: e.currentTarget.value }))}
+          />
+          <div>
+            <Text size="sm" fw={500} mb={4}>Spiritual Practices</Text>
+            <Stack gap={4}>
+              {SPIRITUAL_PRACTICE_OPTIONS.map((opt) => (
+                <Checkbox
+                  key={opt.value}
+                  label={opt.label}
+                  checked={draft.spiritualPractices.includes(opt.value)}
+                  onChange={(e) => setDraft((d) => ({
+                    ...d,
+                    spiritualPractices: e.currentTarget.checked
+                      ? [...d.spiritualPractices, opt.value]
+                      : d.spiritualPractices.filter((v) => v !== opt.value),
+                  }))}
+                />
+              ))}
+            </Stack>
+          </div>
           <Group gap="xs">
             <Button size="xs" onClick={handleSave} loading={saving}>{t('chart.note.saveAsDraft')}</Button>
             <Button size="xs" variant="default" onClick={() => setEditing(false)}>Cancel</Button>
@@ -266,11 +371,53 @@ function NoteCard({ note, appointment, onSign, onUpdate }) {
               </Stack>
             </>
           )}
+          <FaithFieldsView note={note} />
+          {note.cosignStatus === 'rejected' && note.cosignComments && (
+            <Alert color="orange" title="Returned by supervisor" mt="xs" radius="md">
+              {note.cosignComments}
+            </Alert>
+          )}
           <Group gap="xs" mt="sm">
             <Button size="xs" variant="light" onClick={() => setEditing(true)}>Edit</Button>
-            <Button size="xs" color="teal" variant="filled" onClick={handleSign} loading={signing}>
-              {t('chart.note.signAndLock')}
-            </Button>
+            {role === 'intern' ? (
+              note.cosignStatus === 'pending_review' ? (
+                <Badge color="orange" variant="light" size="sm">Pending Supervisor Review</Badge>
+              ) : (
+                <Button size="xs" color="indigo" variant="filled" onClick={handleSubmitForReview} loading={actionLoading}>
+                  Submit for Supervisor Review
+                </Button>
+              )
+            ) : (
+              <Button size="xs" color="teal" variant="filled" onClick={handleSign} loading={signing}>
+                {t('chart.note.signAndLock')}
+              </Button>
+            )}
+            {['counselor', 'practice_admin', 'practice_owner'].includes(role) && note.cosignStatus === 'pending_review' && (
+              <>
+                {!cosignModal ? (
+                  <Button size="xs" color="teal" variant="outline" onClick={() => setCosignModal(true)}>
+                    Cosign / Review
+                  </Button>
+                ) : (
+                  <Paper withBorder radius="md" p="sm" mt="xs" style={{ width: '100%' }}>
+                    <Stack gap="sm">
+                      <Textarea
+                        label="Comments (optional)"
+                        value={cosignComments}
+                        onChange={(e) => setCosignComments(e.currentTarget.value)}
+                        minRows={2}
+                        autosize
+                      />
+                      <Group gap="xs">
+                        <Button size="xs" color="teal" loading={actionLoading} onClick={() => handleCosignAction('reviewed')}>Cosign</Button>
+                        <Button size="xs" color="orange" variant="outline" loading={actionLoading} onClick={() => handleCosignAction('reject')}>Return</Button>
+                        <Button size="xs" variant="default" onClick={() => setCosignModal(false)}>Cancel</Button>
+                      </Group>
+                    </Stack>
+                  </Paper>
+                )}
+              </>
+            )}
           </Group>
         </>
       )}
@@ -285,6 +432,7 @@ export default function SessionNotesTab({
   initialAppointmentAt = '',
   handoffKey = 0,
 }) {
+  // eslint-disable-next-line no-unused-vars
   const { t } = useI18n();
   const [appointments, setAppointments] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -299,6 +447,8 @@ export default function SessionNotesTab({
     noteType: 'progress_note',
     summary: '',
     interventions: '',
+    scriptureReference: '',
+    spiritualPractices: [],
   });
 
   const loadAppointments = useCallback(async () => {
@@ -346,6 +496,8 @@ export default function SessionNotesTab({
       noteType: 'progress_note',
       summary: '',
       interventions: '',
+      scriptureReference: '',
+      spiritualPractices: [],
     });
   }, [clientId]);
 
@@ -390,10 +542,12 @@ export default function SessionNotesTab({
           noteType: draft.noteType,
           summary: draft.summary.trim(),
           interventions: draft.interventions.split('\n').map((s) => s.trim()).filter(Boolean),
+          scriptureReference: draft.scriptureReference.trim() || null,
+          spiritualPractices: draft.spiritualPractices.length ? draft.spiritualPractices : null,
           locked: false,
         }),
       });
-      setDraft({ appointmentId: '', noteType: 'progress_note', summary: '', interventions: '' });
+      setDraft({ appointmentId: '', noteType: 'progress_note', summary: '', interventions: '', scriptureReference: '', spiritualPractices: [] });
       setComposerOpen(false);
       await loadNotes();
       notifications.show({ title: 'Saved', message: 'Draft note created.', color: 'green' });
@@ -411,6 +565,24 @@ export default function SessionNotesTab({
       method: 'PATCH',
       headers: csrfHeaders(),
       body: JSON.stringify(fields),
+    });
+    await loadNotes();
+  };
+
+  const handleSubmitForReview = async (noteId) => {
+    await apiFetch(`/api/v1/clients/${encodeURIComponent(clientId)}/progress-notes/${encodeURIComponent(noteId)}/submit-for-review`, {
+      method: 'POST',
+      headers: csrfHeaders(),
+      body: JSON.stringify({}),
+    });
+    await loadNotes();
+  };
+
+  const handleCosign = async (noteId, action, comments) => {
+    await apiFetch(`/api/v1/clients/${encodeURIComponent(clientId)}/progress-notes/${encodeURIComponent(noteId)}/cosign`, {
+      method: 'POST',
+      headers: csrfHeaders(),
+      body: JSON.stringify({ action, comments }),
     });
     await loadNotes();
   };
@@ -502,6 +674,31 @@ export default function SessionNotesTab({
               minRows={2}
               autosize
             />
+            <TextInput
+              label="Scripture Reference"
+              placeholder="e.g. Philippians 4:6-7"
+              maxLength={255}
+              value={draft.scriptureReference}
+              onChange={(e) => setDraft((d) => ({ ...d, scriptureReference: e.currentTarget.value }))}
+            />
+            <div>
+              <Text size="sm" fw={500} mb={4}>Spiritual Practices</Text>
+              <Stack gap={4}>
+                {SPIRITUAL_PRACTICE_OPTIONS.map((opt) => (
+                  <Checkbox
+                    key={opt.value}
+                    label={opt.label}
+                    checked={draft.spiritualPractices.includes(opt.value)}
+                    onChange={(e) => setDraft((d) => ({
+                      ...d,
+                      spiritualPractices: e.currentTarget.checked
+                        ? [...d.spiritualPractices, opt.value]
+                        : d.spiritualPractices.filter((v) => v !== opt.value),
+                    }))}
+                  />
+                ))}
+              </Stack>
+            </div>
             <Button onClick={handleCreate} loading={submitting} disabled={!draft.appointmentId}>
               {t('chart.note.saveAsDraft')}
             </Button>
@@ -537,6 +734,9 @@ export default function SessionNotesTab({
                     appointment={appt}
                     onSign={handleSign}
                     onUpdate={handleUpdate}
+                    onSubmitForReview={handleSubmitForReview}
+                    onCosign={handleCosign}
+                    currentUser={currentUser}
                   />
                 ))}
               </Stack>
@@ -555,6 +755,9 @@ export default function SessionNotesTab({
                     appointment={null}
                     onSign={handleSign}
                     onUpdate={handleUpdate}
+                    onSubmitForReview={handleSubmitForReview}
+                    onCosign={handleCosign}
+                    currentUser={currentUser}
                   />
                 ))}
               </Stack>
