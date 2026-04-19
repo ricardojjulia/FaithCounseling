@@ -25,8 +25,8 @@ function formatBytes(bytes) {
 }
 
 const STATUS_COLOR = {
-  requested: 'blue', pending: 'yellow', approved: 'green',
-  scheduled: 'teal', declined: 'red', cancelled: 'gray',
+  requested: 'blue', approved: 'green',
+  scheduled: 'teal', declined: 'red',
 };
 
 // ── Message Threads ──────────────────────────────────────────────────────────
