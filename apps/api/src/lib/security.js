@@ -132,6 +132,8 @@ const ROUTE_RATE_LIMITS = [
   { pattern: /^\/v1\/portal\/data-rights$/, maxRequests: 5, windowMs: 60_000 },
   // Client record exports (clinical bundles) are high-sensitivity and low-volume by design.
   { pattern: /^\/v1\/clients\/[^/]+\/export$/, maxRequests: 3, windowMs: 60_000 },
+  // Video join token exchange — public endpoint; tight limit to prevent enumeration.
+  { pattern: /^\/v1\/video\/join\//, maxRequests: 10, windowMs: 60_000 },
 ];
 
 const rateLimitStore = new Map(); // ip -> { count, windowStart }
@@ -250,6 +252,8 @@ export function enforceRbac(request, response, route, session = null) {
   if (route === '/v1/auth/portal-password-reset') return false;
   if (route === '/v1/portal/public-requests' && request.method === 'POST') return false;
   if (route === '/v1/portal/public-config' && request.method === 'GET') return false;
+  // Public video join token exchange — client needs no account to join a session.
+  if (route === '/v1/video/join/:token' && request.method === 'GET') return false;
 
   // Derive role: prefer verified session; fall back to header in dev only.
   let role;

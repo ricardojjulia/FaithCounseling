@@ -2,6 +2,23 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 19, 2026 — Client video join link feature
+
+### feat: Send client a join link for video sessions
+
+**Date:** April 19, 2026
+**Affected area:** `apps/api/src/index.js`, `apps/api/src/db/schema.sql`, `apps/api/src/lib/security.js`, `apps/web/src/components/VideoSession/VideoSessionModal.jsx`, `apps/web/src/lib/clientApi.js`, `apps/web/server.js`, `apps/web/public/join.html`, `apps/web/public/join.js`
+
+- **`video_join_tokens` table**: New MySQL table stores opaque 256-bit join tokens. Each token records tenant, appointment/client, the full JaaS room name, domain, and a 2-hour expiry. The JWT itself is never stored — it is regenerated fresh on exchange using server-side JaaS credentials.
+- **`POST /v1/appointments/:id/client-join-token`** (staff only): Generates a join token for a scheduled appointment and returns a `joinUrl` the counselor can share.
+- **`POST /v1/video/adhoc-client-join-token`** (staff only): Same as above for ad-hoc rooms — accepts `{ clientId, roomName }`.
+- **`GET /v1/video/join/:token`** (public, no auth): Exchanges an opaque token for a client-scoped (non-moderator) JaaS JWT. Tokens expire after 2 hours and include a tight rate limit (10 req/min per IP) to prevent enumeration.
+- **`/join` page**: New public HTML page at `/join?token=<token>`. Client clicks "Join Video Session", the page exchanges the token for a JWT, dynamically loads the 8x8.vc external API, and launches Jitsi in full-screen mode. No login required.
+- **VideoSessionModal UI**: "Get Client Join Link" button added in the pre-launch state and as a compact bar during live sessions. Shows the join URL, a clipboard copy button, and an "Open in email client" link that pre-populates a `mailto:` with the session URL (no SMTP server required).
+- **Security**: Join token is a 64-hex-char opaque string (256-bit entropy). No PHI in tokens or URLs. Client JWT has `moderator: false`. Audit events emitted on token creation (`session.video_join_token.created`) and for ad-hoc tokens (`session.video_join_token.adhoc_created`). Public token exchange endpoint is RBAC-exempt via `enforceRbac`.
+
+---
+
 ## April 18, 2026 — Jitsi "Start Session" button + ad-hoc emergency meeting
 
 ### feat: Start Session button on all active appointments and ad-hoc emergency meeting launcher

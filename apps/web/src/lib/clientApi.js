@@ -735,6 +735,30 @@ export async function startAdHocVideoSession(clientId) {
   });
 }
 
+/**
+ * Generate a client join link for a scheduled appointment.
+ * Returns { joinUrl, expiresAt }.
+ */
+export async function generateClientJoinToken(appointmentId) {
+  return apiFetch(`/api/v1/appointments/${appointmentId}/client-join-token`, {
+    method: 'POST',
+    headers: csrfHeaders(),
+  });
+}
+
+/**
+ * Generate a client join link for an ad-hoc session.
+ * roomName is the full "appId/opaqueId" returned by startAdHocVideoSession.
+ * Returns { joinUrl, expiresAt }.
+ */
+export async function generateAdHocClientJoinToken(clientId, roomName) {
+  return apiFetch('/api/v1/video/adhoc-client-join-token', {
+    method: 'POST',
+    headers: csrfHeaders(),
+    body: JSON.stringify({ clientId, roomName }),
+  });
+}
+
 // ── Phase 4 — ScheduleOps ─────────────────────────────────────────────────
 
 export function fetchAvailabilityOverrides({ staffId, from, to } = {}) {

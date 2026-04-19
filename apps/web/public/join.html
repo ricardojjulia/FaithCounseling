@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Join Video Session | FaithCounseling</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      :root {
+        --join-brand: #1f7a8c;
+        --join-brand-deep: #165d69;
+      }
+      body.join-page {
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #f8f4ec 0%, #eef5f8 55%, #faf8f2 100%);
+        font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+        color: #1f2933;
+        display: flex;
+        flex-direction: column;
+      }
+      .join-shell {
+        max-width: 680px;
+        margin: 0 auto;
+        padding: 40px 20px 48px;
+        width: 100%;
+      }
+      .join-card {
+        background: #ffffffcc;
+        border: 1px solid #d8e0e8;
+        border-radius: 20px;
+        padding: 32px;
+        backdrop-filter: blur(4px);
+        text-align: center;
+      }
+      .join-logo-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      .join-brand-name {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--join-brand);
+      }
+      .join-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin: 0 0 8px;
+        color: #1a2e38;
+      }
+      .join-subtitle {
+        font-size: 0.95rem;
+        color: #5a7080;
+        margin: 0 0 28px;
+      }
+      .join-btn {
+        display: inline-block;
+        background: var(--join-brand);
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        padding: 14px 36px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+        text-decoration: none;
+      }
+      .join-btn:hover { background: var(--join-brand-deep); }
+      .join-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .join-status {
+        margin-top: 20px;
+        font-size: 0.9rem;
+        color: #5a7080;
+      }
+      .join-error {
+        color: #c0392b;
+        background: #fdf0ee;
+        border: 1px solid #f5c6c0;
+        border-radius: 10px;
+        padding: 14px 20px;
+        margin-top: 20px;
+        font-size: 0.95rem;
+      }
+      #video-frame {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        background: #000;
+        display: none;
+        z-index: 9999;
+      }
+      .join-footer {
+        margin-top: 28px;
+        font-size: 0.8rem;
+        color: #8a9baa;
+      }
+    </style>
+  </head>
+  <body class="join-page">
+    <div class="join-shell">
+      <div class="join-card" id="join-card">
+        <div class="join-logo-row">
+          <span class="join-brand-name">FaithCounseling</span>
+        </div>
+        <h1 class="join-title">Join Your Video Session</h1>
+        <p class="join-subtitle">
+          Your counselor has shared this link with you.<br />
+          Click the button below when you're ready to connect.
+        </p>
+        <button class="join-btn" id="join-btn" onclick="startJoin()" disabled>
+          Loading…
+        </button>
+        <div class="join-status" id="join-status">Verifying your session link…</div>
+        <div class="join-error" id="join-error" style="display:none;"></div>
+        <div class="join-footer">
+          This link is private and will expire after 2 hours.<br />
+          If you have trouble connecting, contact your counselor.
+        </div>
+      </div>
+    </div>
+
+    <!-- Full-screen Jitsi container (shown after join button is clicked) -->
+    <div id="video-frame"></div>
+
+    <script src="/join.js" defer></script>
+  </body>
+</html>

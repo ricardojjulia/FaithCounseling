@@ -1447,3 +1447,25 @@ CREATE TABLE IF NOT EXISTS workflow_recommendation_states (
 -- ─── Clients (extended) ───────────────────────────────────────────────────────
 -- primary_counselor_id is included in the CREATE TABLE above for fresh installs.
 -- Existing installs: migrate.js handles the ALTER TABLE via INFORMATION_SCHEMA check.
+
+-- ─── Video join tokens ────────────────────────────────────────────────────────
+-- Opaque one-time tokens that let a client join a video session without
+-- a staff login.  The JWT is NOT stored here — it is regenerated on exchange
+-- using the JaaS credentials already held by the server.  Tokens expire after
+-- 2 hours, matching the JWT lifetime.  The full room_name (appId/opaqueId) is
+-- stored so it can be reproduced exactly when issuing the client-scoped JWT.
+CREATE TABLE IF NOT EXISTS `video_join_tokens` (
+  `id`             VARCHAR(64)   NOT NULL,
+  `tenant_id`      VARCHAR(64)   NOT NULL,
+  `appointment_id` VARCHAR(64)   NULL,
+  `client_id`      VARCHAR(64)   NULL,
+  `room_name`      VARCHAR(512)  NOT NULL,
+  `domain`         VARCHAR(128)  NOT NULL DEFAULT '8x8.vc',
+  `app_id`         VARCHAR(255)  NULL,
+  `api_key_id`     VARCHAR(255)  NULL,
+  `expires_at`     DATETIME      NOT NULL,
+  `created_at`     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_vjt_tenant_expires` (`tenant_id`, `expires_at`),
+  INDEX `idx_vjt_expires` (`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

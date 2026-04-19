@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { Alert, Button, Loader, Modal, Stack, Text } from '@mantine/core';
-import { startVideoSession, startAdHocVideoSession } from '../../lib/clientApi.js';
+import { Alert, Anchor, Button, CopyButton, Group, Loader, Modal, Stack, Text, TextInput, Tooltip } from '@mantine/core';
+import { startVideoSession, startAdHocVideoSession, generateClientJoinToken, generateAdHocClientJoinToken } from '../../lib/clientApi.js';
 import { useJitsiSession } from './useJitsiSession.js';
 
 /**
@@ -19,9 +19,16 @@ export function VideoSessionModal({ opened, onClose, appointmentId, clientId, cl
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState(null);
 
+  // Client join link state
+  const [joinUrl, setJoinUrl]           = useState(null);
+  const [joinUrlLoading, setJoinUrlLoading] = useState(false);
+  const [joinUrlError, setJoinUrlError] = useState(null);
+
   const handleClose = useCallback(() => {
     setSessionData(null);
     setStartError(null);
+    setJoinUrl(null);
+    setJoinUrlError(null);
     onClose();
   }, [onClose]);
 
@@ -50,6 +57,35 @@ export function VideoSessionModal({ opened, onClose, appointmentId, clientId, cl
     }
   }, [appointmentId, clientId, starting, sessionData]);
 
+  // Generate a client join link (separate from counselor session).
+  const handleGetClientLink = useCallback(async () => {
+    if (joinUrlLoading || joinUrl) return;
+    setJoinUrlLoading(true);
+    setJoinUrlError(null);
+    try {
+      let result;
+      if (appointmentId) {
+        result = await generateClientJoinToken(appointmentId);
+      } else {
+        // Ad-hoc: we need the room name from an already-started session, or we
+        // start the session first.  If session hasn't started yet, start it now.
+        let data = sessionData;
+        if (!data) {
+          setStarting(true);
+          data = await startAdHocVideoSession(clientId);
+          setSessionData(data);
+          setStarting(false);
+        }
+        result = await generateAdHocClientJoinToken(clientId, data.roomName);
+      }
+      setJoinUrl(result.joinUrl);
+    } catch (err) {
+      setJoinUrlError(err.message ?? 'Could not generate client link');
+    } finally {
+      setJoinUrlLoading(false);
+    }
+  }, [appointmentId, clientId, joinUrl, joinUrlLoading, sessionData]);
+
   return (
     <Modal
       opened={opened}
@@ -64,6 +100,54 @@ export function VideoSessionModal({ opened, onClose, appointmentId, clientId, cl
         {!sessionData && !starting && !startError && (
           <Stack align="center" justify="center" style={{ flex: 1 }} gap="md" p="xl">
             <Text>Ready to join the video session with {clientName ?? 'your client'}?</Text>
+
+            {/* Client join link section */}
+            <Stack gap="xs" style={{ width: '100%', maxWidth: 480 }}>
+              {!joinUrl && (
+                <Button
+                  variant="light"
+                  color="teal"
+                  size="sm"
+                  loading={joinUrlLoading}
+                  onClick={handleGetClientLink}
+                >
+                  Get Client Join Link
+                </Button>
+              )}
+              {joinUrlError && (
+                <Text c="red" fz="sm">{joinUrlError}</Text>
+              )}
+              {joinUrl && (
+                <Stack gap="xs">
+                  <Text fz="sm" fw={500}>Share this link with your client:</Text>
+                  <Group gap="xs" wrap="nowrap">
+                    <TextInput
+                      value={joinUrl}
+                      readOnly
+                      style={{ flex: 1 }}
+                      size="xs"
+                    />
+                    <CopyButton value={joinUrl} timeout={2500}>
+                      {({ copied, copy }) => (
+                        <Tooltip label={copied ? 'Copied!' : 'Copy link'}>
+                          <Button size="xs" variant={copied ? 'filled' : 'default'} color={copied ? 'teal' : undefined} onClick={copy}>
+                            {copied ? 'Copied' : 'Copy'}
+                          </Button>
+                        </Tooltip>
+                      )}
+                    </CopyButton>
+                  </Group>
+                  <Anchor
+                    href={`mailto:?subject=Your%20Video%20Session%20Link&body=Please%20click%20the%20link%20below%20to%20join%20your%20session%3A%0A%0A${encodeURIComponent(joinUrl)}`}
+                    target="_blank"
+                    fz="sm"
+                  >
+                    Open in email client
+                  </Anchor>
+                </Stack>
+              )}
+            </Stack>
+
             <Button color="blue" size="md" onClick={handleStart}>
               {appointmentId ? 'Join Video Session' : 'Start Ad-hoc Session'}
             </Button>
@@ -97,6 +181,49 @@ export function VideoSessionModal({ opened, onClose, appointmentId, clientId, cl
             minHeight: 0,
           }}
         />
+
+        {/* Client link bar — shown during live session */}
+        {sessionData && !startError && !jitsiError && (
+          <Group
+            gap="xs"
+            p="xs"
+            style={{ borderTop: '1px solid var(--mantine-color-default-border, #dee2e6)', flexShrink: 0 }}
+            wrap="nowrap"
+          >
+            {!joinUrl ? (
+              <Button
+                size="xs"
+                variant="light"
+                color="teal"
+                loading={joinUrlLoading}
+                onClick={handleGetClientLink}
+              >
+                Get Client Join Link
+              </Button>
+            ) : (
+              <>
+                <TextInput value={joinUrl} readOnly size="xs" style={{ flex: 1 }} />
+                <CopyButton value={joinUrl} timeout={2500}>
+                  {({ copied, copy }) => (
+                    <Tooltip label={copied ? 'Copied!' : 'Copy client link'}>
+                      <Button size="xs" variant={copied ? 'filled' : 'default'} color={copied ? 'teal' : undefined} onClick={copy}>
+                        {copied ? 'Copied' : 'Copy'}
+                      </Button>
+                    </Tooltip>
+                  )}
+                </CopyButton>
+                <Anchor
+                  href={`mailto:?subject=Your%20Video%20Session%20Link&body=Please%20click%20the%20link%20below%20to%20join%20your%20session%3A%0A%0A${encodeURIComponent(joinUrl)}`}
+                  target="_blank"
+                  fz="xs"
+                >
+                  Email
+                </Anchor>
+              </>
+            )}
+            {joinUrlError && <Text c="red" fz="xs">{joinUrlError}</Text>}
+          </Group>
+        )}
 
         {/* Waiting for JaaS script to mount */}
         {sessionData && !loaded && !jitsiError && (

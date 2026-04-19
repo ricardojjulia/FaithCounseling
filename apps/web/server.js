@@ -31,7 +31,11 @@ function buildWebSecurityHeaders(requestUrl = '/') {
     'x-frame-options': 'DENY',
     'x-xss-protection': '0',
     'referrer-policy': 'strict-origin-when-cross-origin',
-    'permissions-policy': 'geolocation=(), microphone=(), camera=()',
+    // Allow camera/microphone for Jitsi video sessions (embedded 8x8.vc iframe).
+    // Geolocation remains blocked.
+    'permissions-policy': 'geolocation=()',
+    // Note: the Jitsi iframe also needs allowances — JitsiMeetExternalAPI
+    // sets the iframe allow attribute internally via the External API script.
     'content-security-policy': swaggerDocsRoute
       ? [
           "default-src 'self'",
@@ -46,18 +50,23 @@ function buildWebSecurityHeaders(requestUrl = '/') {
         ].join('; ')
       : [
           "default-src 'self'",
-          "script-src 'self'",
+          // 8x8.vc hosts the JaaS/Jitsi External API script and iframes
+          "script-src 'self' https://8x8.vc",
           "style-src 'self' 'unsafe-inline'",
-          "connect-src 'self'",
-          "img-src 'self' data:",
+          // Jitsi signaling (WebSocket + HTTPS) and WebRTC TURN/STUN
+          "connect-src 'self' https://8x8.vc wss://8x8.vc wss://*.8x8.vc https://*.8x8.vc",
+          "img-src 'self' data: https://8x8.vc https://*.8x8.vc",
           "font-src 'self' data:",
+          // Jitsi Meet loads inside an iframe served from 8x8.vc
+          "frame-src 'self' https://8x8.vc https://*.8x8.vc",
           "frame-ancestors 'none'",
           "base-uri 'self'",
           "form-action 'self'",
         ].join('; '),
     'strict-transport-security': 'max-age=63072000; includeSubDomains; preload',
     'cross-origin-opener-policy': 'same-origin',
-    'cross-origin-embedder-policy': swaggerDocsRoute ? 'unsafe-none' : 'require-corp',
+    // Jitsi requires cross-origin resources; relax COEP for app pages
+    'cross-origin-embedder-policy': swaggerDocsRoute ? 'unsafe-none' : 'unsafe-none',
   };
 }
 
@@ -187,6 +196,7 @@ function resolvePublicUrl(requestUrl) {
   if (pathname === '/about' || pathname === '/about/') return '/about.html';
   if (pathname === '/monitor' || pathname === '/monitor/') return '/monitor.html';
   if (pathname === '/portal' || pathname === '/portal/') return '/portal.html';
+  if (pathname === '/join' || pathname === '/join/') return '/join.html';
   return pathname;
 }
 

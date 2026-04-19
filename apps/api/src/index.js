@@ -249,6 +249,10 @@ const clients = [
   { id: 'c-005', tenantId: 'system', firstName: 'Olivia', lastName: 'Scott', status: 'discharged', faithBackground: 'Methodist', highTouchpoint: false, primaryCounselorId: 's-002' },
 ];
 
+// In-memory store for video join tokens when DB is not configured.
+// Key: opaque hex token; value: { tenantId, appointmentId, clientId, roomName, domain, appId, expiresAt }
+const inMemoryJoinTokens = new Map();
+
 const clientLifecycles = {
   'c-001': {
     tenantId: 'system',
@@ -1806,8 +1810,23 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname.endsWith('/client-join-token') && requestUrl.pathname.startsWith('/v1/appointments/')) {
+      await handleClientJoinToken(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/video/adhoc-session') {
       await handleAdHocVideoSession(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/video/adhoc-client-join-token') {
+      await handleAdHocClientJoinToken(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/video/join/')) {
+      await handleExchangeJoinToken(request, response, requestUrl);
       return;
     }
 
@@ -5578,7 +5597,12 @@ async function handleVideoSession(request, response, requestUrl, session) {
   if (!appId) appId = process.env.JITSI_APP_ID ?? null;
   if (!apiKeyId) apiKeyId = process.env.JITSI_API_KEY_ID ?? null;
   if (!privateKeyPem && process.env.JITSI_PRIVATE_KEY_BASE64) {
-    privateKeyPem = Buffer.from(process.env.JITSI_PRIVATE_KEY_BASE64, 'base64').toString();
+    // Strip Windows CRLF that may have been introduced when the key was
+    // originally generated on a Windows machine or copied from a Windows editor.
+    privateKeyPem = Buffer.from(process.env.JITSI_PRIVATE_KEY_BASE64, 'base64')
+      .toString()
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n');
   }
   if (process.env.JITSI_DOMAIN) domain = process.env.JITSI_DOMAIN;
 
@@ -5587,6 +5611,7 @@ async function handleVideoSession(request, response, requestUrl, session) {
     const now = Math.floor(Date.now() / 1000);
     // Display name: role label only — no PII/PHI in JWT claims.
     const displayName = isModerator ? 'Counselor' : 'Client';
+    // apiKeyId is already the full JaaS kid: "{appId}/{shortKeyId}"
     const header = Buffer.from(
       JSON.stringify({ alg: 'RS256', kid: apiKeyId, typ: 'JWT' }),
     ).toString('base64url');
@@ -5624,7 +5649,11 @@ async function handleVideoSession(request, response, requestUrl, session) {
 
     const signer = crypto.createSign('RSA-SHA256');
     signer.update(`${header}.${payload}`);
-    const signature = signer.sign(privateKeyPem, 'base64url');
+    // Get raw Buffer then encode as base64url (no padding, URL-safe chars).
+    // Avoid passing 'base64url' directly to .sign() as behaviour differs
+    // across Node versions — manual conversion is always correct.
+    const sigBuf = signer.sign(privateKeyPem);
+    const signature = sigBuf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     jwt = `${header}.${payload}.${signature}`;
   }
 
@@ -5696,13 +5725,17 @@ async function handleAdHocVideoSession(request, response, session) {
   if (!appId) appId = process.env.JITSI_APP_ID ?? null;
   if (!apiKeyId) apiKeyId = process.env.JITSI_API_KEY_ID ?? null;
   if (!privateKeyPem && process.env.JITSI_PRIVATE_KEY_BASE64) {
-    privateKeyPem = Buffer.from(process.env.JITSI_PRIVATE_KEY_BASE64, 'base64').toString();
+    privateKeyPem = Buffer.from(process.env.JITSI_PRIVATE_KEY_BASE64, 'base64')
+      .toString()
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n');
   }
   if (process.env.JITSI_DOMAIN) domain = process.env.JITSI_DOMAIN;
 
   let jwt = null;
   if (appId && apiKeyId && privateKeyPem) {
     const now = Math.floor(Date.now() / 1000);
+    // apiKeyId is already the full JaaS kid: "{appId}/{shortKeyId}"
     const header = Buffer.from(
       JSON.stringify({ alg: 'RS256', kid: apiKeyId, typ: 'JWT' }),
     ).toString('base64url');
@@ -5740,7 +5773,8 @@ async function handleAdHocVideoSession(request, response, session) {
 
     const signer = crypto.createSign('RSA-SHA256');
     signer.update(`${header}.${jwtPayload}`);
-    const signature = signer.sign(privateKeyPem, 'base64url');
+    const sigBuf = signer.sign(privateKeyPem);
+    const signature = sigBuf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     jwt = `${header}.${jwtPayload}.${signature}`;
   }
 
@@ -5753,6 +5787,273 @@ async function handleAdHocVideoSession(request, response, session) {
     domain,
     roomName: fullRoomName,
   });
+}
+
+// ── Shared helper: resolve JaaS config for a tenant ──────────────────────────
+// Returns { appId, apiKeyId, privateKeyPem, domain } from DB practice config or env vars.
+async function resolveJaasConfig(tenantId) {
+  let appId = null;
+  let apiKeyId = null;
+  let privateKeyPem = null;
+  let domain = '8x8.vc';
+
+  if (process.env.DB_NAME) {
+    const [practices] = await pool.query(
+      'SELECT jaas_app_id, jaas_api_key_id, jaas_private_key_enc, jaas_domain FROM practices WHERE tenant_id = ? LIMIT 1',
+      [tenantId],
+    );
+    if (practices.length) {
+      const p = practices[0];
+      if (p.jaas_app_id)    appId    = p.jaas_app_id;
+      if (p.jaas_api_key_id) apiKeyId = p.jaas_api_key_id;
+      if (p.jaas_domain)    domain   = p.jaas_domain;
+      if (p.jaas_private_key_enc) {
+        try { privateKeyPem = decrypt(p.jaas_private_key_enc); } catch { /* fall through */ }
+      }
+    }
+  }
+
+  if (!appId)    appId    = process.env.JITSI_APP_ID     ?? null;
+  if (!apiKeyId) apiKeyId = process.env.JITSI_API_KEY_ID ?? null;
+  if (!privateKeyPem && process.env.JITSI_PRIVATE_KEY_BASE64) {
+    privateKeyPem = Buffer.from(process.env.JITSI_PRIVATE_KEY_BASE64, 'base64')
+      .toString()
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n');
+  }
+  if (process.env.JITSI_DOMAIN) domain = process.env.JITSI_DOMAIN;
+
+  return { appId, apiKeyId, privateKeyPem, domain };
+}
+
+// ── Generate a signed RS256 JWT (non-moderator) using pre-resolved JaaS config ──
+function buildClientJwt({ appId, apiKeyId, privateKeyPem, roomName, tokenId }) {
+  if (!appId || !apiKeyId || !privateKeyPem) return null;
+  const now = Math.floor(Date.now() / 1000);
+  const header = Buffer.from(
+    JSON.stringify({ alg: 'RS256', kid: apiKeyId, typ: 'JWT' }),
+  ).toString('base64url');
+  const payload = Buffer.from(
+    JSON.stringify({
+      aud: 'jitsi',
+      iss: 'chat',
+      iat: now,
+      exp: now + 7200,
+      nbf: now - 5,
+      sub: appId,
+      context: {
+        features: {
+          livestreaming: false,
+          'file-upload': false,
+          'outbound-call': false,
+          'sip-outbound-call': false,
+          transcription: false,
+          'list-visitors': false,
+          recording: false,
+          flip: false,
+        },
+        user: {
+          'hidden-from-recorder': false,
+          moderator: false,
+          name: 'Client',
+          id: tokenId ?? 'client',
+          avatar: '',
+          email: '',
+        },
+      },
+      room: roomName,
+    }),
+  ).toString('base64url');
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(`${header}.${payload}`);
+  const sigBuf = signer.sign(privateKeyPem);
+  const signature = sigBuf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  return `${header}.${payload}.${signature}`;
+}
+
+/**
+ * POST /v1/appointments/:id/client-join-token
+ * Staff only.  Generates a short-lived opaque token that the client can use to
+ * join the session without a staff account.  Returns a join URL.
+ */
+async function handleClientJoinToken(request, response, requestUrl, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const appointmentId = requestUrl.pathname
+    .replace(/\/client-join-token$/, '')
+    .replace('/v1/appointments/', '');
+
+  const appointment = await resolveAuthorizedAppointment(
+    request, response, appointmentId, session, 'appointment.video_session.client_join_token',
+  );
+  if (!appointment) return;
+
+  const tenantId = callerTenant(request, session);
+
+  // Reuse or create the stable opaque room name.
+  let opaqueRoomName = appointment.videoRoomId;
+  if (!opaqueRoomName) {
+    opaqueRoomName = crypto.randomBytes(16).toString('hex');
+    if (process.env.DB_NAME) {
+      await updateAppointmentVideoRoom(appointmentId, tenantId, opaqueRoomName);
+    } else {
+      const appt = appointments.find((a) => a.id === appointmentId);
+      if (appt) appt.videoRoomId = opaqueRoomName;
+    }
+  }
+
+  const { appId, apiKeyId, domain } = await resolveJaasConfig(tenantId);
+  // Full room name stored in the token row — same format as counselor JWT uses.
+  const fullRoomName = appId ? `${appId}/${opaqueRoomName}` : opaqueRoomName;
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 hours
+
+  if (process.env.DB_NAME) {
+    await pool.query(
+      `INSERT INTO video_join_tokens
+         (id, tenant_id, appointment_id, room_name, domain, app_id, api_key_id, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [token, tenantId, appointmentId, fullRoomName, domain, appId, apiKeyId, expiresAt],
+    );
+  } else {
+    inMemoryJoinTokens.set(token, {
+      tenantId, appointmentId, clientId: null,
+      roomName: fullRoomName, domain, appId, apiKeyId, expiresAt,
+    });
+  }
+
+  const baseUrl = (process.env.APP_BASE_URL ?? '').replace(/\/$/, '')
+    || `http://127.0.0.1:${process.env.WEB_PORT ?? 3102}`;
+  const joinUrl = `${baseUrl}/join?token=${token}`;
+
+  await emitAudit(request, 'session.video_join_token.created', 'appointment', appointmentId, session);
+
+  writeJson(response, 200, { joinUrl, expiresAt: expiresAt.toISOString() });
+}
+
+/**
+ * POST /v1/video/adhoc-client-join-token
+ * Staff only.  Like handleClientJoinToken but for ad-hoc (non-appointment) rooms.
+ * Body: { clientId, roomName } where roomName is the full "appId/opaqueId" returned
+ * by POST /v1/video/adhoc-session.
+ */
+async function handleAdHocClientJoinToken(request, response, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const callerRoleValue = callerRole(request, session);
+  if (callerRoleValue === 'client' || !callerRoleValue) {
+    writeJson(response, 403, { error: 'Forbidden' });
+    return;
+  }
+
+  const body = await readJsonBody(request);
+  const clientId   = sanitizeStr(body?.clientId   ?? '', 64) || null;
+  const roomName   = sanitizeStr(body?.roomName   ?? '', 512) || null;
+
+  if (!clientId || !roomName) {
+    writeJson(response, 400, { error: 'clientId and roomName are required' });
+    return;
+  }
+
+  // Validate client access.
+  const client = await resolveAuthorizedClient(
+    request, response, clientId, session, 'appointment.video_session.adhoc_client_join_token',
+  );
+  if (!client) return;
+
+  const tenantId = callerTenant(request, session);
+  const { appId, apiKeyId, domain } = await resolveJaasConfig(tenantId);
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
+
+  if (process.env.DB_NAME) {
+    await pool.query(
+      `INSERT INTO video_join_tokens
+         (id, tenant_id, client_id, room_name, domain, app_id, api_key_id, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [token, tenantId, clientId, roomName, domain, appId, apiKeyId, expiresAt],
+    );
+  } else {
+    inMemoryJoinTokens.set(token, {
+      tenantId, appointmentId: null, clientId,
+      roomName, domain, appId, apiKeyId, expiresAt,
+    });
+  }
+
+  const baseUrl = (process.env.APP_BASE_URL ?? '').replace(/\/$/, '')
+    || `http://127.0.0.1:${process.env.WEB_PORT ?? 3102}`;
+  const joinUrl = `${baseUrl}/join?token=${token}`;
+
+  await emitAudit(request, 'session.video_join_token.adhoc_created', 'client', clientId, session);
+
+  writeJson(response, 200, { joinUrl, expiresAt: expiresAt.toISOString() });
+}
+
+/**
+ * GET /v1/video/join/:token
+ * Public (no auth required).  Exchanges an opaque join token for a client-scoped
+ * JaaS JWT and the room details needed to render the Jitsi UI.
+ */
+async function handleExchangeJoinToken(request, response, requestUrl) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const token = requestUrl.pathname.replace('/v1/video/join/', '');
+  // Basic sanity check — token must be a non-empty lowercase hex string.
+  if (!token || !/^[0-9a-f]{32,}$/i.test(token)) {
+    writeJson(response, 400, { error: 'Invalid token' });
+    return;
+  }
+
+  let entry = null;
+
+  if (process.env.DB_NAME) {
+    const [rows] = await pool.query(
+      'SELECT * FROM video_join_tokens WHERE id = ? AND expires_at > NOW() LIMIT 1',
+      [token],
+    );
+    if (rows.length) entry = rows[0];
+  } else {
+    const mem = inMemoryJoinTokens.get(token);
+    if (mem && mem.expiresAt > new Date()) entry = mem;
+  }
+
+  if (!entry) {
+    writeJson(response, 404, { error: 'Join link not found or expired' });
+    return;
+  }
+
+  // Normalise field names between DB rows (snake_case) and in-memory entries (camelCase).
+  const tenantId  = entry.tenant_id  ?? entry.tenantId;
+  const roomName  = entry.room_name  ?? entry.roomName;
+  const domain    = entry.domain     ?? '8x8.vc';
+  let   appId     = entry.app_id     ?? entry.appId     ?? null;
+  let   apiKeyId  = entry.api_key_id ?? entry.apiKeyId  ?? null;
+
+  // Re-resolve private key — never stored in the tokens table.
+  const jaas = await resolveJaasConfig(tenantId);
+  if (!appId)    appId    = jaas.appId;
+  if (!apiKeyId) apiKeyId = jaas.apiKeyId;
+
+  const jwt = buildClientJwt({
+    appId,
+    apiKeyId,
+    privateKeyPem: jaas.privateKeyPem,
+    roomName,       // already in full "appId/opaqueId" form
+    tokenId: token.slice(0, 8),
+  });
+
+  writeJson(response, 200, { jwt, domain, roomName, appId });
 }
 
 async function handleAppointmentById(request, response, requestUrl, session) {
@@ -15068,7 +15369,10 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/platform/retention-policies') return '/v1/platform/retention-policies';
   if (pathname.startsWith('/v1/clients/')) return '/v1/clients/:id';
   if (pathname.endsWith('/video-session') && pathname.startsWith('/v1/appointments/')) return '/v1/appointments/:id/video-session';
+  if (pathname.endsWith('/client-join-token') && pathname.startsWith('/v1/appointments/')) return '/v1/appointments/:id/client-join-token';
   if (pathname === '/v1/video/adhoc-session') return '/v1/video/adhoc-session';
+  if (pathname === '/v1/video/adhoc-client-join-token') return '/v1/video/adhoc-client-join-token';
+  if (pathname.startsWith('/v1/video/join/')) return '/v1/video/join/:token';
   if (pathname.startsWith('/v1/appointments/')) return '/v1/appointments/:id';
   if (pathname.endsWith('/video-config') && pathname.startsWith('/v1/practices/')) return '/v1/practices/:id/video-config';
   if (pathname.startsWith('/v1/practices/')) return '/v1/practices/:id';
