@@ -8,6 +8,8 @@ import LocationsTab from './tabs/LocationsTab.jsx';
 import StaffTab from './tabs/StaffTab.jsx';
 import LifecycleTab from './tabs/LifecycleTab.jsx';
 import AppointmentsTab from './tabs/AppointmentsTab.jsx';
+import ChartTab from './tabs/ChartTab.jsx';
+import ClientsTab from './tabs/ClientsTab.jsx';
 import { useI18n } from '../../lib/i18nContext.jsx';
 
 const STUDIO_TABS = [
@@ -60,6 +62,10 @@ export default function WorkspaceStudioPage({ initialTab = 'portal', onScheduleP
                 <LifecycleTab onOpenClient={onViewClient} />
               ) : tab.id === 'appointments' ? (
                 <AppointmentsTab />
+              ) : tab.id === 'chart' ? (
+                <ChartTab />
+              ) : tab.id === 'clients' ? (
+                <ClientsTab onViewClient={onViewClient} />
               ) : (
                 <Text c="dimmed" fz="sm">{t('studio.placeholderForTab', { tab: t(tab.labelKey) })}</Text>
               )}

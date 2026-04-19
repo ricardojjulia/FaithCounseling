@@ -2,6 +2,56 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 18, 2026 — Workspace Studio: Chart and Clients tabs
+
+### feat: Build ChartTab and ClientsTab in Workspace Studio
+
+**Date:** April 18, 2026
+**Affected area:** `apps/web/src/components/WorkspaceStudio/tabs/ChartTab.jsx` (new), `apps/web/src/components/WorkspaceStudio/tabs/ClientsTab.jsx` (new), `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx`
+
+The **Chart** and **Clients** tabs in Workspace Studio previously showed empty placeholders. Both now have full implementations:
+
+- **ChartTab** — Manages the practice's clinical form and instrument catalog. Fetches `GET /api/v1/forms/catalog?includeInactive=true`, groups all 41+ instruments by category (intake, administrative, assessment, clinical, treatment, worksheets, faith, etc.), and lets practice admins toggle each form active/inactive and toggle "standard on signup" status via `PATCH /api/v1/forms/catalog`. Summary badges show active/signup/total counts. Includes search and category filter. Switches are disabled while saving.
+
+- **ClientsTab** — Displays a management-level client directory. Fetches `GET /api/v1/clients` with optional status filter. Shows summary stats cards (active, waitlist, inactive, discharged, high-touchpoint, minor). Table supports client-side search by name/faith background and server-side status filtering. Row click or icon button opens the client chart via the existing `onViewClient` prop. Client names are treated as PHI and not logged or emitted in telemetry.
+
+## April 18, 2026 — Per-tenant Jitsi/JaaS video configuration UI
+
+### feat: Add per-practice video / telehealth configuration in Workspace Studio
+
+**Date:** April 18, 2026
+**Affected area:** `apps/web/src/components/WorkspaceStudio/tabs/PracticeTab.jsx`
+
+The Practice tab in Workspace Studio now includes a **Video / Telehealth Configuration** section. Practice admins can enter their own JaaS (Jitsi as a Service) credentials — App ID, API Key ID, domain, and RSA private key (PEM). Credentials are write-only from the UI: the private key is never returned by the API (stored encrypted at rest, AES-256-GCM). The backend (`handlePracticeVideoConfig`, `PATCH /v1/practices/:id/video-config`) and DB columns (`jaas_app_id`, `jaas_api_key_id`, `jaas_private_key_enc`, `jaas_domain` on `practices`) were already in place. Video session handlers (scheduled and ad-hoc) already prefer tenant DB config over server-level env vars; this change provides the missing admin UI to populate those values.
+
+## April 18, 2026 — Portal data coverage: counselor visibility into portal activity
+
+### feat: Surface portal activity and contact preferences in counselor client detail view
+
+**Date:** April 18, 2026
+**Affected area:** `apps/api/src/index.js`, `apps/web/src/lib/clientApi.js`, `apps/web/src/components/ClientDetail/tabs/PortalActivityTab.jsx`, `apps/web/src/components/ClientDetail/tabs/DemographicsTab.jsx`, `apps/web/src/components/ClientDetail/ClientDetailTabs.jsx`, `packages/i18n/src/index.js`, locale files
+
+Three portal data gaps closed:
+
+1. **Portal Activity tab (counselor view)** — A new "Portal Activity" tab was added to the counselor Client Detail view. It shows all portal message threads (with reply capability), client scheduling/appointment requests (with Approve/Decline/Mark Scheduled actions), and client-uploaded documents, all sourced live from the DB via the existing portal API endpoints.
+
+2. **Portal Contact Preferences on Demographics tab** — The counselor Demographics tab now fetches the client's self-managed portal profile (via `fetchPortalProfile`) and displays a read-only "Portal Contact Preferences" section at the bottom showing preferred name, contact email/phone, pronouns, marital status, education, occupation, affiliations, and preferred contact method. This data does not overwrite the clinical record.
+
+3. **Portal messages DB support** — `handlePortalMessages` in `index.js` was updated to use `listPortalMessageThreads`/`listPortalMessages` and `createPortalMessageThread`/`createPortalMessage` from the DB query layer when `DB_NAME` is set, instead of falling back to in-memory only.
+
+---
+
+## April 18, 2026 — Client portal active video session banner
+
+### feat: Show active video session join link in client portal dashboard
+
+**Date:** April 18, 2026
+**Affected area:** `apps/api/src/index.js`, `apps/web/src/components/Portal/ClientPortalPage.jsx`
+
+When a counselor generates a video join link (scheduled or ad-hoc), the client now sees a green "Video Session Ready" banner at the top of their portal dashboard with a "Join Now" button. The portal overview API was updated to include `activeVideoSession` (joinUrl + expiresAt) by querying active, unexpired join tokens linked to the client.
+
+---
+
 ## April 19, 2026 — Client video join link feature
 
 ### feat: Send client a join link for video sessions

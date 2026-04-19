@@ -20,6 +20,7 @@ import {
   Textarea,
   Title,
 } from '@mantine/core';
+import { IconVideo } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import {
   changeAuthenticatedPassword,
@@ -693,6 +694,38 @@ export default function ClientPortalPage({
 
           <Tabs.Panel value="dashboard" pt="md">
             <Stack gap="md">
+              {overview?.activeVideoSession ? (
+                <Alert
+                  color="green"
+                  variant="filled"
+                  title="Video Session Ready"
+                  icon={<IconVideo size={20} />}
+                >
+                  <Group justify="space-between" align="center" wrap="nowrap">
+                    <Text size="sm">
+                      Your counselor has started a video session for you.
+                      {overview.activeVideoSession.expiresAt ? (
+                        <> Link expires at {new Date(overview.activeVideoSession.expiresAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}.</>
+                      ) : null}
+                    </Text>
+                    <Button
+                      component="a"
+                      href={overview.activeVideoSession.joinUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      color="white"
+                      variant="white"
+                      c="green.9"
+                      leftSection={<IconVideo size={16} />}
+                      size="sm"
+                      style={{ flexShrink: 0 }}
+                    >
+                      Join Now
+                    </Button>
+                  </Group>
+                </Alert>
+              ) : null}
+
               <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
                 <Card withBorder radius="md" p="md">
                   <Text c="dimmed" size="xs" tt="uppercase" fw={700}>{t('portal.dashboard.nextAppointment')}</Text>

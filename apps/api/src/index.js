@@ -118,7 +118,7 @@ import {
   listPortalDataRightRequests, createPortalDataRightRequest, updatePortalDataRightRequest,
   listPortalMessageThreads, getPortalMessageThread, createPortalMessageThread, updatePortalMessageThread,
   listPortalMessages, createPortalMessage,
-  listPortalAppointmentRequests, createPortalAppointmentRequest, updatePortalAppointmentRequest,
+  listPortalAppointmentRequests, createPortalAppointmentRequest, updatePortalAppointmentRequest, getPortalAppointmentRequest,
 } from './db/queries/portal.js';
 import {
   listFormCatalog, createFormCatalogItem, updateFormCatalogItem, getFormCatalogItemByKey,
@@ -8016,6 +8016,49 @@ async function handlePortalOverview(request, response, requestUrl, session) {
   const totalSuggestedCents = pastSessionCount * suggestedOfferingCents;
   const outstandingCents = Math.max(totalSuggestedCents - offeringStats.totalCents, 0);
 
+  // --- Active video join token ---
+  let activeVideoSession = null;
+  const baseUrlForJoin = (process.env.APP_BASE_URL ?? '').replace(/\/$/, '')
+    || `http://127.0.0.1:${process.env.WEB_PORT ?? 3102}`;
+  try {
+    if (process.env.DB_NAME) {
+      const [tokenRows] = await pool.query(
+        `SELECT id, expires_at FROM video_join_tokens
+         WHERE tenant_id = ? AND expires_at > NOW()
+           AND (client_id = ? OR appointment_id IN (
+             SELECT id FROM appointments WHERE client_id = ? AND tenant_id = ?
+           ))
+         ORDER BY expires_at DESC LIMIT 1`,
+        [client.tenantId, client.id, client.id, client.tenantId],
+      );
+      if (tokenRows.length) {
+        const row = tokenRows[0];
+        const expiresAt = row.expires_at instanceof Date ? row.expires_at.toISOString() : row.expires_at;
+        activeVideoSession = { joinUrl: `${baseUrlForJoin}/join?token=${row.id}`, expiresAt };
+      }
+    } else {
+      const now = new Date();
+      const clientApptIds = new Set(
+        appointments
+          .filter((a) => a.tenantId === client.tenantId && a.clientId === client.id)
+          .map((a) => a.id),
+      );
+      for (const [tok, entry] of inMemoryJoinTokens.entries()) {
+        if (entry.tenantId !== client.tenantId) continue;
+        if (entry.expiresAt <= now) continue;
+        if (entry.clientId === client.id || clientApptIds.has(entry.appointmentId)) {
+          activeVideoSession = {
+            joinUrl: `${baseUrlForJoin}/join?token=${tok}`,
+            expiresAt: entry.expiresAt.toISOString(),
+          };
+          break;
+        }
+      }
+    }
+  } catch {
+    // Non-fatal — portal overview still works without video session data
+  }
+
   emitAudit(request, 'portal.overview.read', 'portal', client.id);
   writeJson(response, 200, {
     client: {
@@ -8051,6 +8094,7 @@ async function handlePortalOverview(request, response, requestUrl, session) {
     messageThreads,
     appointmentRequests,
     counselorDirectory,
+    activeVideoSession,
   });
 }
 
@@ -9385,7 +9429,7 @@ async function handlePortalAppointmentRequests(request, response, requestUrl, se
 
   const requestId = sanitizeStr(payload.requestId, 50);
   const item = process.env.DB_NAME
-    ? (await listPortalAppointmentRequests(client.tenantId, client.id)).find((entry) => entry.id === requestId)
+    ? await getPortalAppointmentRequest(requestId, client.tenantId)
     : portalAppointmentRequests.find((entry) => entry.id === requestId);
   if (!item) {
     writeJson(response, 404, { error: 'Appointment request not found' });
@@ -9427,6 +9471,22 @@ async function handlePortalMessages(request, response, requestUrl, session) {
 
   if (request.method === 'GET') {
     const threadId = sanitizeStr(requestUrl.searchParams.get('threadId') ?? '', 50);
+
+    if (process.env.DB_NAME) {
+      let threads = await listPortalMessageThreads(client.tenantId, client.id);
+      if (threadId) threads = threads.filter((t) => t.id === threadId);
+      const items = await Promise.all(
+        threads.map(async (thread) => ({
+          ...thread,
+          messages: (await listPortalMessages(thread.id, client.tenantId))
+            .map((m) => ({ ...m, body: m.content ?? m.body })),
+        }))
+      );
+      emitAudit(request, 'portal.message.read', 'portal_message_thread', client.id, session);
+      writeJson(response, 200, { items });
+      return;
+    }
+
     let threads = portalMessageThreads.filter((thread) => thread.tenantId === client.tenantId && thread.clientId === client.id);
     if (threadId) {
       threads = threads.filter((thread) => thread.id === threadId);
@@ -9454,8 +9514,44 @@ async function handlePortalMessages(request, response, requestUrl, session) {
     return;
   }
 
-  let thread;
   const threadId = sanitizeStr(payload.threadId, 50);
+
+  if (process.env.DB_NAME) {
+    let dbThread;
+    if (threadId) {
+      dbThread = await getPortalMessageThread(threadId, client.tenantId);
+      if (!dbThread) { writeJson(response, 404, { error: 'Message thread not found' }); return; }
+      if (enforceTenantScope(request, response, dbThread.tenantId)) return;
+      if (dbThread.clientId !== client.id && callerRole(request, session) === 'client') {
+        writeJson(response, 403, { error: 'Access to this resource is not permitted' }); return;
+      }
+    } else {
+      const subject = sanitizeStr(payload.subject, 200);
+      if (!subject) { writeJson(response, 400, { error: 'subject is required when creating a new thread' }); return; }
+      dbThread = await createPortalMessageThread({
+        id: genId('pt'),
+        tenantId: client.tenantId,
+        clientId: client.id,
+        subject,
+        status: 'open',
+      });
+    }
+    const senderRole = callerRole(request, session) === 'client' ? 'client' : callerRole(request, session) || 'staff';
+    const newMsg = await createPortalMessage({
+      id: genId('pm'),
+      tenantId: client.tenantId,
+      threadId: dbThread.id,
+      senderId: sanitizeStr(request.headers['x-actor-id'] || '', 120) || `${senderRole}-${client.id}`,
+      senderType: senderRole,
+      content: body,
+      sentAt: new Date().toISOString(),
+    });
+    emitAudit(request, 'portal.message.create', 'portal_message_thread', dbThread.id, session);
+    writeJson(response, 201, { thread: dbThread, message: { ...newMsg, body: newMsg.content ?? body } });
+    return;
+  }
+
+  let thread;
   if (threadId) {
     thread = portalMessageThreads.find((item) => item.id === threadId);
     if (!thread) {
@@ -9463,7 +9559,7 @@ async function handlePortalMessages(request, response, requestUrl, session) {
       return;
     }
     if (enforceTenantScope(request, response, thread.tenantId)) return;
-    if (thread.clientId !== client.id) {
+    if (thread.clientId !== client.id && callerRole(request, session) === 'client') {
       writeJson(response, 403, { error: 'Access to this resource is not permitted' });
       return;
     }

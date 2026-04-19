@@ -76,6 +76,7 @@
   "client.tab.diagnoses": "Diagnosticos y medicamentos",
   "client.tab.faith": "Perfil de fe",
   "client.tab.legal": "Legal y administracion",
+  "client.tab.portalActivity": "Actividad del Portal",
   "clientDetail.backToClients": "Volver a clientes",
   "clientDetail.dob": "Fecha de nacimiento",
   "clientDetail.errorLoad": "No se pudo cargar el cliente: {error}",

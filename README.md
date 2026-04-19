@@ -154,7 +154,7 @@ The v2.0.0 spec covers all 150+ implemented endpoints across every surface of th
 - **Forms** — catalog, assignments, submissions, and client overview
 - **Inventories** — definitions and assignments
 - **Billing** — invoices, payments, superbills, claims, fee schedules, service codes, and aging reports
-- **Client Portal** — profile, intake packets, documents, uploads, appointment requests, messaging, resources, data rights (GDPR/CCPA), and public intake requests
+- **Client Portal** — profile, intake packets, documents, uploads, appointment requests, messaging, resources, data rights (GDPR/CCPA), and public intake requests; counselors now see all portal activity (messages, scheduling requests, uploads) and client-entered contact preferences directly in the Client Detail view
 - **Faith Features** — note templates, treatment goals, consent variants, resources, inventories, referral coordination, and language preferences
 - **Offerings** — service offering catalog and summary
 - **Workflows** — clinical recommendation state management

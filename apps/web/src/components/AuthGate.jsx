@@ -1,11 +1,26 @@
-import { useState } from 'react';
-import { TextInput, PasswordInput, Button, Alert, Text, Paper, Stack, Group, Box, List, Divider } from '@mantine/core';
+import { useState, useEffect } from 'react';
+import { TextInput, PasswordInput, Button, Alert, Text, Paper, Stack, Group, Box, Divider } from '@mantine/core';
 import { useI18n } from '../lib/i18nContext.jsx';
 import { completePortalPasswordReset, requestPortalPasswordReset } from '../lib/clientApi.js';
 
 export default function AuthGate({ onContinue }) {
   const { t } = useI18n();
   const [mode, setMode] = useState('sign_in');
+  const [branding, setBranding] = useState({ practiceName: '', logoUrl: '' });
+
+  useEffect(() => {
+    fetch('/api/v1/portal/public-config')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.item) {
+          setBranding({
+            practiceName: data.item.practiceName ?? '',
+            logoUrl: data.item.logoUrl ?? '',
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [resetToken, setResetToken] = useState('');
@@ -102,21 +117,27 @@ export default function AuthGate({ onContinue }) {
             }}
           >
             <Box mb="md">
-              <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-                <rect x="15" y="4" width="6" height="28" rx="3" fill="#4f46e5" fillOpacity="0.82"/>
-                <rect x="8" y="11" width="20" height="6" rx="3" fill="#4f46e5" fillOpacity="0.82"/>
-              </svg>
+              {branding.logoUrl ? (
+                <img
+                  src={branding.logoUrl}
+                  alt={branding.practiceName || t('brand.title')}
+                  style={{ maxHeight: 48, maxWidth: 160, objectFit: 'contain' }}
+                />
+              ) : (
+                <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                  <rect x="15" y="4" width="6" height="28" rx="3" fill="#4f46e5" fillOpacity="0.82"/>
+                  <rect x="8" y="11" width="20" height="6" rx="3" fill="#4f46e5" fillOpacity="0.82"/>
+                </svg>
+              )}
             </Box>
-            <Text fz="xs" fw={600} tt="uppercase" c="brand" ls={1} mb={4}>{t('brand.title')}</Text>
+            <Text fz="xs" fw={600} tt="uppercase" c="brand" ls={1} mb={4}>
+              {branding.practiceName || t('brand.title')}
+            </Text>
             <Text fw={700} fz="xl" mb="sm">{t('auth.welcomeBack')}</Text>
             <Text fz="sm" c="dimmed" mb="md">
               {t('auth.workspaceIntro')}
             </Text>
-            <List fz="xs" c="dimmed" spacing={6}>
-              <List.Item>{t('auth.security.serverManaged')}</List.Item>
-              <List.Item>{t('auth.security.passwordPolicy')}</List.Item>
-              <List.Item>{t('auth.security.lockout')}</List.Item>
-            </List>
+
           </Box>
 
           {/* Form panel */}

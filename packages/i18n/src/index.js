@@ -645,6 +645,7 @@ export const baseMessages = Object.freeze({
   'client.diagnoses.validationRequired': 'Each diagnosis requires both a code and description.',
   'client.tab.faith': 'Faith Profile',
   'client.tab.legal': 'Legal & Admin',
+  'client.tab.portalActivity': 'Portal Activity',
   'counselor.tab.profile': 'Profile',
   'counselor.tab.licenses': 'Licenses',
   'counselor.tab.specialties': 'Specialties',

@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react';
 import { notifications } from '@mantine/notifications';
 import {
   Stack, Title, SimpleGrid, TextInput, PasswordInput, Select, Button, Group,
-  Text, Paper, Divider,
+  Text, Paper, Divider, Alert,
 } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import {
   patchClient, createClientPhone, updateClientPhone, deleteClientPhone,
   createClientAddress, updateClientAddress, deleteClientAddress,
-  fetchStaff,
+  fetchStaff, fetchPortalProfile,
 } from '../../../lib/clientApi.js';
 
 const STATUS_OPTIONS    = [{ value: 'active', label: 'Active' }, { value: 'waitlist', label: 'Waitlist' }, { value: 'inactive', label: 'Inactive' }, { value: 'discharged', label: 'Discharged' }];
@@ -78,6 +78,9 @@ export default function DemographicsTab({ client, clientId }) {
   const [counselorOptions,   setCounselorOptions]   = useState([]);
   const [counselorSaving,    setCounselorSaving]    = useState(false);
 
+  // Portal contact preferences (read-only, client-managed)
+  const [portalProfile, setPortalProfile] = useState(null);
+
   useEffect(() => {
     fetchStaff()
       .then((data) => {
@@ -88,6 +91,12 @@ export default function DemographicsTab({ client, clientId }) {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetchPortalProfile(clientId)
+      .then((data) => setPortalProfile(data?.profile ?? data ?? null))
+      .catch(() => setPortalProfile(null));
+  }, [clientId]);
 
   const saveCounselor = async () => {
     setCounselorSaving(true);
@@ -313,6 +322,74 @@ export default function DemographicsTab({ client, clientId }) {
           </Group>
         </Stack>
       </Stack>
+
+      {portalProfile && (
+        <>
+          <Divider />
+          <Stack gap="sm">
+            <Title order={4} fz="sm" tt="uppercase" c="dimmed">Portal Contact Preferences (Client-Entered)</Title>
+            <Alert color="blue" variant="light" p="xs">
+              <Text fz="xs">These fields were entered by the client in their portal. They are read-only here and do not overwrite the clinical record above.</Text>
+            </Alert>
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+              {portalProfile.preferredName && (
+                <Paper withBorder radius="sm" p="sm">
+                  <Text fz="xs" c="dimmed">Preferred Name</Text>
+                  <Text fz="sm">{portalProfile.preferredName}</Text>
+                </Paper>
+              )}
+              {portalProfile.contactEmail && (
+                <Paper withBorder radius="sm" p="sm">
+                  <Text fz="xs" c="dimmed">Portal Contact Email</Text>
+                  <Text fz="sm">{portalProfile.contactEmail}</Text>
+                </Paper>
+              )}
+              {portalProfile.contactPhone && (
+                <Paper withBorder radius="sm" p="sm">
+                  <Text fz="xs" c="dimmed">Portal Contact Phone</Text>
+                  <Text fz="sm">{portalProfile.contactPhone}</Text>
+                </Paper>
+              )}
+              {portalProfile.profileDetails?.demographics?.pronouns && (
+                <Paper withBorder radius="sm" p="sm">
+                  <Text fz="xs" c="dimmed">Pronouns (Portal)</Text>
+                  <Text fz="sm">{portalProfile.profileDetails.demographics.pronouns}</Text>
+                </Paper>
+              )}
+              {portalProfile.profileDetails?.demographics?.maritalStatus && (
+                <Paper withBorder radius="sm" p="sm">
+                  <Text fz="xs" c="dimmed">Marital Status (Portal)</Text>
+                  <Text fz="sm">{portalProfile.profileDetails.demographics.maritalStatus}</Text>
+                </Paper>
+              )}
+              {portalProfile.profileDetails?.education?.level && (
+                <Paper withBorder radius="sm" p="sm">
+                  <Text fz="xs" c="dimmed">Education Level (Portal)</Text>
+                  <Text fz="sm">{portalProfile.profileDetails.education.level}</Text>
+                </Paper>
+              )}
+              {portalProfile.profileDetails?.education?.occupation && (
+                <Paper withBorder radius="sm" p="sm">
+                  <Text fz="xs" c="dimmed">Occupation (Portal)</Text>
+                  <Text fz="sm">{portalProfile.profileDetails.education.occupation}</Text>
+                </Paper>
+              )}
+              {(portalProfile.profileDetails?.affiliations ?? []).length > 0 && (
+                <Paper withBorder radius="sm" p="sm">
+                  <Text fz="xs" c="dimmed">Church / Ministry Affiliations (Portal)</Text>
+                  <Text fz="sm">{portalProfile.profileDetails.affiliations.join(', ')}</Text>
+                </Paper>
+              )}
+              {portalProfile.contactPreferences?.method && (
+                <Paper withBorder radius="sm" p="sm">
+                  <Text fz="xs" c="dimmed">Preferred Contact Method (Portal)</Text>
+                  <Text fz="sm">{portalProfile.contactPreferences.method}</Text>
+                </Paper>
+              )}
+            </SimpleGrid>
+          </Stack>
+        </>
+      )}
     </Stack>
   );
 }

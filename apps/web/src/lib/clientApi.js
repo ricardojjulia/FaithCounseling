@@ -106,8 +106,26 @@ export function fetchPortalUploads(clientId = null) {
   return apiFetch(withClientId('/api/v1/portal/uploads', clientId));
 }
 
+export function fetchPortalAppointmentRequests(clientId = null) {
+  return apiFetch(withClientId('/api/v1/portal/appointment-requests', clientId));
+}
+
 export function createPortalUploadRecord(data, clientId = null) {
   return apiFetch(withClientId('/api/v1/portal/uploads', clientId), {
+    method: 'POST',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function fetchPortalMessages(clientId = null, threadId = null) {
+  const base = withClientId('/api/v1/portal/messages', clientId);
+  if (threadId) return apiFetch(`${base}&threadId=${encodeURIComponent(threadId)}`);
+  return apiFetch(base);
+}
+
+export function sendPortalMessage(data, clientId = null) {
+  return apiFetch(withClientId('/api/v1/portal/messages', clientId), {
     method: 'POST',
     headers: csrfHeaders(),
     body: JSON.stringify(data),

@@ -729,6 +729,14 @@ export async function createPortalAppointmentRequest({
   return rowToPortalAppointmentRequest(rows[0]);
 }
 
+export async function getPortalAppointmentRequest(id, tenantId) {
+  const [rows] = await pool.query(
+    'SELECT * FROM portal_appointment_requests WHERE id = ? AND tenant_id = ?',
+    [id, tenantId]
+  );
+  return rows[0] ? rowToPortalAppointmentRequest(rows[0]) : null;
+}
+
 export async function updatePortalAppointmentRequest(id, tenantId, fields) {
   const setClauses = [];
   const values = [];
