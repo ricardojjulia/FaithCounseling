@@ -108,8 +108,8 @@ export default function TreatmentPlanTab({ clientId }) {
       if (p) {
         setForm({
           status: p.status ?? 'draft',
-          goals: Array.isArray(p.goals) && p.goals.length > 0 ? p.goals : [''],
-          interventions: Array.isArray(p.interventions) && p.interventions.length > 0 ? p.interventions : [''],
+          goals: Array.isArray(p.goals) && p.goals.length > 0 ? p.goals.map((g) => String(g ?? '')) : [''],
+          interventions: Array.isArray(p.interventions) && p.interventions.length > 0 ? p.interventions.map((i) => String(i ?? '')) : [''],
           reviewCadence: p.reviewCadence ?? '',
           reviewedAt: p.reviewedAt ? new Date(p.reviewedAt).toISOString().slice(0, 10) : '',
         });
@@ -130,8 +130,8 @@ export default function TreatmentPlanTab({ clientId }) {
   };
 
   const handleSave = async () => {
-    const goals = form.goals.map((g) => g.trim()).filter(Boolean);
-    const interventions = form.interventions.map((i) => i.trim()).filter(Boolean);
+    const goals = form.goals.map((g) => String(g ?? '').trim()).filter(Boolean);
+    const interventions = form.interventions.map((i) => String(i ?? '').trim()).filter(Boolean);
     if (goals.length === 0) {
       notifications.show({ title: 'Required', message: 'At least one goal is required.', color: 'yellow' });
       return;
@@ -213,11 +213,11 @@ export default function TreatmentPlanTab({ clientId }) {
             Goal coverage
           </Text>
           <Text fw={800} fz="2rem" mt="sm">
-            {form.goals.map((goal) => goal.trim()).filter(Boolean).length}
+            {form.goals.map((goal) => String(goal).trim()).filter(Boolean).length}
           </Text>
           <Text size="sm" c="dimmed">Active goals currently written into the plan.</Text>
           <Progress
-            value={Math.min(100, form.goals.map((goal) => goal.trim()).filter(Boolean).length * 20)}
+            value={Math.min(100, form.goals.map((goal) => String(goal).trim()).filter(Boolean).length * 20)}
             color="indigo"
             radius="xl"
             mt="md"

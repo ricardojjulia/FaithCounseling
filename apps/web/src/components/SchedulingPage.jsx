@@ -678,9 +678,9 @@ function AppointmentTable({
                 >
                   Open
                 </Button>
-                {appointment.remoteSession && onJoinVideo ? (
+                {onJoinVideo && !['completed', 'cancelled', 'no_show'].includes(appointment.status) ? (
                   <Button size="xs" color="blue" variant="filled" onClick={() => onJoinVideo(appointment)}>
-                    Join Video
+                    Start Session
                   </Button>
                 ) : null}
                 <Button size="xs" variant="default" onClick={() => onEdit?.(appointment)}>Edit</Button>
@@ -1846,6 +1846,9 @@ export default function SchedulingPage({
   const [composerMode, setComposerMode] = useState('create');
   const [editingAppointment, setEditingAppointment] = useState(null);
   const [videoSessionAppt, setVideoSessionAppt] = useState(null);
+  const [adHocSession, setAdHocSession] = useState(null); // { clientId, clientName } | null
+  const [adHocPickerOpen, setAdHocPickerOpen] = useState(false);
+  const [adHocClientId, setAdHocClientId] = useState(null);
   const [composerClientId, setComposerClientId] = useState(initialClientId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -2109,6 +2112,13 @@ export default function SchedulingPage({
           <Stack gap="md">
             <Group justify="flex-end">
               <Button variant="default" onClick={loadScheduling}>Refresh</Button>
+              <Button
+                variant="light"
+                color="teal"
+                onClick={() => { setAdHocClientId(null); setAdHocPickerOpen(true); }}
+              >
+                Ad-hoc Meeting
+              </Button>
               <Button onClick={() => {
                 setComposerClientId(initialClientId);
                 setComposerMode('create');
@@ -2145,8 +2155,9 @@ export default function SchedulingPage({
                     }}
                     valueFormat="MM/DD/YYYY"
                     renderDay={(date) => {
-                      const day = date.getDate();
-                      const dayKey = toDayKey(date);
+                      const d = date instanceof Date ? date : new Date(typeof date === 'string' ? `${date}T12:00:00` : date);
+                      const day = d.getDate();
+                      const dayKey = toDayKey(d);
                       const hasAppointments = appointmentDayKeys.has(dayKey);
                       return (
                         <Box pos="relative" w={30} h={30}>
@@ -2359,6 +2370,54 @@ export default function SchedulingPage({
         onClose={() => setVideoSessionAppt(null)}
         appointmentId={videoSessionAppt?.id ?? ''}
         clientName={videoSessionAppt?.clientName ?? ''}
+      />
+
+      {/* Ad-hoc client picker */}
+      <Modal
+        opened={adHocPickerOpen}
+        onClose={() => setAdHocPickerOpen(false)}
+        title="Start Ad-hoc Meeting"
+        size="sm"
+      >
+        <Stack gap="md">
+          <Text fz="sm" c="dimmed">
+            Select a client to start an unscheduled emergency or ad-hoc video session.
+          </Text>
+          <Select
+            label="Client"
+            placeholder="Search clients…"
+            searchable
+            data={(clients ?? []).map((c) => ({
+              value: c.id,
+              label: [c.firstName, c.lastName].filter(Boolean).join(' ') || c.id,
+            }))}
+            value={adHocClientId}
+            onChange={setAdHocClientId}
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setAdHocPickerOpen(false)}>Cancel</Button>
+            <Button
+              color="teal"
+              disabled={!adHocClientId}
+              onClick={() => {
+                const client = (clients ?? []).find((c) => c.id === adHocClientId);
+                const name = client ? [client.firstName, client.lastName].filter(Boolean).join(' ') : '';
+                setAdHocSession({ clientId: adHocClientId, clientName: name });
+                setAdHocPickerOpen(false);
+              }}
+            >
+              Start Session
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      {/* Ad-hoc video session modal */}
+      <VideoSessionModal
+        opened={adHocSession !== null}
+        onClose={() => setAdHocSession(null)}
+        clientId={adHocSession?.clientId ?? ''}
+        clientName={adHocSession?.clientName ?? ''}
       />
     </Stack>
   );

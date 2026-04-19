@@ -477,6 +477,7 @@ export default function App() {
   const showOfferings        = currentView === 'offerings';
   const showClinical         = currentView === 'clinical';
   const showFaith            = currentView === 'faith';
+  const showTimeTracking     = currentView === 'time-tracking';
   const showFallbackWorkspace = !showDashboard && !showCounselorHome && !showTasks && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal && !showOfferings && !showClinical && !showFaith;
   if (authBootstrapping) {
     return (
