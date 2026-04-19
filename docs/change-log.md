@@ -2,6 +2,17 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 18, 2026 — Client portal active video session banner
+
+### feat: Show active video session join link in client portal dashboard
+
+**Date:** April 18, 2026
+**Affected area:** `apps/api/src/index.js`, `apps/web/src/components/Portal/ClientPortalPage.jsx`
+
+When a counselor generates a video join link (scheduled or ad-hoc), the client now sees a green "Video Session Ready" banner at the top of their portal dashboard with a "Join Now" button. The portal overview API was updated to include `activeVideoSession` (joinUrl + expiresAt) by querying active, unexpired join tokens linked to the client.
+
+---
+
 ## April 19, 2026 — Client video join link feature
 
 ### feat: Send client a join link for video sessions
