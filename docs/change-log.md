@@ -2,6 +2,21 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 22, 2026 — Project cleanup tracker reconciliation
+
+### fix: reconcile cleanup tracker status with current repository hygiene state
+
+**Date:** April 22, 2026
+**Affected area:** `PLANS/PLAN-TRACKER.md`, `README.md`
+
+Cleaned and reconciled the project-cleanup follow-up baseline:
+
+- removed leftover `agents/translation_guardian/__pycache__/` cache artifacts locally
+- confirmed stale mirror `.github/agents/translation_guardian/` is absent
+- confirmed duplicate root `.venv/` is absent (only `.venv311/` remains)
+- confirmed Python cache and venv patterns are already enforced in `.gitignore`
+- moved `PROJECT-CLEANUP.md` from partially executed to complete in the plan tracker
+
 ## April 22, 2026 — Time tracking Phase 3 supervisor verification
 
 ### feat: add supervisor verification workflows and board-ready CSV export for licensure tracking
