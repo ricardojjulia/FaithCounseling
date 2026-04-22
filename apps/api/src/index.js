@@ -155,7 +155,7 @@ import { getClientLegal, upsertClientLegal } from './db/queries/clientLegal.js';
 import { createClient as createClientRecord } from './db/queries/clients.js';
 import {
   listTimeEntries, createTimeEntry, getTimeEntry, updateTimeEntry, deleteTimeEntry,
-  syncTimeEntryFromAppointment, getTimeEntrySummary,
+  syncTimeEntryFromAppointment, getTimeEntrySummary, listTimeEntriesForUsers, verifyTimeEntry,
   listLicensureGoals, createLicensureGoal,
   listSupervisorAssignments, createSupervisorAssignment, deleteSupervisorAssignment, isSupervisorOf,
 } from './db/queries/timeTracking.js';
@@ -1939,8 +1939,16 @@ export async function handleApiRequest(request, response) {
       await handleTimeEntriesSummary(request, response, requestUrl, session);
       return;
     }
+    if (requestUrl.pathname === '/v1/time-entries/pending-verification') {
+      await handlePendingVerificationTimeEntries(request, response, requestUrl, session);
+      return;
+    }
     if (requestUrl.pathname === '/v1/time-entries/export') {
       await handleTimeEntriesExport(request, response, requestUrl, session);
+      return;
+    }
+    if (requestUrl.pathname.startsWith('/v1/time-entries/') && requestUrl.pathname.endsWith('/verify')) {
+      await handleVerifyTimeEntry(request, response, requestUrl, session);
       return;
     }
     if (requestUrl.pathname.startsWith('/v1/time-entries/')) {
@@ -15174,6 +15182,39 @@ async function handleSupervisorAssignmentById(request, response, requestUrl, ses
 
 // ─── Time tracking ───────────────────────────────────────────────────────────
 
+const TIME_ENTRY_CATEGORY_LABELS = Object.freeze({
+  direct_clinical: 'Direct Clinical',
+  indirect_admin: 'Indirect / Admin',
+  supervision_individual: 'Individual Supervision',
+  supervision_group: 'Group Supervision',
+  ce_spiritual: 'CE / Spiritual Formation',
+  ministry_coordination: 'Ministry Coordination',
+});
+
+const SUPERVISION_TIME_ENTRY_CATEGORIES = new Set(['supervision_individual', 'supervision_group']);
+
+function formatStaffDisplayName(staff) {
+  return [staff?.firstName, staff?.lastName].filter(Boolean).join(' ').trim() || 'Unknown Supervisor';
+}
+
+function buildClientReferenceHash(appointmentId) {
+  if (!appointmentId) return '';
+  return crypto.createHash('sha256').update(String(appointmentId)).digest('hex').slice(0, 6).toUpperCase();
+}
+
+function csvEscape(value) {
+  const normalized = value == null ? '' : String(value);
+  if (!/[",\r\n]/.test(normalized)) return normalized;
+  return `"${normalized.replace(/"/g, '""')}"`;
+}
+
+async function canExportTimeEntries(session, userId) {
+  if (!session?.tenantId || !session?.userId || !userId) return false;
+  if (userId === session.userId) return true;
+  if (!process.env.DB_NAME) return false;
+  return isSupervisorOf(session.tenantId, session.userId, userId);
+}
+
 async function resolveTimeEntryUser(session, requestUrl) {
   // Allows a supervisor or admin to view a specific intern's time entries
   const forUser = requestUrl.searchParams.get('userId');
@@ -15238,12 +15279,38 @@ async function handleTimeEntriesSummary(request, response, requestUrl, session) 
   const summary = await getTimeEntrySummary(session.tenantId, userId, {
     dateFrom: requestUrl.searchParams.get('date_from') ?? undefined,
     dateTo:   requestUrl.searchParams.get('date_to') ?? undefined,
+    countForGoals: requestUrl.searchParams.get('count_for_goals') === '1',
   });
   writeJson(response, 200, { summary });
 }
 
-// PHI-safe CSV export — omits descriptions, client IDs, and free-text fields.
-// Exports only: entry_id, date (UTC date only), category, duration_minutes.
+async function handlePendingVerificationTimeEntries(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+
+  const requestedInternId = sanitizeStr(requestUrl.searchParams.get('userId'), 64);
+  const assignments = await listSupervisorAssignments(session.tenantId, { supervisorId: session.userId });
+  const assignedInternIds = [...new Set(assignments.map((item) => item.internId).filter(Boolean))];
+
+  if (requestedInternId && !assignedInternIds.includes(requestedInternId)) {
+    writeJson(response, 403, { error: 'Not authorised to review that intern' });
+    return;
+  }
+
+  const items = await listTimeEntriesForUsers(
+    session.tenantId,
+    requestedInternId ? [requestedInternId] : assignedInternIds,
+    {
+      dateFrom: requestUrl.searchParams.get('date_from') ?? undefined,
+      dateTo: requestUrl.searchParams.get('date_to') ?? undefined,
+      onlyPendingVerification: true,
+    },
+  );
+  writeJson(response, 200, { items });
+}
+
+// PHI-safe CSV export — strips descriptions and never emits client identifiers.
 async function handleTimeEntriesExport(request, response, requestUrl, session) {
   if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
   if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
@@ -15251,6 +15318,10 @@ async function handleTimeEntriesExport(request, response, requestUrl, session) {
   const userId = await resolveTimeEntryUser(session, requestUrl);
   if (!userId) { writeJson(response, 403, { error: 'Not authorised' }); return; }
   if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+  if (!(await canExportTimeEntries(session, userId))) {
+    writeJson(response, 403, { error: 'Exports are limited to the owner or assigned supervisor' });
+    return;
+  }
 
   const entries = await listTimeEntries(session.tenantId, userId, {
     category: requestUrl.searchParams.get('category') ?? undefined,
@@ -15259,16 +15330,35 @@ async function handleTimeEntriesExport(request, response, requestUrl, session) {
     limit:    5000,
   });
 
-  // Build CSV — no descriptions, no names, no client IDs
-  const SAFE_CATEGORIES = new Set([
-    'direct_clinical', 'indirect_admin', 'supervision_individual',
-    'supervision_group', 'ce_spiritual', 'ministry_coordination',
-  ]);
-  const csvRows = ['entry_id,date,category,duration_minutes'];
+  const staffItems = await listStaff(session.tenantId);
+  const staffNamesById = new Map(staffItems.map((item) => [item.id, formatStaffDisplayName(item)]));
+  const csvRows = [[
+    'Date',
+    'Category',
+    'Duration (minutes)',
+    'Duration (hours)',
+    'Client Reference',
+    'Verified By',
+    'Verified Date',
+    'Supervisor Signature',
+  ].join(',')];
   for (const entry of entries) {
     const date = entry.startTime ? entry.startTime.slice(0, 10) : '';
-    const cat  = SAFE_CATEGORIES.has(entry.category) ? entry.category : 'other';
-    csvRows.push(`${entry.id},${date},${cat},${entry.durationMinutes ?? 0}`);
+    const category = TIME_ENTRY_CATEGORY_LABELS[entry.category] ?? 'Other';
+    const verifiedByName = entry.verifiedBy ? (staffNamesById.get(entry.verifiedBy) ?? 'Unknown Supervisor') : '';
+    const signature = entry.verifiedAt
+      ? `[Verified - ${verifiedByName || 'Supervisor'}]`
+      : '[Pending]';
+    csvRows.push([
+      date,
+      category,
+      entry.durationMinutes ?? 0,
+      ((entry.durationMinutes ?? 0) / 60).toFixed(2),
+      buildClientReferenceHash(entry.appointmentId),
+      verifiedByName,
+      entry.verifiedAt ? entry.verifiedAt.slice(0, 10) : '',
+      signature,
+    ].map(csvEscape).join(','));
   }
   const csv = csvRows.join('\r\n');
 
@@ -15280,6 +15370,37 @@ async function handleTimeEntriesExport(request, response, requestUrl, session) {
     'Cache-Control': 'no-store',
   });
   response.end(csv);
+}
+
+async function handleVerifyTimeEntry(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+
+  const id = requestUrl.pathname.replace('/v1/time-entries/', '').replace('/verify', '');
+  const entry = await getTimeEntry(id, session.tenantId);
+  if (!entry) { writeJson(response, 404, { error: 'Not found' }); return; }
+  if (!SUPERVISION_TIME_ENTRY_CATEGORIES.has(entry.category)) {
+    writeJson(response, 409, { error: 'Only supervision entries can be verified' });
+    return;
+  }
+  if (entry.verifiedAt) { writeJson(response, 409, { error: 'Time entry already verified' }); return; }
+  if (entry.isLocked) { writeJson(response, 409, { error: 'Locked time entry cannot be verified' }); return; }
+  if (entry.userId === session.userId) {
+    writeJson(response, 403, { error: 'You cannot verify your own time entry' });
+    return;
+  }
+  const assigned = await isSupervisorOf(session.tenantId, session.userId, entry.userId);
+  if (!assigned) {
+    writeJson(response, 403, { error: 'Not authorised to verify this time entry' });
+    return;
+  }
+
+  const verifiedAt = new Date().toISOString();
+  await verifyTimeEntry(id, session.tenantId, session.userId, verifiedAt);
+  const updated = await getTimeEntry(id, session.tenantId);
+  emitAudit(request, 'time_entry.verified', 'time_entry', id, session);
+  writeJson(response, 200, { item: updated });
 }
 
 async function handleTimeEntryById(request, response, requestUrl, session) {
@@ -15362,8 +15483,10 @@ async function handleLicensureGoals(request, response, requestUrl, session) {
   if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
 
   if (request.method === 'GET') {
+    const userId = await resolveTimeEntryUser(session, requestUrl);
+    if (!userId) { writeJson(response, 403, { error: 'Not authorised' }); return; }
     if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
-    const items = await listLicensureGoals(session.tenantId, session.userId);
+    const items = await listLicensureGoals(session.tenantId, userId);
     writeJson(response, 200, { items });
     return;
   }
@@ -15463,6 +15586,13 @@ function resolveRoute(pathname) {
   if (pathname.startsWith('/v1/platform/impersonation-sessions/')) return '/v1/platform/impersonation-sessions/:id';
   if (pathname === '/v1/platform/data-exports') return '/v1/platform/data-exports';
   if (pathname === '/v1/platform/retention-policies') return '/v1/platform/retention-policies';
+  if (pathname === '/v1/time-entries') return '/v1/time-entries';
+  if (pathname === '/v1/time-entries/summary') return '/v1/time-entries/summary';
+  if (pathname === '/v1/time-entries/pending-verification') return '/v1/time-entries/pending-verification';
+  if (pathname === '/v1/time-entries/export') return '/v1/time-entries/export';
+  if (pathname.startsWith('/v1/time-entries/') && pathname.endsWith('/verify')) return '/v1/time-entries/:id/verify';
+  if (pathname.startsWith('/v1/time-entries/')) return '/v1/time-entries/:id';
+  if (pathname === '/v1/licensure-goals') return '/v1/licensure-goals';
   if (pathname.startsWith('/v1/clients/')) return '/v1/clients/:id';
   if (pathname.endsWith('/video-session') && pathname.startsWith('/v1/appointments/')) return '/v1/appointments/:id/video-session';
   if (pathname.endsWith('/client-join-token') && pathname.startsWith('/v1/appointments/')) return '/v1/appointments/:id/client-join-token';

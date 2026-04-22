@@ -353,7 +353,7 @@ export default function CounselorHomePage({
         </Paper>
       </SimpleGrid>
 
-      <LicensureProgressBars userId={currentUser?.id} />
+      <LicensureProgressBars userId={currentUser?.staffId ?? currentUser?.staffMemberId} />
     </Stack>
   );
 }
