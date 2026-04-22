@@ -21,19 +21,12 @@ Last evaluated: April 22, 2026
 | [FORM-LIBRARY-EXPANSION.md](FORM-LIBRARY-EXPANSION.md) | Full form library expansion implemented in phased rollout |
 | [MantineMigration.md](MantineMigration.md) | Mantine UI migration fully delivered |
 | [OPERATIONS-DASHBOARD-UPGRADE.md](OPERATIONS-DASHBOARD-UPGRADE.md) | All 4 dashboard cards live: todaySchedule, priorityQueue, complianceWatch, clientsBox |
+| [PROJECT-CLEANUP.md](PROJECT-CLEANUP.md) | Hygiene pass complete: stale mirror removed, duplicate `.venv/` absent, Python cache patterns ignored, and tracker leftovers reconciled on follow-up branch |
 | [README-REFRESH-PLAN.md](README-REFRESH-PLAN.md) | README rewritten with all planned sections; LICENSE file present |
 | [ScheduleOps.md](ScheduleOps.md) | AvailabilityOverridesPanel, SeriesPanel, utilization tab, all API routes confirmed |
 | [TIME-TRACKING-COUNSELORS.md](TIME-TRACKING-COUNSELORS.md) | Phases 1-3 delivered on `feat/time-tracking-phase-3`: supervisor pending-verification queue, verification-aware licensure totals, supervisor intern-ledger review, PHI-safe board-ready CSV export |
 | [USER and USER MAINTENANCE.md](USER%20and%20USER%20MAINTENANCE.md) | User maintenance and login work fully delivered (MFA not included by design) |
 | [WORKSPACE-STUDIO-FORMS-PORTAL-WORKFLOW.md](WORKSPACE-STUDIO-FORMS-PORTAL-WORKFLOW.md) | Full forms + portal workflow implemented |
-
----
-
-## ⚠️ Partially Executed
-
-| Plan | Remaining Work |
-|---|---|
-| [PROJECT-CLEANUP.md](PROJECT-CLEANUP.md) | `__pycache__` in agents/translation_guardian, stale `.github/agents/translation_guardian/` copy, `.venv/` duplicate, test-results artifacts |
 
 ---
 
