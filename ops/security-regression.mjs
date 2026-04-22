@@ -152,6 +152,17 @@ async function main() {
   assert(result.status === 403, 'Practice admin must not create tenant provisioning requests');
   console.log('practice-admin-platform-guard', result.status, result.payload.error);
 
+  result = await req('/v1/platform/tenant-provisioning', {
+    method: 'PATCH',
+    headers: headersByRole.practiceAdmin,
+    body: {
+      id: 'tpr-001',
+      status: 'in_progress',
+    },
+  });
+  assert(result.status === 403, 'Practice admin must not update tenant provisioning requests');
+  console.log('practice-admin-platform-update-guard', result.status, result.payload.error);
+
   result = await req('/v1/platform/impersonation-sessions', {
     method: 'POST',
     headers: headersByRole.practiceAdmin,

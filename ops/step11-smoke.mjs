@@ -65,7 +65,38 @@ async function main() {
       status: 'queued',
     },
   });
-  console.log('tenant-provisioning-platform', result.status, result.payload.item?.id || result.payload.error);
+  const provisioningId = result.payload.item?.id;
+  console.log('tenant-provisioning-platform', result.status, provisioningId || result.payload.error);
+
+  result = await req('/v1/platform/tenant-provisioning', {
+    method: 'PATCH',
+    headers: platformAdminHeaders,
+    body: {
+      id: provisioningId,
+      status: 'in_progress',
+    },
+  });
+  console.log('tenant-provisioning-progress', result.status, result.payload.item?.status || result.payload.error);
+
+  result = await req('/v1/platform/tenant-provisioning', {
+    method: 'PATCH',
+    headers: platformAdminHeaders,
+    body: {
+      id: provisioningId,
+      status: 'completed',
+    },
+  });
+  console.log('tenant-provisioning-complete', result.status, result.payload.item?.status || result.payload.error);
+
+  result = await req('/v1/platform/tenant-provisioning', {
+    method: 'PATCH',
+    headers: platformAdminHeaders,
+    body: {
+      id: provisioningId,
+      status: 'queued',
+    },
+  });
+  console.log('tenant-provisioning-invalid-transition', result.status, result.payload.error || 'ok');
 
   result = await req('/v1/platform/impersonation-sessions', {
     method: 'POST',

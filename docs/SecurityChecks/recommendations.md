@@ -67,8 +67,8 @@
 - Effort: S
 - Suggested owner: Backend, Platform
 - Recommendation: Require all tenant provisioning updates to follow the canonical status lifecycle (`queued` -> `in_progress` -> `completed` or `failed`) via guarded API transitions.
-- Implementation notes: Use `PATCH /v1/platform/tenant-provisioning` for status updates, reject invalid transitions, and ensure automation scripts do not bypass lifecycle checks with direct DB writes.
-- Definition of done: All provisioning transitions are API-driven, invalid jumps are blocked with 409, and `completed` is the only status used for active tenant host activation.
+- Implementation notes: Use `PATCH /v1/platform/tenant-provisioning` for status updates, reject invalid transitions, ensure automation scripts do not bypass lifecycle checks with direct DB writes, and keep endpoint-level transition tests in CI coverage.
+- Definition of done: All provisioning transitions are API-driven, invalid jumps are blocked with 409, `completed` is the only status used for active tenant host activation, and regression/smoke scripts follow the same transition flow.
 
 ## Quick Wins
 - Remove `temporaryPassword` from public and admin portal API responses.

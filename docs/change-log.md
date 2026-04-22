@@ -2,6 +2,28 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 22, 2026 — Phase 4 provisioning API transition tests and automation wiring
+
+### feat: add endpoint tests for provisioning transitions and wire smoke/security scripts to PATCH lifecycle updates
+
+**Date:** April 22, 2026
+**Affected area:** `apps/api/test/tenant-provisioning-api.test.mjs`, `ops/step11-smoke.mjs`, `ops/step12-validate.mjs`, `ops/security-regression.mjs`, `README.md`, `docs/SecurityChecks/findings.md`, `docs/SecurityChecks/recommendations.md`
+
+Implemented Phase 4 slice 4 by adding endpoint-level test coverage and wiring existing automation to canonical lifecycle transitions:
+
+- added API endpoint tests for `POST/PATCH /v1/platform/tenant-provisioning` including:
+  - valid transition progression (`queued -> in_progress -> completed`)
+  - invalid transition rejection (`409`)
+  - RBAC guard for non-platform-admin PATCH (`403`)
+- updated `ops/step11-smoke.mjs` to exercise provisioning create/progress/complete plus invalid transition check
+- updated `ops/step12-validate.mjs` to assert lifecycle transition behavior during validation flow
+- updated `ops/security-regression.mjs` to assert practice-admin PATCH provisioning denial
+
+Validation notes:
+
+- targeted provisioning tests pass (`tenant-provisioning-lifecycle` + `tenant-provisioning-api`)
+- unrelated pre-existing intake-preview suite failures remain outside this slice
+
 ## April 22, 2026 — Phase 4 tenant provisioning lifecycle semantics and tests
 
 ### feat: add provisioning status transition rules, PATCH updates, and unit tests

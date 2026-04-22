@@ -498,7 +498,43 @@ async function main() {
     },
   });
   assert(provisioningResult.status === 201, 'Expected tenant provisioning to succeed for platform admin');
-  console.log('tenant-provisioning', provisioningResult.status, provisioningResult.payload.item?.id);
+  const provisioningId = provisioningResult.payload.item?.id;
+  console.log('tenant-provisioning', provisioningResult.status, provisioningId);
+
+  const provisioningProgressResult = await req('/v1/platform/tenant-provisioning', {
+    method: 'PATCH',
+    headers: platformAdminHeaders,
+    body: {
+      id: provisioningId,
+      status: 'in_progress',
+    },
+  });
+  assert(provisioningProgressResult.status === 200, 'Expected tenant provisioning transition to in_progress to succeed');
+  assert(provisioningProgressResult.payload.item?.status === 'in_progress', 'Expected provisioning status to be in_progress');
+  console.log('tenant-provisioning-progress', provisioningProgressResult.status, provisioningProgressResult.payload.item?.status);
+
+  const provisioningCompleteResult = await req('/v1/platform/tenant-provisioning', {
+    method: 'PATCH',
+    headers: platformAdminHeaders,
+    body: {
+      id: provisioningId,
+      status: 'completed',
+    },
+  });
+  assert(provisioningCompleteResult.status === 200, 'Expected tenant provisioning transition to completed to succeed');
+  assert(provisioningCompleteResult.payload.item?.status === 'completed', 'Expected provisioning status to be completed');
+  console.log('tenant-provisioning-complete', provisioningCompleteResult.status, provisioningCompleteResult.payload.item?.status);
+
+  const invalidProvisioningTransitionResult = await req('/v1/platform/tenant-provisioning', {
+    method: 'PATCH',
+    headers: platformAdminHeaders,
+    body: {
+      id: provisioningId,
+      status: 'queued',
+    },
+  });
+  assert(invalidProvisioningTransitionResult.status === 409, 'Expected invalid provisioning transition to be rejected with 409');
+  console.log('tenant-provisioning-invalid-transition', invalidProvisioningTransitionResult.status, invalidProvisioningTransitionResult.payload.error);
 
   const impersonationStartResult = await req('/v1/platform/impersonation-sessions', {
     method: 'POST',

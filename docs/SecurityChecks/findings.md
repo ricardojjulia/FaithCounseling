@@ -110,8 +110,8 @@
 - Risk: Without transition control, manual or script-driven status mutations can incorrectly mark tenant provisioning states and affect host-routing activation decisions.
 - Impact: Incorrect tenant activation posture can weaken isolation controls and operational safety during provisioning.
 - PHI/PII relevance: Provisioning state drives tenant-level access boundaries, which protect practice-isolated data.
-- Remediation applied: Added canonical status lifecycle helper (`queued`, `in_progress`, `completed`, `failed`), enforced transition rules in `PATCH /v1/platform/tenant-provisioning`, added request-by-id lookup for transition validation, and aligned provisioned tenant detection to canonical `completed` status.
-- Manual verification needed: Validate provisioning orchestration jobs and admin tooling follow the new transition path and status model in staging/production.
+- Remediation applied: Added canonical status lifecycle helper (`queued`, `in_progress`, `completed`, `failed`), enforced transition rules in `PATCH /v1/platform/tenant-provisioning`, added request-by-id lookup for transition validation, aligned provisioned tenant detection to canonical `completed` status, added endpoint-level API tests, and wired smoke/validation/security regression scripts to the canonical PATCH transition flow.
+- Manual verification needed: Validate staging/production provisioning orchestration uses API transitions exclusively (no direct DB status writes).
 
 ## Sensitive Data Inventory
 - PHI: client demographics, DOB, SSN fragments, treatment plans, progress notes, diagnoses, medications, allergies, clinical history, legal/guardianship data, portal messages, uploads, intake answers — primarily in `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/schema.sql` and related query modules; several flows correctly encrypt these fields. The credential-disclosure and log-leakage paths from the original review have been remediated.
