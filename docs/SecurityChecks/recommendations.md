@@ -61,12 +61,22 @@
 - Implementation notes: Runtime now fails fast when `ENABLE_TENANT_HOST_ROUTING=true` in non-local runtime without strict mode. Complete rollout by enforcing deployment policy that always enables tenant-host mode and strict mode together for SaaS traffic, and validate provisioning-driven slug sets match active tenants.
 - Definition of done: Unknown tenant hosts always return 404 in staging/production, startup guard is active in deployment policy checks, and active tenant slugs are sourced from provisioning data.
 
+### R-007 - Enforce canonical tenant provisioning lifecycle transitions across all tooling
+- Related findings: F-008
+- Priority: Near-term
+- Effort: S
+- Suggested owner: Backend, Platform
+- Recommendation: Require all tenant provisioning updates to follow the canonical status lifecycle (`queued` -> `in_progress` -> `completed` or `failed`) via guarded API transitions.
+- Implementation notes: Use `PATCH /v1/platform/tenant-provisioning` for status updates, reject invalid transitions, and ensure automation scripts do not bypass lifecycle checks with direct DB writes.
+- Definition of done: All provisioning transitions are API-driven, invalid jumps are blocked with 409, and `completed` is the only status used for active tenant host activation.
+
 ## Quick Wins
 - Remove `temporaryPassword` from public and admin portal API responses.
 - Remove `resetToken` from password-reset HTTP responses in every environment.
 - Stop logging raw audit objects and client-linked reminder identifiers from the worker.
 - Add a deployment review item to verify `instant_activation` is disabled until credential delivery is safe.
 - Add deployment checks to require strict tenant host routing (`TENANT_STRICT_HOST_ROUTING=true`) and explicit tenant slug allowlists.
+- Update provisioning automation to use canonical lifecycle transitions and avoid direct status writes.
 
 ## Longer-Term Hardening
 - Add end-to-end MFA coverage and negative tests for MFA-required accounts.

@@ -100,6 +100,19 @@
 - Remediation applied: Added DB-backed canonical tenant slug source, strict-mode unknown-tenant 404 enforcement against canonical slugs, and non-local startup guard requiring strict mode when tenant-host routing is enabled.
 - Manual verification needed: Confirm staging/production explicitly set `ENABLE_TENANT_HOST_ROUTING=true` with `TENANT_STRICT_HOST_ROUTING=true`, and verify provisioning statuses correctly represent active tenants.
 
+### F-008 - Tenant provisioning status updates needed explicit lifecycle transition controls
+- Severity: Medium
+- Confidence: High
+- Category: Tenant Isolation, Change Control, API Integrity
+- Status: Fixed
+- Affected files: `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/lib/tenant-provisioning.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/index.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/queries/platform.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/pools.js`
+- Evidence: Platform tenant provisioning previously accepted create-time statuses only and lacked a guarded update path for lifecycle progression. This slice introduces canonical status normalization plus transition validation and adds a `PATCH` update path that rejects invalid jumps (`409`) and audit-logs updates.
+- Risk: Without transition control, manual or script-driven status mutations can incorrectly mark tenant provisioning states and affect host-routing activation decisions.
+- Impact: Incorrect tenant activation posture can weaken isolation controls and operational safety during provisioning.
+- PHI/PII relevance: Provisioning state drives tenant-level access boundaries, which protect practice-isolated data.
+- Remediation applied: Added canonical status lifecycle helper (`queued`, `in_progress`, `completed`, `failed`), enforced transition rules in `PATCH /v1/platform/tenant-provisioning`, added request-by-id lookup for transition validation, and aligned provisioned tenant detection to canonical `completed` status.
+- Manual verification needed: Validate provisioning orchestration jobs and admin tooling follow the new transition path and status model in staging/production.
+
 ## Sensitive Data Inventory
 - PHI: client demographics, DOB, SSN fragments, treatment plans, progress notes, diagnoses, medications, allergies, clinical history, legal/guardianship data, portal messages, uploads, intake answers — primarily in `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/schema.sql` and related query modules; several flows correctly encrypt these fields. The credential-disclosure and log-leakage paths from the original review have been remediated.
 - PII: names, emails, phone numbers, addresses, contact details, employment/licensure identifiers, portal registration details — found across `clients`, `staff_members`, `portal_*`, `client_*`, and `tenant_provisioning` tables plus route handlers in `apps/api/src/index.js`.

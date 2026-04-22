@@ -86,6 +86,14 @@ export async function listTenantProvisioningRequests(tenantId) {
   return rows.map(rowToTenantProvisioningRequest);
 }
 
+export async function getTenantProvisioningRequestById(id) {
+  const [rows] = await pool.query(
+    'SELECT * FROM tenant_provisioning WHERE id = ? LIMIT 1',
+    [id]
+  );
+  return rows[0] ? rowToTenantProvisioningRequest(rows[0]) : null;
+}
+
 export async function createTenantProvisioningRequest({
   id,
   tenantId,
