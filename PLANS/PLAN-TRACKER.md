@@ -1,6 +1,6 @@
 # Plan Tracker
 
-Last evaluated: April 9, 2026
+Last evaluated: April 22, 2026
 
 ---
 
@@ -23,6 +23,7 @@ Last evaluated: April 9, 2026
 | [OPERATIONS-DASHBOARD-UPGRADE.md](OPERATIONS-DASHBOARD-UPGRADE.md) | All 4 dashboard cards live: todaySchedule, priorityQueue, complianceWatch, clientsBox |
 | [README-REFRESH-PLAN.md](README-REFRESH-PLAN.md) | README rewritten with all planned sections; LICENSE file present |
 | [ScheduleOps.md](ScheduleOps.md) | AvailabilityOverridesPanel, SeriesPanel, utilization tab, all API routes confirmed |
+| [TIME-TRACKING-COUNSELORS.md](TIME-TRACKING-COUNSELORS.md) | Phases 1-3 delivered on `feat/time-tracking-phase-3`: supervisor pending-verification queue, verification-aware licensure totals, supervisor intern-ledger review, PHI-safe board-ready CSV export |
 | [USER and USER MAINTENANCE.md](USER%20and%20USER%20MAINTENANCE.md) | User maintenance and login work fully delivered (MFA not included by design) |
 | [WORKSPACE-STUDIO-FORMS-PORTAL-WORKFLOW.md](WORKSPACE-STUDIO-FORMS-PORTAL-WORKFLOW.md) | Full forms + portal workflow implemented |
 
@@ -41,7 +42,6 @@ Last evaluated: April 9, 2026
 | Plan | Summary |
 | ---- | ------- |
 | [TELEHEALTH-AND-DIFFERENTIATION.md](TELEHEALTH-AND-DIFFERENTIATION.md) | FaithCounseling-meet (Jitsi) integration + faith-integrated clinical features + supervision workflows + SaaS multi-tenant infra. 4 phases; Phase 1 starts April 18, 2026. |
-| [TIME-TRACKING-COUNSELORS.md](TIME-TRACKING-COUNSELORS.md) | Counselor clinical hour & licensure tracking. Auto-sync from appointments, manual indirect logging, supervisor verification, PHI-safe CSV export for state boards. Target start April 20, 2026. |
 | [I18N-REWRITE.md](I18N-REWRITE.md) | Full i18n system rewrite: BCP 47 locale codes, plural support, Intl.* formatting, `/translate-locale` Claude Code skill, 6 phases |
 
 ---

@@ -1,6 +1,6 @@
 # TIME-TRACKING-COUNSELORS
 
-**Status:** Planning
+**Status:** In progress — phases 1 and 2 delivered; phase 3 delivered on `feat/time-tracking-phase-3` (pending merge to `main`)
 **Prepared:** April 17, 2026
 **Target Start:** April 20, 2026
 **Initiative:** Counselor Clinical Hour & Licensure Tracking
@@ -143,12 +143,12 @@ or client identifiers.
 
 ### Phase 1 Acceptance Criteria
 
-- [ ] Migration runs cleanly against the existing schema
-- [ ] All CRUD endpoints return correct data for the requesting user
-- [ ] `PATCH` and `DELETE` return `403` on locked entries
-- [ ] Sync endpoint is idempotent
-- [ ] `description` is stored encrypted and decrypted on read
-- [ ] Audit events are written for create, update, delete, and sync
+- [x] Migration runs cleanly against the existing schema
+- [x] All CRUD endpoints return correct data for the requesting user
+- [x] `PATCH` and `DELETE` return `403` on locked entries
+- [x] Sync endpoint is idempotent
+- [x] `description` is stored encrypted and decrypted on read
+- [x] Audit events are written for create, update, delete, and sync
 
 ---
 
@@ -207,11 +207,11 @@ RingProgress` or `Progress` bars:
 
 ### Phase 2 Acceptance Criteria
 
-- [ ] Quick-Log widget is accessible from the main dashboard without navigating away
-- [ ] Ledger table loads, paginates, and shows color-coded categories
-- [ ] Session note lock prompts the counselor to sync time
-- [ ] Progress bars are visible on the Counselor Profile
-- [ ] All UI strings have i18n keys in `packages/i18n/`
+- [x] Quick-Log widget is accessible from the main dashboard without navigating away
+- [x] Ledger table loads, paginates, and shows color-coded categories
+- [x] Session note lock prompts the counselor to sync time
+- [x] Progress bars are visible on the Counselor Profile
+- [x] All UI strings have i18n keys in `packages/i18n/`
 
 ---
 
@@ -276,11 +276,11 @@ requirements for v1.
 
 ### Phase 3 Acceptance Criteria
 
-- [ ] Supervisor sees a "Pending Verification" list for their interns' supervision hours
-- [ ] Verifying an entry locks it and writes the audit event
-- [ ] Verified hours are visually distinct from unverified in the intern's ledger
-- [ ] CSV export downloads correctly and contains no PHI beyond supervisor name
-- [ ] Export is only available to the owning counselor and their supervisor
+- [x] Supervisor sees a "Pending Verification" list for their interns' supervision hours
+- [x] Verifying an entry locks it and writes the audit event
+- [x] Verified hours are visually distinct from unverified in the intern's ledger
+- [x] CSV export downloads correctly and contains no PHI beyond supervisor name
+- [x] Export is only available to the owning counselor and their supervisor
 
 ---
 
@@ -315,13 +315,13 @@ requirements for v1.
 
 ## Acceptance Criteria (Full Feature)
 
-- [ ] Counselor can manually log indirect time (e.g., 30 min for prayer/prep)
-- [ ] Closing an appointment automatically prompts to log direct clinical time
-- [ ] Interns see a progress bar toward their configured licensure goal
-- [ ] Supervisors see a "Pending Verification" list for their interns' hours
-- [ ] Exported CSV matches standard state board format, sanitized of PHI
-- [ ] All audit events are written per canonical semantics
-- [ ] No PHI appears in telemetry
+- [x] Counselor can manually log indirect time (e.g., 30 min for prayer/prep)
+- [x] Closing an appointment automatically prompts to log direct clinical time
+- [x] Interns see a progress bar toward their configured licensure goal
+- [x] Supervisors see a "Pending Verification" list for their interns' hours
+- [x] Exported CSV matches standard state board format, sanitized of PHI
+- [x] All audit events are written per canonical semantics
+- [x] No PHI appears in telemetry
 
 ---
 

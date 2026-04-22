@@ -48,13 +48,46 @@ function rowToLicensureGoal(row) {
 
 // ─── Time entries ────────────────────────────────────────────────────────────
 
-export async function listTimeEntries(tenantId, userId, { category, dateFrom, dateTo } = {}) {
+export async function listTimeEntries(tenantId, userId, { category, dateFrom, dateTo, limit = null } = {}) {
   const conditions = ['tenant_id = ?', 'user_id = ?'];
   const params = [tenantId, userId];
+  const normalizedLimit = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Number(limit) : null;
 
   if (category) { conditions.push('category = ?'); params.push(category); }
   if (dateFrom)  { conditions.push('start_time >= ?'); params.push(dateFrom); }
   if (dateTo)    { conditions.push('start_time <= ?'); params.push(dateTo); }
+
+  const [rows] = await pool.query(
+    `SELECT * FROM time_entries WHERE ${conditions.join(' AND ')} ORDER BY start_time DESC${normalizedLimit ? ' LIMIT ?' : ''}`,
+    normalizedLimit ? [...params, normalizedLimit] : params,
+  );
+  return rows.map(rowToTimeEntry);
+}
+
+export async function listTimeEntriesForUsers(
+  tenantId,
+  userIds,
+  { category, dateFrom, dateTo, onlyPendingVerification = false } = {},
+) {
+  const normalizedUserIds = Array.isArray(userIds)
+    ? [...new Set(userIds.filter(Boolean))]
+    : [];
+  if (!normalizedUserIds.length) return [];
+
+  const conditions = [
+    'tenant_id = ?',
+    `user_id IN (${normalizedUserIds.map(() => '?').join(', ')})`,
+  ];
+  const params = [tenantId, ...normalizedUserIds];
+
+  if (category) { conditions.push('category = ?'); params.push(category); }
+  if (dateFrom) { conditions.push('start_time >= ?'); params.push(dateFrom); }
+  if (dateTo)   { conditions.push('start_time <= ?'); params.push(dateTo); }
+  if (onlyPendingVerification) {
+    conditions.push("category IN ('supervision_individual', 'supervision_group')");
+    conditions.push('verified_at IS NULL');
+    conditions.push('is_locked = 0');
+  }
 
   const [rows] = await pool.query(
     `SELECT * FROM time_entries WHERE ${conditions.join(' AND ')} ORDER BY start_time DESC`,
@@ -112,6 +145,16 @@ export async function updateTimeEntry(id, tenantId, fields) {
   );
 }
 
+export async function verifyTimeEntry(id, tenantId, supervisorId, verifiedAt) {
+  const [result] = await pool.query(
+    `UPDATE time_entries
+        SET verified_by = ?, verified_at = ?, is_locked = 1
+      WHERE id = ? AND tenant_id = ?`,
+    [supervisorId, verifiedAt, id, tenantId],
+  );
+  return result.affectedRows > 0;
+}
+
 export async function deleteTimeEntry(id, tenantId) {
   await pool.query(
     'DELETE FROM time_entries WHERE id = ? AND tenant_id = ?',
@@ -141,14 +184,23 @@ export async function syncTimeEntryFromAppointment({
 /**
  * Returns aggregate minutes by category within a date range for a user.
  */
-export async function getTimeEntrySummary(tenantId, userId, { dateFrom, dateTo } = {}) {
+export async function getTimeEntrySummary(tenantId, userId, { dateFrom, dateTo, countForGoals = false } = {}) {
   const conditions = ['tenant_id = ?', 'user_id = ?'];
   const params = [tenantId, userId];
   if (dateFrom) { conditions.push('start_time >= ?'); params.push(dateFrom); }
   if (dateTo)   { conditions.push('start_time <= ?'); params.push(dateTo); }
 
+  const totalMinutesExpr = countForGoals
+    ? `SUM(
+         CASE
+           WHEN category IN ('supervision_individual', 'supervision_group') AND verified_at IS NULL THEN 0
+           ELSE duration_minutes
+         END
+       )`
+    : 'SUM(duration_minutes)';
+
   const [rows] = await pool.query(
-    `SELECT category, SUM(duration_minutes) AS total_minutes, COUNT(*) AS entry_count
+    `SELECT category, ${totalMinutesExpr} AS total_minutes, COUNT(*) AS entry_count
        FROM time_entries
       WHERE ${conditions.join(' AND ')}
       GROUP BY category`,

@@ -19,8 +19,8 @@ export default function LicensureProgressBars({ userId } = {}) {
   useEffect(() => {
     const query = userId ? `?userId=${encodeURIComponent(userId)}` : '';
     Promise.all([
-      fetch(`/api/v1/licensure-goals`).then((r) => r.json()),
-      fetch(`/api/v1/time-entries/summary${query}`).then((r) => r.json()),
+      fetch(`/api/v1/licensure-goals${query}`).then((r) => r.json()),
+      fetch(`/api/v1/time-entries/summary${query ? `${query}&count_for_goals=1` : '?count_for_goals=1'}`).then((r) => r.json()),
     ])
       .then(([goalsData, summaryData]) => {
         setGoals(goalsData.items ?? []);

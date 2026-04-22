@@ -23,6 +23,7 @@ This document summarises every planning file in the `PLANS/` directory — what 
 | [MantineMigration.md](#mantine-ui-migration) | Infrastructure | Delivered | UI system |
 | [OPERATIONS-DASHBOARD-UPGRADE.md](#operations-dashboard-upgrade) | Feature | Implemented | Dashboard |
 | [ScheduleOps.md](#schedule-ops--operational-scheduling-layer) | Feature | In progress | Scheduling |
+| [TIME-TRACKING-COUNSELORS.md](#time-tracking-counselors) | Feature | In progress — phases 1 and 2 delivered; phase 3 branch-delivered | Licensure / Supervision |
 | [USER and USER MAINTENANCE.md](#user-and-user-maintenance) | Feature | Delivered | Auth / Staff |
 | [WORKSPACE-STUDIO-FORMS-PORTAL-WORKFLOW.md](#workspace-studio-forms--portal-workflow) | Feature | Implemented | Studio / Docs |
 
@@ -75,6 +76,29 @@ Remaining scope:
 - published resource and mental health library content
 - GDPR-style data-rights export and account deletion
 - configurable portal branding with logo and colour overrides
+
+---
+
+### Time Tracking Counselors
+
+**File:** [PLANS/TIME-TRACKING-COUNSELORS.md](../PLANS/TIME-TRACKING-COUNSELORS.md)
+**Status:** In progress — phases 1 and 2 delivered; phase 3 delivered on `feat/time-tracking-phase-3` (pending merge to `main`)
+**Prepared:** April 17, 2026
+
+Adds licensure-oriented counselor time tracking directly to the platform so teams do not need separate tools for clinical hour accounting.
+
+Delivered in branch `feat/time-tracking-phase-3`:
+
+- manual and appointment-synced time ledger coverage for direct/indirect categories
+- supervisor pending-verification queue and verify-and-lock workflow for intern supervision entries
+- verification-aware licensure goal totals so unverified supervision minutes do not count toward progress
+- supervisor intern-ledger review mode with read-only safeguards
+- PHI-safe board-oriented CSV export including hashed client references and supervisor verification columns
+
+Notes:
+
+- Plan tracker and plan file status were aligned on April 22, 2026.
+- This overview marks the feature as branch-delivered until PR #92 lands on `main`.
 
 ---
 
