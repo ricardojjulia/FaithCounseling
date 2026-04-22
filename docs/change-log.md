@@ -2,6 +2,28 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 22, 2026 — Telehealth Phase 4 SaaS infrastructure scaffolding
+
+### feat: scaffold SaaS multi-tenant infrastructure for commercial launch
+
+**Date:** April 22, 2026
+**Affected area:** `PLANS/PLAN-TRACKER.md`, `README.md`
+
+FaithCounseling Telehealth Phases 1-3 are now complete and delivered:
+
+- **Phase 1:** JaaS video sessions wired into the scheduling page with "Join Video Session" button for counselors.
+- **Phase 2:** Client video join links, public token exchange, and faith-integrated clinical notes with scripture reference and spiritual practices fields.
+- **Phase 3:** Supervision cosign workflow for intern-authored session notes with supervisor review queue and cosign audit events.
+
+Phase 4 (SaaS Multi-Tenant Infrastructure) is now in active scaffolding on branch `feat/telehealth-phase-4-saas-infra`. This phase implements:
+
+- Per-tenant DB pool registry for isolated customer databases
+- Tenant provisioning API (internal, Platform Admin only)
+- Platform Admin app for FaithCounseling staff to manage tenant lifecycle
+- Billing model scaffolding (feature gates by plan tier; no payment processing)
+
+Phase 4 is a prerequisite for commercial SaaS launch but can be worked in parallel with other product features.
+
 ## April 22, 2026 — Project cleanup tracker reconciliation
 
 ### fix: reconcile cleanup tracker status with current repository hygiene state

@@ -24,6 +24,7 @@ Last evaluated: April 22, 2026
 | [PROJECT-CLEANUP.md](PROJECT-CLEANUP.md) | Hygiene pass complete: stale mirror removed, duplicate `.venv/` absent, Python cache patterns ignored, and tracker leftovers reconciled on follow-up branch |
 | [README-REFRESH-PLAN.md](README-REFRESH-PLAN.md) | README rewritten with all planned sections; LICENSE file present |
 | [ScheduleOps.md](ScheduleOps.md) | AvailabilityOverridesPanel, SeriesPanel, utilization tab, all API routes confirmed |
+| [TELEHEALTH-AND-DIFFERENTIATION.md](TELEHEALTH-AND-DIFFERENTIATION.md) | Phases 1-3 delivered: JaaS video sessions on scheduling, client join links, faith-integrated clinical notes, supervision cosign workflow. Phase 4 (SaaS multi-tenant infra) scaffolding on `feat/telehealth-phase-4-saas-infra`. |
 | [TIME-TRACKING-COUNSELORS.md](TIME-TRACKING-COUNSELORS.md) | Phases 1-3 delivered on `feat/time-tracking-phase-3`: supervisor pending-verification queue, verification-aware licensure totals, supervisor intern-ledger review, PHI-safe board-ready CSV export |
 | [USER and USER MAINTENANCE.md](USER%20and%20USER%20MAINTENANCE.md) | User maintenance and login work fully delivered (MFA not included by design) |
 | [WORKSPACE-STUDIO-FORMS-PORTAL-WORKFLOW.md](WORKSPACE-STUDIO-FORMS-PORTAL-WORKFLOW.md) | Full forms + portal workflow implemented |
@@ -34,7 +35,6 @@ Last evaluated: April 22, 2026
 
 | Plan | Summary |
 | ---- | ------- |
-| [TELEHEALTH-AND-DIFFERENTIATION.md](TELEHEALTH-AND-DIFFERENTIATION.md) | FaithCounseling-meet (Jitsi) integration + faith-integrated clinical features + supervision workflows + SaaS multi-tenant infra. 4 phases; Phase 1 starts April 18, 2026. |
 | [I18N-REWRITE.md](I18N-REWRITE.md) | Full i18n system rewrite: BCP 47 locale codes, plural support, Intl.* formatting, `/translate-locale` Claude Code skill, 6 phases |
 
 ---
