@@ -8,6 +8,7 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import mysql from 'mysql2/promise';
+import { isProvisionedTenantStatus } from '../lib/tenant-provisioning.js';
 
 const tenantContextStorage = new AsyncLocalStorage();
 const poolRegistry = new Map();
@@ -15,8 +16,6 @@ let tenantSlugCache = {
   expiresAt: 0,
   slugs: new Set(['system']),
 };
-
-const PROVISIONED_TENANT_ACTIVE_STATUSES = new Set(['active', 'completed', 'provisioned', 'ready']);
 
 function parseSslEnabled(value) {
   if (typeof value === 'boolean') return value;
@@ -115,7 +114,7 @@ async function listProvisionedTenantSlugsFromDb() {
     if (!slug) continue;
     const status = String(row.status || '').trim().toLowerCase();
     const completed = Boolean(row.completed_at);
-    if (completed || PROVISIONED_TENANT_ACTIVE_STATUSES.has(status)) {
+    if (completed || isProvisionedTenantStatus(status)) {
       slugs.add(slug);
     }
   }

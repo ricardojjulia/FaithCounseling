@@ -144,11 +144,15 @@ import {
   getFaithLanguagePreferences, upsertFaithLanguagePreferences,
 } from './db/queries/faith.js';
 import {
-  listTenantProvisioningRequests, createTenantProvisioningRequest, updateTenantProvisioningRequest,
+  listTenantProvisioningRequests, createTenantProvisioningRequest, updateTenantProvisioningRequest, getTenantProvisioningRequestById,
   listImpersonationSessions, createImpersonationSession, endImpersonationSession,
   listDataExportJobs, createDataExportJob, updateDataExportJob,
   getRetentionPolicy, upsertRetentionPolicy,
 } from './db/queries/platform.js';
+import {
+  normalizeTenantProvisioningStatus,
+  canTransitionTenantProvisioningStatus,
+} from './lib/tenant-provisioning.js';
 import { listClientAddresses, getClientAddress, createClientAddress, updateClientAddress, deleteClientAddress } from './db/queries/clientAddresses.js';
 import { listClientPhones, getClientPhone, createClientPhone, updateClientPhone, deleteClientPhone } from './db/queries/clientPhones.js';
 import { listClientContacts, getClientContact, createClientContact, updateClientContact, deleteClientContact } from './db/queries/clientContacts.js';
@@ -863,7 +867,6 @@ const faithIntegrationLevels = Object.freeze(['explicit', 'balanced', 'light']);
 const faithResourceTypes = Object.freeze(['scripture', 'devotional', 'prayer', 'worksheet']);
 const faithCoordinationStatuses = Object.freeze(['proposed', 'active', 'paused', 'closed']);
 const faithInventoryCadences = Object.freeze(['weekly', 'biweekly', 'monthly', 'as_needed']);
-const platformProvisioningStatuses = Object.freeze(['queued', 'in_progress', 'completed', 'failed']);
 const platformImpersonationStatuses = Object.freeze(['active', 'ended']);
 const platformExportTypes = Object.freeze(['clinical_records', 'billing', 'documents', 'audit_log']);
 const platformExportStatuses = Object.freeze(['queued', 'processing', 'completed', 'failed']);
@@ -11342,7 +11345,7 @@ async function handleTenantProvisioning(request, response, session) {
     return;
   }
 
-  if (request.method !== 'POST') {
+  if (request.method !== 'POST' && request.method !== 'PATCH') {
     writeJson(response, 405, { error: 'Method not allowed' });
     return;
   }
@@ -11350,10 +11353,56 @@ async function handleTenantProvisioning(request, response, session) {
   if (requirePlatformAdmin(request, response, session)) return;
 
   const payload = await readJsonBody(request);
+
+  if (request.method === 'PATCH') {
+    const id = sanitizeStr(payload.id, 64);
+    const nextStatus = normalizeTenantProvisioningStatus(payload.status);
+    if (!id || !nextStatus) {
+      writeJson(response, 400, { error: 'id and valid status are required' });
+      return;
+    }
+
+    if (process.env.DB_NAME) {
+      const existing = await getTenantProvisioningRequestById(id);
+      if (!existing) {
+        writeJson(response, 404, { error: 'Tenant provisioning request not found' });
+        return;
+      }
+      if (!canTransitionTenantProvisioningStatus(existing.status, nextStatus)) {
+        writeJson(response, 409, { error: `Invalid status transition: ${existing.status} -> ${nextStatus}` });
+        return;
+      }
+
+      const item = await updateTenantProvisioningRequest(id, {
+        status: nextStatus,
+        completedAt: nextStatus === 'completed' ? new Date().toISOString() : null,
+      });
+      await emitAudit(request, 'platform.tenant_provisioning.update', 'tenant_provisioning_request', id, session);
+      writeJson(response, 200, { item });
+      return;
+    }
+
+    const existing = tenantProvisioningRequests.find((item) => item.id === id);
+    if (!existing) {
+      writeJson(response, 404, { error: 'Tenant provisioning request not found' });
+      return;
+    }
+    if (!canTransitionTenantProvisioningStatus(existing.status, nextStatus)) {
+      writeJson(response, 409, { error: `Invalid status transition: ${existing.status} -> ${nextStatus}` });
+      return;
+    }
+
+    existing.status = nextStatus;
+    existing.completedAt = nextStatus === 'completed' ? new Date().toISOString() : null;
+    await emitAudit(request, 'platform.tenant_provisioning.update', 'tenant_provisioning_request', id, session);
+    writeJson(response, 200, { item: existing });
+    return;
+  }
+
   const requestedTenantId = sanitizeStr(payload.requestedTenantId, 60);
   const requestedPracticeName = sanitizeStr(payload.requestedPracticeName, 200);
   const ownerEmail = sanitizeStr(payload.ownerEmail, 200);
-  const status = normalizePlatformProvisioningStatus(payload.status ?? 'queued');
+  const status = normalizeTenantProvisioningStatus(payload.status ?? 'queued');
 
   if (!requestedTenantId || !requestedPracticeName || !ownerEmail || !status) {
     writeJson(response, 400, { error: 'requestedTenantId, requestedPracticeName, ownerEmail, and valid status are required' });
@@ -13553,10 +13602,6 @@ function normalizeFaithCoordinationStatus(value) {
 
 function normalizeFaithInventoryCadence(value) {
   return faithInventoryCadences.includes(value) ? value : null;
-}
-
-function normalizePlatformProvisioningStatus(value) {
-  return platformProvisioningStatuses.includes(value) ? value : null;
 }
 
 function normalizePlatformImpersonationStatus(value) {

@@ -2,6 +2,26 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 22, 2026 — Phase 4 tenant provisioning lifecycle semantics and tests
+
+### feat: add provisioning status transition rules, PATCH updates, and unit tests
+
+**Date:** April 22, 2026
+**Affected area:** `apps/api/src/lib/tenant-provisioning.js`, `apps/api/src/index.js`, `apps/api/src/db/pools.js`, `apps/api/src/db/queries/platform.js`, `apps/api/test/tenant-provisioning-lifecycle.test.mjs`, `README.md`, `docs/SecurityChecks/findings.md`, `docs/SecurityChecks/recommendations.md`
+
+Implemented Phase 4 slice 3 for tenant-provisioning lifecycle control:
+
+- introduced canonical provisioning status helpers and transition rules (`queued`, `in_progress`, `completed`, `failed`)
+- added `PATCH` support to `/v1/platform/tenant-provisioning` for status updates with transition validation and audit event emission
+- added DB lookup helper to fetch provisioning requests by id for transition checks
+- aligned known-tenant activation logic to canonical `completed` provisioning status
+- added unit tests validating status normalization, transition rules, and provisioned-status detection
+
+Security posture notes:
+
+- invalid lifecycle jumps now return HTTP 409 instead of silently mutating tenant provisioning state
+- completed provisioning is now the explicit canonical signal for active tenant slug resolution
+
 ## April 22, 2026 — Phase 4 strict tenant-host enforcement and canonical slug source
 
 ### feat: enforce strict host routing in non-local tenant-host mode and resolve known tenants from provisioning data
