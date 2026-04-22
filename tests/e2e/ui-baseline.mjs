@@ -676,7 +676,7 @@ function buildSummaryMarkdown(uiMap) {
 
   const errorCount = allScreens.reduce((n, s) => n + (s.visible_errors?.length || 0), 0);
   const consoleErrCount = globalConsoleErrors.length;
-  const netFailCount = globalNetworkFailures.filter((f) => !f.url.includes('/api/v1/telemetry')).length;
+  const netFailCount = globalNetworkFailures.length;
 
   let md = `# UI Baseline Summary\n\n`;
   md += `**Generated:** ${uiMap.generated_at}\n`;
@@ -685,7 +685,7 @@ function buildSummaryMarkdown(uiMap) {
   md += `**Total screens captured:** ${allScreens.length}\n`;
   md += `**Visible UI errors:** ${errorCount}\n`;
   md += `**Console errors:** ${consoleErrCount}\n`;
-  md += `**Network failures (non-telemetry):** ${netFailCount}\n\n`;
+  md += `**Network failures:** ${netFailCount}\n\n`;
 
   md += `## Overall Decision\n\n`;
   if (allScreens.length === 0) {
@@ -715,7 +715,7 @@ function buildSummaryMarkdown(uiMap) {
 
   if (netFailCount > 0) {
     md += `## Network Failures\n\n`;
-    for (const f of globalNetworkFailures.filter((x) => !x.url.includes('/api/v1/telemetry')).slice(0, 20)) {
+    for (const f of globalNetworkFailures.slice(0, 20)) {
       md += `- **[${f.persona}]** HTTP ${f.status}: ${f.url}\n`;
     }
     md += '\n';
@@ -763,7 +763,7 @@ async function main() {
   console.log('\n=== COMPLETE ===');
   console.log(`Total screens: ${allScreens.length}`);
   console.log(`Console errors: ${globalConsoleErrors.length}`);
-  console.log(`Network failures: ${globalNetworkFailures.filter((f) => !f.url.includes('/api/v1/telemetry')).length}`);
+  console.log(`Network failures: ${globalNetworkFailures.length}`);
 }
 
 main().catch((err) => {

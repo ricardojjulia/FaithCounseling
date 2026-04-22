@@ -1,4 +1,4 @@
-# 11 — Monitoring and Telemetry
+# 11 — Monitoring and Runtime Health
 
 **Faith Counseling User Manual**
 
@@ -6,7 +6,9 @@
 
 ## Overview
 
-Faith Counseling includes built-in monitoring and telemetry so practice administrators and owners can observe platform health, surface operational anomalies, and track system behavior — without requiring a separate monitoring platform.
+Faith Counseling includes built-in local monitoring so practice administrators and owners can review platform health, inspect runtime issues, and confirm that core services are responding normally.
+
+Monitoring is local to the application. The current product does not require or expose OpenTelemetry / OTEL export, external collectors, Jaeger, or Prometheus as part of normal use.
 
 ---
 
@@ -24,17 +26,16 @@ The Monitoring page provides a live snapshot of:
 |---|---|
 | **API health** | Whether the API is responding and handling requests normally |
 | **Database health** | Whether the database connection is healthy |
-| **Worker health** | Whether background processing is running |
+| **Worker status** | Whether background processing is running normally |
 | **Request performance** | Response times for key API routes |
 | **Error rate** | Rate of application errors and their severity levels |
 | **Active sessions** | Approximate concurrent session count |
-| **Telemetry export status** | Whether OTEL export is configured and sending |
 
 ---
 
 ## 11.3 Operations Dashboard (Monitoring Lens)
 
-The Operations Dashboard (accessible from the main navigation and from the Monitoring page) expands on raw telemetry with practice-relevant operational signals:
+The Operations Dashboard expands on raw runtime health with practice-relevant operational signals:
 
 | Section | Details |
 |---|---|
@@ -46,54 +47,29 @@ The Operations Dashboard (accessible from the main navigation and from the Monit
 
 ---
 
-## 11.4 Telemetry Export (OpenTelemetry)
+## 11.4 Local Monitoring Model
 
-Faith Counseling supports optional export of telemetry signals to a centralized observability backend using the **OpenTelemetry (OTEL)** standard.
+Faith Counseling keeps monitoring inside the application:
 
-### When No OTEL Endpoint Is Configured
+- health signals remain available through the built-in monitoring surfaces
+- database monitoring remains available to authorized admin roles
+- startup and normal use do not depend on external tracing or metrics infrastructure
 
-All monitoring remains fully local. Telemetry is captured and viewable in the Monitoring page without any external dependency. Local monitoring is always available.
-
-### When OTEL Export Is Configured
-
-Configure OTEL export by setting environment variables:
-
-| Variable | Description |
-|---|---|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | The URL of your OTEL collector endpoint |
-| `OTEL_SERVICE_NAME` | The service name label displayed in your observability platform |
-
-Once configured, spans, metrics, and logs are exported to the configured backend automatically.
-
-### OTEL Naming Conventions
-
-Faith Counseling follows OTEL semantic conventions first, with `faith.ui.*` namespace used only for application-specific gaps that standard OTEL conventions do not cover.
+If you are using the product normally, no OTEL or external observability configuration is required.
 
 ---
 
-## 11.5 PHI and Privacy in Telemetry
+## 11.5 PHI and Privacy in Monitoring
 
-Faith Counseling telemetry is designed with strict privacy safeguards:
+Faith Counseling monitoring is designed with strict privacy safeguards:
 
-- **No PHI is emitted** — telemetry never includes client names, emails, IDs, diagnoses, or any personally identifiable health information
-- **No free-text values** in telemetry labels — only structured, low-cardinality signals
-- **Audit logs are separate** — raw audit events are never exported via telemetry channels
-
----
-
-## 11.6 Surface Registry
-
-Every visible surface in the application (screens, tabs, major workflow modals) is tracked in the platform's **surface registry**. The Monitoring page exposes coverage metrics:
-
-- Which surfaces have telemetry coverage
-- Which surfaces are missing baseline signals
-- Surface-level error and performance data
-
-This ensures that no screen goes unobserved.
+- **No PHI is emitted** — monitoring must not include client names, emails, IDs, diagnoses, or other identifiable health information
+- **No free-text values** in monitoring labels — only structured, low-cardinality operational signals
+- **Audit logs are separate** — raw audit events are never exported through monitoring flows
 
 ---
 
-## 11.7 Reading the Health Panel
+## 11.6 Reading the Health Panel
 
 The Monitoring page health panel uses color indicators:
 
@@ -106,7 +82,7 @@ The Monitoring page health panel uses color indicators:
 
 ---
 
-## 11.8 Configurable Operational Alerts
+## 11.7 Configurable Operational Alerts
 
 Practice admins can configure threshold-based alerts visible in the Operations Dashboard:
 
@@ -114,7 +90,7 @@ Practice admins can configure threshold-based alerts visible in the Operations D
 - **Portal backlog threshold** — flag when unreviewed portal requests exceed a limit
 - **Appointment utilization threshold** — flag when capacity drops below a target fill rate
 
-Alerts appear as banner indicators on the dashboard — they do not send external notifications by default.
+Alerts appear as banner indicators on the dashboard. They do not send external notifications by default.
 
 ---
 

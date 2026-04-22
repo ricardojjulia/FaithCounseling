@@ -2,6 +2,23 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 21, 2026 — OTEL instrumentation removal
+
+### fix: remove OpenTelemetry-facing browser hooks, config, and current docs references
+
+**Date:** April 21, 2026
+**Affected area:** `apps/web/server.js`, `apps/web/src/components/TimeTracking/TimeTrackingPage.jsx`, `apps/web/public/about.html`, `apps/web/public/operations.html`, `.env.example`, `README.md`, `apps/web/README.md`, `CONTRIBUTING.md`, `docs/api/openapi.yaml`, `PLANS/FULL-SURFACE-MONITORING.md`, `tests/e2e/ui-error-scan.mjs`, `tests/e2e/ui-baseline.mjs`
+
+OpenTelemetry / OTEL instrumentation was removed from the current repo surface. This change:
+
+- removes the browser-side telemetry helpers and their page/script hookups
+- drops the proxy CSRF exemption that only existed for telemetry POST endpoints
+- removes OTEL / OTLP environment examples and the dead Prometheus scrape config
+- removes the old Playwright network-failure exception that ignored browser telemetry endpoints during UI monitoring validation
+- updates the canonical monitoring plan, current-facing READMEs, contributor guidance, user manual, and OpenAPI spec so the repository no longer advertises Jaeger, Prometheus, OTLP export, or browser telemetry ingestion as active features
+
+Monitoring remains local-first through the existing health and database-monitoring surfaces. Audit and monitoring boundaries remain unchanged: no PHI, no raw audit rows, and no high-cardinality identifiers in operational signals.
+
 ## April 18, 2026 — Workspace Studio: Chart and Clients tabs
 
 ### feat: Build ChartTab and ClientsTab in Workspace Studio

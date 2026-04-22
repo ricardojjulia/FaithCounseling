@@ -56,12 +56,10 @@ tags:
     description: Lookup / reference data (DSM-5-TR, appointment types)
   - name: i18n
     description: Internationalization — locales, catalogs, translation
-  - name: Telemetry
-    description: Frontend telemetry — vitals and events
   - name: Monitoring
     description: Infrastructure health checks
   - name: System
-    description: Health probes, metrics, and bootstrap
+    description: Health probes and bootstrap metadata
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PATHS
@@ -144,20 +142,6 @@ paths:
                     type: array
                     items:
                       type: string
-
-  /metrics:
-    get:
-      tags: [System]
-      summary: Prometheus metrics export
-      operationId: prometheusMetrics
-      security: []
-      responses:
-        '200':
-          description: Prometheus text exposition format
-          content:
-            text/plain:
-              schema:
-                type: string
 
   /openapi.yaml:
     get:
@@ -4552,75 +4536,6 @@ paths:
                   targetLanguage:
                     type: string
 
-  # ── Telemetry ────────────────────────────────────────────────────────────────
-
-  /v1/telemetry/vitals:
-    post:
-      tags: [Telemetry]
-      summary: Submit frontend Web Vitals metrics
-      operationId: submitTelemetryVitals
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                metrics:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      name:
-                        type: string
-                      value:
-                        type: number
-                      unit:
-                        type: string
-                pageUrl:
-                  type: string
-      responses:
-        '200':
-          description: Vitals recorded
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OkResponse'
-
-  /v1/telemetry/events:
-    post:
-      tags: [Telemetry]
-      summary: Submit frontend interaction events
-      operationId: submitTelemetryEvents
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                events:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      name:
-                        type: string
-                      timestamp:
-                        type: string
-                        format: date-time
-                      metadata:
-                        type: object
-      responses:
-        '200':
-          description: Events recorded
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OkResponse'
-
   # ── Monitoring ───────────────────────────────────────────────────────────────
 
   /v1/monitoring/db:
@@ -4631,19 +4546,6 @@ paths:
       responses:
         '200':
           description: Database health status
-          content:
-            application/json:
-              schema:
-                type: object
-
-  /v1/monitoring/observability-stack:
-    get:
-      tags: [Monitoring]
-      summary: Observability stack health (OpenTelemetry, Prometheus)
-      operationId: monitoringObservabilityStack
-      responses:
-        '200':
-          description: Observability stack status
           content:
             application/json:
               schema:

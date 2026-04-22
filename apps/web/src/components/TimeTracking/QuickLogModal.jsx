@@ -97,7 +97,7 @@ export default function QuickLogModal({ opened, onClose, onCreated }) {
         )}
         <Textarea
           label="Notes (optional)"
-          placeholder="Brief description — not visible in telemetry"
+          placeholder="Brief description"
           value={description}
           onChange={(e) => setDescription(e.currentTarget.value)}
           minRows={2}

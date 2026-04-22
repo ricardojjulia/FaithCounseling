@@ -51,18 +51,16 @@ Default URL: `http://localhost:3000`
 - care flow progress indicators
 - Offerings workspace and Workspace Studio suggested-giving settings, including correction of incorrect offering entries
 - same-origin `/api/*` proxy for live dashboard hydration from the API service
-- monitoring surfaces for API liveness, readiness, and telemetry summary data
+- monitoring surfaces for API liveness, readiness, and database health data
 - branded monitoring page at `/monitor.html` aligned to the same indigo/light workspace palette as the main app
 - branded Operations Studio page at `/operations.html` aligned to the same indigo/light workspace palette as the main app
-- OTEL status UI that reflects shared OTLP, traces-only, or metrics-only endpoint configuration
 - interactive API docs served through the same-origin proxy at `/api/docs`
 - branded static About page at `/about` with a stronger counselor-first product narrative, shared light-indigo app palette, and operational linkouts
 
 ## Monitoring Notes
 
-- Monitoring and operations pages consume `/api/v1/telemetry/summary` for runtime telemetry
-- Frontend surfaces emit structured telemetry to `/api/v1/telemetry/events`
 - Health probes are available through `/api/health`, `/api/health/live`, and `/api/health/ready`
+- Monitoring surfaces rely on local health and database-monitoring endpoints instead of browser telemetry beacons or OTEL export
 - Dashboard metric cards consume `/api/v1/appointments` for session and future-appointment counts
 - Counselor Home consumes the same appointment and operations-summary feeds as the legacy dashboard, but presents them through a counselor-first working surface
 - Counselor task workflows derive counselor-assigned note gaps, outstanding assignments, and unscheduled follow-up clients from the shared operations-summary and client feeds
@@ -83,7 +81,6 @@ Default URL: `http://localhost:3000`
 - The live API connection status is intentionally rendered in the sidebar identity area, directly below the user pill, instead of in the top bar
 - Scheduling views now submit and filter by `counselorId`, while the API resolves current counselor/client display names from the linked records so workload surfaces stay accurate after profile renames
 - `/api/docs` uses a docs-specific CSP/COEP profile so proxied Swagger UI can load its required assets without weakening the rest of the application
-- The monitoring OTEL status banner follows the API `exportedViaOtel` flag, which now treats `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` as a valid OTEL export configuration
 - React app views, detail tabs, scheduling subviews, Workspace Studio tabs, and standalone pages now participate in the shared surface-monitoring baseline
 - The monitoring page now renders overall UI summary cards, health probes, workflow leaders, and a per-surface breakdown that distinguishes current, recent, and historical issue state instead of only lifetime failure counts
 - The standalone Operations Studio page now uses the same light indigo brand system as the main app while keeping its reporting, platform, language, data, and audit workflows intact

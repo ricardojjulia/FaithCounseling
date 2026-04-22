@@ -122,7 +122,7 @@ function attachErrorListeners(page, errors) {
   });
 
   page.on('response', (res) => {
-    if (res.status() >= 400 && !res.url().includes('/api/v1/telemetry')) {
+    if (res.status() >= 400) {
       errors.push({ source: 'network', url: res.url(), text: `HTTP ${res.status()}` });
     }
   });

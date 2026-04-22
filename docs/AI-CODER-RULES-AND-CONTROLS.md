@@ -208,7 +208,7 @@ These rules apply to **every code change**, not only dedicated security tasks.
 | Hardcoding secrets in source files | Secret leakage |
 | Using `eval()` or unvalidated `innerHTML` | XSS / code injection |
 | Dynamic SQL string construction | SQL injection |
-| Emitting PHI or PII in telemetry labels or OTEL spans | Privacy violation |
+| Emitting PHI or PII in monitoring labels or diagnostics | Privacy violation |
 | Deleting or updating audit ledger rows | Audit integrity |
 | Cross-tenant data access | Tenant isolation violation |
 
@@ -229,14 +229,13 @@ For any meaningful security review:
 
 Source of truth: `PLANS/FULL-SURFACE-MONITORING.md`
 
-- Every visible surface must expose monitoring signals: performance, usability, errors, and telemetry/export status.
+- Every visible surface must preserve local monitoring visibility for health, reliability, errors, and workflow consistency.
 - New or modified screens/tabs/pages/modals must be added to the shared surface registry.
 - New or modified surfaces must appear in the monitoring summary and monitoring page.
-- Follow OTEL hybrid naming: use OTEL semantic conventions first; use `faith.ui.*` only for app-specific gaps with no OTEL equivalent.
-- Local monitoring must remain available even when OTEL export is not configured.
-- External OTEL export must remain optional and config-driven.
-- **Never emit PHI, free text, names, emails, IDs, or other high-cardinality labels in telemetry.**
-- Audit ledger and telemetry are separate systems — never export raw audit rows via telemetry pipelines.
+- Local monitoring must remain available without OTEL / OTLP exporters or external observability collectors.
+- Do not reintroduce browser telemetry beacons or OTEL exporters without updating the monitoring plan first.
+- **Never emit PHI, free text, names, emails, IDs, or other high-cardinality labels in monitoring-related diagnostics.**
+- Audit ledger and monitoring are separate systems — never export raw audit rows through monitoring flows.
 
 ---
 
@@ -276,7 +275,7 @@ Before touching any of the following areas, **read the listed plan file first** 
 
 | Area | Plan file to read first |
 |---|---|
-| UI, telemetry, monitoring, OTEL, health, screens, tabs, dashboards | `PLANS/FULL-SURFACE-MONITORING.md` |
+| UI, monitoring, health, screens, tabs, dashboards | `PLANS/FULL-SURFACE-MONITORING.md` |
 | Security, auditing, compliance, PHI, RBAC, auth/session, tenant isolation, exports, retention, impersonation, background jobs | `PLANS/FULL-SECURITY-AND-AUDITING.md` |
 
 If a session changes the monitoring standard, update `PLANS/FULL-SURFACE-MONITORING.md` first, then README and docs.

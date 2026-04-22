@@ -256,9 +256,9 @@ Defines:
 - audit event semantics and taxonomy (canonical result values: `success`, `failure`, `denied`, `error`)
 - audit ledger requirements (append-only, tamper-evident, tenant-scoped)
 - audit intelligence query and UI surface requirements
-- privacy and compliance constraints (no PHI in logs, telemetry, or error payloads)
+- privacy and compliance constraints (no PHI in logs, monitoring diagnostics, or error payloads)
 
-The audit ledger and telemetry are separate systems. Raw audit rows are never exported via telemetry.
+The audit ledger and monitoring flows are separate systems. Raw audit rows are never exported through monitoring.
 
 **AGENTS.md rule:** Any change touching the areas above must read this file before proceeding. The `AGENTS.md` at the repo root enforces this.
 
@@ -270,19 +270,17 @@ The audit ledger and telemetry are separate systems. Raw audit rows are never ex
 **Status:** Canonical baseline — treat as source of truth for all monitoring changes
 **Prepared:** March 28, 2026
 
-This is the canonical monitoring standard for FaithCounseling. All sessions touching UI, telemetry, monitoring, OTEL, health, screens, tabs, workflows, dashboards, or summaries must read this file first.
+This is the canonical monitoring standard for FaithCounseling. All sessions touching UI, monitoring, health, screens, tabs, workflows, dashboards, or summaries must read this file first.
 
 Defines:
 
-- OTEL hybrid naming convention (`faith.ui.*` only for app-specific gaps not covered by OTEL semantic conventions)
 - shared surface registry — every visible surface must have an entry; new or modified surfaces must be added
-- monitoring signals required per surface: performance, usability, errors, and telemetry/export status
-- local monitoring must remain available even when OTEL export is not configured
-- external OTEL export is optional and config-driven
-- PHI must never appear in telemetry labels (no names, emails, IDs, free text)
+- monitoring expectations required per surface: health, reliability, errors, and workflow consistency
+- local monitoring remains available without OTEL / OTLP exporters
+- PHI must never appear in monitoring labels or diagnostics (no names, emails, IDs, free text)
 - placeholder but visible screens still require baseline monitoring coverage
 
-The full surface inventory lives in this file and in `packages/telemetry/src/surfaces.js`.
+The full surface inventory lives in this file and in the current monitoring documentation baseline.
 
 **AGENTS.md rule:** Any change touching the areas above must read this file before proceeding.
 

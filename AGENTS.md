@@ -2,9 +2,9 @@
 
 You are working in the FaithCounseling repository — a faith-based Christian counseling practice platform. Follow these rules exactly before making changes.
 
-This repository uses `main` as the monitoring and telemetry baseline.
+This repository uses `main` as the monitoring and runtime-health baseline.
 
-For any work touching UI, telemetry, monitoring, OTEL, health, screens, tabs, workflows, dashboards, or summaries:
+For any work touching UI, monitoring, health, screens, tabs, workflows, dashboards, runtime visibility, or summaries:
 
 - Read [PLANS/FULL-SURFACE-MONITORING.md](PLANS/FULL-SURFACE-MONITORING.md) first.
 - Treat that file as the source of truth.
@@ -16,16 +16,15 @@ For any work touching security, auditing, compliance, PHI handling, RBAC, auth/s
 
 Required repo rules:
 
-- Every visible surface must expose monitoring signals for performance, usability, errors, and telemetry/export status.
+- Every visible surface must preserve local monitoring visibility for health, reliability, errors, and workflow consistency.
 - New or modified screens, tabs, pages, and major modal workflows must be added to the shared surface registry.
 - New or modified visible surfaces must appear in the monitoring summary.
 - New or modified visible surfaces must be represented on the monitoring page.
-- Follow OTEL hybrid naming: use OTEL semantic conventions first and `faith.ui.*` only for app-specific gaps.
-- Local monitoring must remain available even when OTEL export is not configured.
-- External OTEL export must remain optional and config-driven.
-- Never emit PHI, free text, names, emails, IDs, or other high-cardinality labels in telemetry.
+- Local monitoring must remain available without OTEL / OTLP exporters or external observability collectors.
+- Do not reintroduce browser telemetry beacons, OTEL exporters, or collector dependencies unless the monitoring plan is updated first.
+- Never emit PHI, free text, names, emails, IDs, or other high-cardinality labels in monitoring-related diagnostics.
 - Placeholder but visible screens still require baseline monitoring coverage.
-- Audit ledger and telemetry must remain separate systems: never export raw audit rows via telemetry.
+- Audit ledger and monitoring must remain separate systems: never export raw audit rows through monitoring flows.
 - Security and auditing changes must follow canonical audit result semantics (`success`, `failure`, `denied`, `error`).
 
 Documentation rules:

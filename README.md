@@ -32,7 +32,7 @@ Want a fully loaded local tour instead of a blank shell? The repo now includes a
 - **Workspace Studio:** full-featured practice administration hub with tabs for Practice profile, Locations CRUD, Staff roster, Lifecycle caseload board, Appointments (service codes), Documents, Offerings, and Portal workflows
 - **Scheduling and operations workflows:** appointments, waitlists, reminders, utilization visibility, and a guided recurring-series builder so staff can create repeat schedules without typing raw RRULE syntax
 - **Client portal workflows:** onboarding, forms, documents, and client self-service surfaces
-- **Monitoring and telemetry:** local monitoring page, Prometheus metrics scraping, Jaeger distributed tracing, and optional OTLP export
+- **Monitoring and runtime health:** built-in monitoring and operations pages with local health and database visibility
 - **Security and audit foundations:** role-aware access controls and structured audit event patterns
 
 ## LATEST LOOK
@@ -76,7 +76,7 @@ The platform has moved quickly over the last few iterations, and the most recent
 
 - **Licensure time tracking:** Counselors and interns track direct clinical, indirect/administrative, individual/group supervision, CE/spiritual formation, and ministry coordination hours via the new **Time Tracking** nav link. A Quick Log modal creates entries in seconds. `LicensureProgressBars` shows per-goal hours achieved vs. target. All time entry descriptions are AES-256-GCM encrypted at rest.
 
-- **Full API documentation is live (v6.0.0):** The OpenAPI spec has been fully regenerated from the actual implementation — growing from 12 documented endpoints to 150+, fixing the security scheme from Bearer JWT to the correct HttpOnly session cookie, removing phantom paths, and adding every surface: auth, clients and all sub-resources, scheduling, billing, portal, faith features, audit intelligence, platform admin, i18n, telemetry, and monitoring. Browsable at `http://localhost:3002/api/docs`.
+- **Full API documentation is live (v6.0.0):** The OpenAPI spec has been fully regenerated from the actual implementation — growing from 12 documented endpoints to 150+, fixing the security scheme from Bearer JWT to the correct HttpOnly session cookie, removing phantom paths, and adding every active surface: auth, clients and all sub-resources, scheduling, billing, portal, faith features, audit intelligence, platform admin, i18n, and monitoring. Browsable at `http://localhost:3002/api/docs`.
 - **Deterministic Audit Intelligence observations (v6.1.0):** The Audit Intelligence tab in Practice Operations now generates instant, rule-based callouts after every query — no AI dependency required. A 75-rule engine evaluates volume patterns, denial and error rates, authentication anomalies, PHI access concentration, admin actions, actor behavior, action distribution, and data quality gaps. Results are severity-tiered (critical → warning → info) and always available without an `ANTHROPIC_API_KEY`.
 - **3-minute browser idle session timeout:** Any open browser tab now automatically invalidates the session after 3 minutes of inactivity. A dismissible warning appears at 30 seconds remaining. The server-side idle timeout has been tightened to match, providing defense in depth for PHI protection.
 - **Browser error sweep is now clean:** a Playwright-driven UI scan now walks public, admin, and client surfaces against the local app, and the latest pass cleared public CSP script violations, signed-out auth noise, protected-monitoring 401s, and the Scheduling recurring-series runtime loop so the sweep finishes at `0` public, `0` admin, and `0` client errors.
@@ -113,7 +113,7 @@ Current manual review posture: **Medium risk** (reduced from High after 2026-04-
 
 ## API Security And Compliance Baseline (v6.1.0)
 
-This repository now includes a versioned API security and compliance engineering baseline for high-trust environments where sensitive data may exist. v5.7.0 additionally ships a full Jaeger + Prometheus observability stack.
+This repository now includes a versioned API security and compliance engineering baseline for high-trust environments where sensitive data may exist.
 
 The baseline requires secure-by-design and privacy-by-design implementation patterns across all API work, including:
 
@@ -127,7 +127,7 @@ The baseline requires secure-by-design and privacy-by-design implementation patt
 Canonical reference:
 
 - `PLANS/FULL-SECURITY-AND-AUDITING.md` (includes the `v5.7.0 API Security And Compliance Engineering Standard` section)
-- `PLANS/JAEGER-PROMETHEUS-OBSERVABILITY.md` (Jaeger 2.17 + Prometheus observability stack architecture and configuration)
+- `PLANS/JAEGER-PROMETHEUS-OBSERVABILITY.md` (archived historical plan)
 
 This baseline supports HIPAA-oriented safeguards, GDPR-aligned privacy principles, SOC 2 control expectations, and PCI-conscious engineering practices.
 
@@ -163,9 +163,8 @@ The v2.0.0 spec covers all 150+ implemented endpoints across every surface of th
 - **Platform Administration** — tenant provisioning, impersonation sessions, data exports, and retention policies *(platform_admin only)*
 - **Reference** — DSM-5-TR diagnosis code search
 - **Internationalization** — locales, translation catalogs, settings, and auto-translate
-- **Telemetry** — Web Vitals and frontend event submission
-- **Monitoring** — database health and observability stack status
-- **System** — health probes, Prometheus metrics, bootstrap metadata
+- **Monitoring** — database health and local runtime visibility
+- **System** — health probes and bootstrap metadata
 
 ### Security scheme
 
@@ -220,7 +219,7 @@ The static public surfaces are meant to reflect the current product posture, not
 - `apps/worker`: background process surface for asynchronous work
 - `packages/domain`: shared domain contracts and enums
 - `packages/i18n`: localization utilities and message catalogs
-- `packages/telemetry`: shared telemetry and monitoring utilities
+- `packages/telemetry`: reserved workspace for future monitoring-related utilities
 - `ops/demo-dataset`: reproducible SQL demo-data generation, apply, and verification workflow
 - `pnpm start`: canonical local launcher with env loading, DB preflight, migrations, and coordinated API, web, and worker startup
 
@@ -234,7 +233,7 @@ That plan establishes the expected boundary for any upstream ministry platform, 
 - Future integration must use APIs, webhooks, or adapters rather than direct database coupling.
 - Member-to-client linkage must be consent-aware, tenant-scoped, revocable, and minimum-necessary.
 - Church-side users should receive ministry-safe coordination data by default, not clinical record detail.
-- AI and telemetry must treat counseling data as restricted, with audit and monitoring kept privacy-safe and separate.
+- AI and monitoring-related diagnostics must treat counseling data as restricted, with audit and monitoring kept privacy-safe and separate.
 
 ## Architecture Diagram
 
@@ -246,7 +245,7 @@ flowchart TB
     end
 
     subgraph frontend[" 🌐  Frontend — apps/web "]
-        WEB["React 18 + Mantine + Vite\nNode.js BFF · CSRF Protection · Session Proxy\nI18N Runtime · Surface Telemetry"]
+        WEB["React 18 + Mantine + Vite\nNode.js BFF · CSRF Protection · Session Proxy\nI18N Runtime · Local Monitoring"]
     end
 
     subgraph backend[" 🔌  Backend — apps/api "]
@@ -260,7 +259,7 @@ flowchart TB
     subgraph packages[" 📦  Shared Packages "]
         DOM["@faith/domain\nContracts · Enums · Types"]
         I18N["@faith/i18n\nLocale Catalogs · Runtime Translations"]
-        TEL["@faith/telemetry\nOTEL Signals · Local Monitoring"]
+        TEL["@faith/telemetry\nReserved Monitoring Utilities"]
     end
 
     subgraph ops[" 🚀  Local Startup & Demo Ops "]
@@ -268,9 +267,8 @@ flowchart TB
         DEMO["🧪 Demo Dataset SQL\nGenerate · Apply · Verify"]
     end
 
-    subgraph infra[" 🗄️  Data & Observability "]
+    subgraph infra[" 🗄️  Data & Runtime Ops "]
         DB[("MySQL\nEncrypted at Rest · Migrations")]
-        OTEL["🔭 Jaeger + Prometheus\nTraces · Metrics · optional"]
         AGENT["🤖 Translation Guardian\nPython Agent · Docker"]
     end
 
@@ -282,17 +280,13 @@ flowchart TB
     WRK --> DB
 
     WEB -. uses .-> I18N
-    WEB -. uses .-> TEL
     WEB -. uses .-> DOM
-    API -. uses .-> TEL
     API -. uses .-> DOM
-    WRK -. uses .-> TEL
     START --> WEB
     START --> API
     START --> DB
     DEMO --> DB
 
-    TEL -.->|"export\n(optional)"| OTEL
     AGENT -.->|"reviews"| I18N
 ```
 
@@ -397,7 +391,7 @@ This repository is deployment-ready, but it does not currently include opinionat
 4. Configure strict allowed origins in `ALLOWED_ORIGINS`.
 5. Set `NODE_ENV=production`.
 6. Place web/API behind TLS termination (HTTPS only).
-7. Configure an optional OTEL endpoint if centralized observability is required.
+7. Confirm monitoring and health surfaces are reachable in the deployed environment.
 8. Run migrations before app startup in each environment.
 
 ### Service start commands (container or VM)
@@ -427,6 +421,31 @@ node tests/e2e/ui-error-scan.mjs
 
 `node tests/e2e/ui-error-scan.mjs` drives Chromium against `http://127.0.0.1:3002` by default, signs in with the local admin and client demo accounts, and writes a page-by-page error report to `test-results/ui-error-scan.json`. Override the target with `UI_SCAN_BASE_URL` when needed.
 
+### Load testing (k6)
+
+Performance and load tests live in `tests/load/` and are powered by [k6](https://k6.io). They run real workflows against the live API — not mocks.
+
+```bash
+# Start the API first
+pnpm start:api
+
+# Run the full counselor workflow (composite, highest-value)
+pnpm test:load:full
+
+# Run a focused scenario
+pnpm test:load:auth
+pnpm test:load:intake
+pnpm test:load:notes
+
+# Run all scenarios sequentially
+pnpm test:load
+
+# Target staging with custom VU count
+BASE_URL=https://staging.example.com ./tests/load/run.sh full --vus 20 --duration 3m
+```
+
+Six scenarios are available: auth, client intake, session notes, scheduling, billing, and the full composite counselor workflow. See [`docs/LOAD-TESTING.md`](docs/LOAD-TESTING.md) for the complete guide — logic, thresholds, how to run on a schedule, and how to add new scenarios.
+
 ### Demo dataset workflows
 
 ```bash
@@ -451,34 +470,16 @@ pnpm agent:translation:build
 pnpm agent:translation:run
 ```
 
-### Optional telemetry export (OpenTelemetry + Jaeger + Prometheus)
+### Local monitoring
 
-All three services expose Prometheus-format `/metrics` endpoints and export traces via OTLP HTTP.
+Monitoring stays inside the application. Standard development and deployment do not require OTEL, OTLP, Jaeger, Prometheus, or browser telemetry ingestion.
 
-**Start the optional observability stack (Jaeger 2.17 + Prometheus):**
+Use the built-in surfaces instead:
 
-```bash
-docker compose --profile observability up -d
-```
-
-Key ports when running:
-
-- Jaeger UI: `http://localhost:16686`
-- Prometheus: `http://localhost:9090`
-- API metrics: `http://localhost:3001/metrics`
-- Web metrics: `http://localhost:3002/metrics`
-- Worker metrics: `http://localhost:9465/metrics`
-
-Set the trace endpoint in `.env`:
-
-```bash
-OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:4318/v1/traces
-WORKER_METRICS_PORT=9465
-```
-
-The monitoring page (`/monitor`) includes an Observability Stack panel that shows live status for all five endpoints and provides one-line enable/disable commands.
-
-If `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is unset, trace export is skipped and telemetry remains local/Prometheus-only.
+- `/monitor.html` for runtime monitoring
+- `/operations.html` for operations-oriented visibility
+- `/api/health`, `/api/health/live`, and `/api/health/ready` for health probes
+- `/api/v1/monitoring/db` for admin database monitoring
 
 ## Recent Updates
 
@@ -498,13 +499,12 @@ Every screen title, page subtitle, navigation label, dashboard panel heading, an
 
 Notable changes: `My Day` and `My Tasks` for counselors, `Today's Overview` for the admin dashboard, `Needs Attention` replacing `Priority Queue`, `Documentation Watch` replacing `Compliance Watch`, `Caseload` replacing `Lifecycle` in Workspace Studio, `Forms & Documents` replacing `Documents & Inventories`, `Privacy & Data` replacing `Data Rights` in the client portal, and `Welcome to Faith Counseling` on the sign-in screen.
 
-### Jaeger + Prometheus Observability Stack (April 6, 2026 — v5.7.0)
+### OTEL Removal (April 21, 2026)
 
-All three services now expose Prometheus-format `/metrics` endpoints and export distributed traces to Jaeger 2.17 via OTLP HTTP. A new `observability` Docker Compose profile starts Jaeger and Prometheus with a single command. W3C trace context (`traceparent`/`tracestate`) is forwarded through the web proxy so browser → web → API spans link in a single Jaeger trace tree. The monitoring page now includes a live Observability Stack status panel showing Jaeger, Prometheus, and all three metrics endpoints, with enable/disable commands inline.
+OpenTelemetry-facing browser helpers, OTLP configuration examples, and current-facing observability documentation were removed. The monitoring baseline is now local-first and does not advertise Jaeger, Prometheus, or browser telemetry ingestion as active features.
 
-- Plan: `PLANS/JAEGER-PROMETHEUS-OBSERVABILITY.md`
+- Monitoring plan: `PLANS/FULL-SURFACE-MONITORING.md`
 - Monitoring and governance: `docs/MONITORING-AND-GOVERNANCE-FOUNDATION.md`
-- Start: `docker compose --profile observability up -d`
 
 ### User Manual (April 5, 2026)
 
@@ -558,6 +558,7 @@ The change log summarizes completed work across releases and documents the detai
 
 ## Documentation Index
 
+- **Load Testing:** `docs/LOAD-TESTING.md` — k6 load test guide: scenarios, execution, thresholds, scheduling, and how to expand
 - **API Documentation:** `docs/api/openapi.yaml` — OpenAPI 3.1 spec (v2.0.0), 150+ endpoints; interactive via `http://localhost:3002/api/docs`
 - **User Manual:** `docs/User Manual/README.md` — full end-user guide covering all roles and platform surfaces
 - Locale status docs: `docs/i18n/` — generated per-locale translation coverage and review readiness snapshots
@@ -569,7 +570,7 @@ The change log summarizes completed work across releases and documents the detai
 - Security checks and nightly reports: `docs/SecurityChecks/`
 - Monitoring baseline: `PLANS/FULL-SURFACE-MONITORING.md`
 - Security and auditing baseline: `PLANS/FULL-SECURITY-AND-AUDITING.md`
-- Jaeger + Prometheus observability plan: `PLANS/JAEGER-PROMETHEUS-OBSERVABILITY.md`
+- Historical observability plan: `PLANS/JAEGER-PROMETHEUS-OBSERVABILITY.md`
 - Monitoring and governance foundation: `docs/MONITORING-AND-GOVERNANCE-FOUNDATION.md`
 - Database implementation details: `docs/DATABASE-IMPLEMENTATION.md`
 - Change log: `docs/change-log.md`

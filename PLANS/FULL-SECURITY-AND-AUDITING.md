@@ -3,7 +3,7 @@
 **Status:** Canonical baseline
 **Prepared:** March 28, 2026
 **Initiative:** AegisTrail Security & Audit Fabric
-**Stack:** Node.js API, React/standalone web, MySQL, OpenTelemetry
+**Stack:** Node.js API, React/standalone web, MySQL
 
 ## Purpose
 

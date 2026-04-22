@@ -6,7 +6,6 @@ import {
 import { IconPlus, IconTrash, IconDownload } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { csrfHeaders } from '../../lib/csrf.js';
-import { frontendTelemetry } from '../../lib/frontendTelemetry.js';
 import QuickLogModal from './QuickLogModal.jsx';
 import LicensureProgressBars from './LicensureProgressBars.jsx';
 
@@ -77,10 +76,8 @@ export default function TimeTrackingPage({ currentUser }) {
       ]);
       setEntries(entriesData.items ?? []);
       setSummary(summaryData.summary ?? []);
-      frontendTelemetry.trackSurfaceLoad('time_tracking', 'success');
     } catch (err) {
       setError(err.message);
-      frontendTelemetry.trackSurfaceLoad('time_tracking', 'error');
     } finally {
       setLoading(false);
     }
@@ -110,7 +107,6 @@ export default function TimeTrackingPage({ currentUser }) {
     const catQuery = categoryFilter ? `&category=${encodeURIComponent(categoryFilter)}` : '';
     // Trigger browser download — session cookie is sent automatically
     window.location.assign(`/api/v1/time-entries/export?${catQuery}`);
-    frontendTelemetry.trackAction('time_tracking', 'export_csv', 'success', {});
   };
 
   return (

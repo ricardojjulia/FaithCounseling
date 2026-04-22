@@ -57,7 +57,7 @@ Before writing any code, please:
 3. **For large changes, open an issue first.** Describe what you want to build and why. This avoids wasted effort and keeps changes aligned with the platform's direction.
 4. **Read the relevant plan documents** before touching security, auditing, monitoring, or telemetry:
    - `PLANS/FULL-SECURITY-AND-AUDITING.md` — canonical standard for all security, auth, PHI, RBAC, audit, and compliance work
-   - `PLANS/FULL-SURFACE-MONITORING.md` — canonical standard for monitoring, telemetry, OTEL, and surface observability
+   - `PLANS/FULL-SURFACE-MONITORING.md` — canonical standard for local monitoring, runtime health, and surface observability
 
 These plan documents are the source of truth. When in doubt, they win.
 
@@ -138,14 +138,6 @@ pnpm demo:sql:apply
 
 This creates the canonical demo dataset in MySQL so local development looks and behaves like the real product.
 
-### Optional: start the observability stack
-
-```bash
-docker compose --profile observability up -d
-```
-
-Starts Jaeger (traces at `http://localhost:16686`) and Prometheus (metrics at `http://localhost:9090`).
-
 ---
 
 ## Project Structure
@@ -159,7 +151,7 @@ faith-counseling/
 ├── packages/
 │   ├── domain/       Shared contracts, enums, and domain types
 │   ├── i18n/         Localization — locale catalogs and runtime utilities
-│   └── telemetry/    OpenTelemetry signals, Prometheus metrics, monitoring
+│   └── telemetry/    Reserved workspace for monitoring-related utilities
 ├── docs/             Documentation, change log, API spec, release summaries
 ├── ops/              Local tooling — demo dataset, security scans, startup scripts
 ├── PLANS/            Canonical implementation standards (monitoring, security)
@@ -380,7 +372,7 @@ This platform handles Protected Health Information. These rules apply to every c
 - Client names, emails, phone numbers, addresses, and clinical content are encrypted at rest. Never write these fields to the database as plaintext.
 - Never log PHI, PII, or free-text clinical content — in the API, the worker, or telemetry.
 - Never include PHI in audit event fields (`targetId`, `actorId`, `sourceWorkflow`). Use opaque IDs only.
-- Never include PHI in OTEL spans, metrics labels, or Prometheus label cardinality.
+- Never include PHI in monitoring labels, browser instrumentation payloads, or exported diagnostics.
 
 ### Authentication and authorization
 
@@ -475,15 +467,14 @@ Read `PLANS/FULL-SURFACE-MONITORING.md` before touching any surface. The rules i
 
 - New screens, tabs, pages, and major modal workflows must be added to the shared surface registry
 - New surfaces must appear in the monitoring summary and on the monitoring page
-- Use OTEL semantic conventions first; use `faith.ui.*` namespacing only for app-specific gaps
-- Local monitoring must remain available even when OTEL export is not configured
-- External OTEL export must remain optional and config-driven
+- Monitoring must remain local-first and privacy-safe
+- Do not reintroduce OTEL / OTLP exporters or external observability collectors without updating the canonical monitoring plan first
 
 ### What not to do
 
 - Never emit PHI or high-cardinality labels in telemetry or metrics
 - Never mix the audit ledger with telemetry — they are separate systems
-- Never make the observability stack a hard dependency for startup
+- Never make external monitoring infrastructure a hard dependency for startup
 
 ---
 
