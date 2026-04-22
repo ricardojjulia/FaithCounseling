@@ -11,6 +11,12 @@ import mysql from 'mysql2/promise';
 
 const tenantContextStorage = new AsyncLocalStorage();
 const poolRegistry = new Map();
+let tenantSlugCache = {
+  expiresAt: 0,
+  slugs: new Set(['system']),
+};
+
+const PROVISIONED_TENANT_ACTIVE_STATUSES = new Set(['active', 'completed', 'provisioned', 'ready']);
 
 function parseSslEnabled(value) {
   if (typeof value === 'boolean') return value;
@@ -55,6 +61,16 @@ function parseTenantDbMap() {
   }
 }
 
+function parseAllowedTenantSlugsFromEnv() {
+  const raw = process.env.TENANT_ALLOWED_SLUGS || '';
+  return new Set(
+    raw
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
 function resolveTenantDbConfig(tenantId) {
   const tenantMap = parseTenantDbMap();
   if (tenantId && tenantMap[tenantId]) {
@@ -81,6 +97,55 @@ export function getPoolForTenant(tenantId = 'system') {
   const pool = mysql.createPool(buildPoolConfig(config));
   poolRegistry.set(key, pool);
   return pool;
+}
+
+async function listProvisionedTenantSlugsFromDb() {
+  if (!process.env.DB_NAME) return new Set(['system']);
+
+  const defaultPool = getPoolForTenant('system');
+  const [rows] = await defaultPool.query(
+    `SELECT requested_tenant_id, status, completed_at
+       FROM tenant_provisioning
+      WHERE requested_tenant_id IS NOT NULL`,
+  );
+
+  const slugs = new Set(['system']);
+  for (const row of rows) {
+    const slug = String(row.requested_tenant_id || '').trim().toLowerCase();
+    if (!slug) continue;
+    const status = String(row.status || '').trim().toLowerCase();
+    const completed = Boolean(row.completed_at);
+    if (completed || PROVISIONED_TENANT_ACTIVE_STATUSES.has(status)) {
+      slugs.add(slug);
+    }
+  }
+  return slugs;
+}
+
+export async function getKnownTenantSlugs() {
+  const now = Date.now();
+  if (tenantSlugCache.expiresAt > now) {
+    return tenantSlugCache.slugs;
+  }
+
+  const slugs = new Set(['system']);
+  for (const slug of parseAllowedTenantSlugsFromEnv()) {
+    slugs.add(slug);
+  }
+
+  try {
+    const dbSlugs = await listProvisionedTenantSlugsFromDb();
+    for (const slug of dbSlugs) slugs.add(slug);
+  } catch {
+    // Fall back to env-only allowlist if DB lookup is unavailable.
+  }
+
+  const ttlMs = Number(process.env.TENANT_SLUG_CACHE_TTL_MS || 60_000);
+  tenantSlugCache = {
+    expiresAt: now + Math.max(ttlMs, 5_000),
+    slugs,
+  };
+  return slugs;
 }
 
 export function getActivePool() {

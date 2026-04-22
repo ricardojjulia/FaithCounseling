@@ -87,18 +87,18 @@
 - Remediation applied: `encrypt.js` now loads `DB_ENCRYPTION_HMAC_KEY` separately via `loadHmacKey()` / `hmacKey()`. When set, `deriveLookupHash()` uses it exclusively; when absent, it falls back to the main key for backward compatibility. Changing the HMAC key invalidates all existing lookup hashes — a rehash migration is required before switching keys in production. README already documented the variable correctly.
 - Manual verification needed: Confirm whether deployment tooling injects additional unused secrets or relies on the README contract.
 
-### F-007 - Tenant host isolation is now implemented but strict unknown-tenant rejection is configuration-dependent
+### F-007 - Tenant host isolation requires strict tenant-host mode for non-local SaaS routing
 - Severity: Medium
 - Confidence: Medium
 - Category: AuthZ, Tenant Isolation, Configuration
-- Status: Mitigated (requires deployment configuration to reach full enforcement)
+- Status: Mitigated (stronger runtime guard added)
 - Affected files: `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/pools.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/pool.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/middleware/tenant.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/index.js`
-- Evidence: Request handling now resolves tenant context from host and runs inside tenant-scoped DB context (`apps/api/src/index.js` server wrapper and `runWithTenantContext`). Unknown tenant rejection is enforced only when `TENANT_STRICT_HOST_ROUTING=true` and an allowlist is provided (`apps/api/src/middleware/tenant.js`).
-- Risk: If SaaS deployment enables host-based tenant routing without strict mode and explicit tenant allowlists, unknown or mistyped tenant hosts may route through default tenant behavior instead of deterministic 404 isolation.
+- Evidence: Request handling resolves tenant context from host and runs inside tenant-scoped DB context (`apps/api/src/index.js` server wrapper and `runWithTenantContext`). Known tenant slugs are now loaded from `tenant_provisioning` with env fallback (`apps/api/src/db/pools.js`). Unknown tenant rejection is enforced against that canonical set when `TENANT_STRICT_HOST_ROUTING=true` (`apps/api/src/middleware/tenant.js`). Startup now fails fast in non-local runtime when `ENABLE_TENANT_HOST_ROUTING=true` without strict mode (`apps/api/src/index.js`).
+- Risk: If teams route real SaaS host traffic without enabling tenant-host mode and strict mode as intended, tenant host isolation guarantees can still be weakened by configuration drift.
 - Impact: Weak host-routing configuration can undermine expected tenant boundary guarantees in production SaaS mode.
 - PHI/PII relevance: Tenant isolation failures can expose cross-practice metadata or records.
-- Remediation applied: Added strict-mode 404 enforcement capability and explicit tenant allowlist support. Default mode remains backward-compatible for local/dev.
-- Manual verification needed: Confirm production uses `TENANT_STRICT_HOST_ROUTING=true`, sets `TENANT_ALLOWED_SLUGS`, and provisions tenant DB mappings before enabling custom host routing.
+- Remediation applied: Added DB-backed canonical tenant slug source, strict-mode unknown-tenant 404 enforcement against canonical slugs, and non-local startup guard requiring strict mode when tenant-host routing is enabled.
+- Manual verification needed: Confirm staging/production explicitly set `ENABLE_TENANT_HOST_ROUTING=true` with `TENANT_STRICT_HOST_ROUTING=true`, and verify provisioning statuses correctly represent active tenants.
 
 ## Sensitive Data Inventory
 - PHI: client demographics, DOB, SSN fragments, treatment plans, progress notes, diagnoses, medications, allergies, clinical history, legal/guardianship data, portal messages, uploads, intake answers — primarily in `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/schema.sql` and related query modules; several flows correctly encrypt these fields. The credential-disclosure and log-leakage paths from the original review have been remediated.

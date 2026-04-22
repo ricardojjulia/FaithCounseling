@@ -2,6 +2,25 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 22, 2026 — Phase 4 strict tenant-host enforcement and canonical slug source
+
+### feat: enforce strict host routing in non-local tenant-host mode and resolve known tenants from provisioning data
+
+**Date:** April 22, 2026
+**Affected area:** `apps/api/src/db/pools.js`, `apps/api/src/middleware/tenant.js`, `apps/api/src/index.js`, `README.md`, `docs/SecurityChecks/findings.md`, `docs/SecurityChecks/recommendations.md`
+
+Implemented Phase 4 slice 2 for tenant-isolation hardening:
+
+- added cached known-tenant slug resolution from `tenant_provisioning` (`requested_tenant_id`, active/completed statuses) with env allowlist fallback
+- enforced strict unknown-tenant rejection against the canonical slug set when strict mode is enabled
+- added a startup guard: if `ENABLE_TENANT_HOST_ROUTING=true` in non-local runtime and `TENANT_STRICT_HOST_ROUTING` is not enabled, API startup fails fast
+
+Security posture notes:
+
+- host-routing isolation now has a canonical tenant source of truth rather than env-only allowlists
+- misconfigured non-local tenant-host deployments fail closed at startup
+- local/dev remains backward compatible when tenant-host routing is disabled
+
 ## April 22, 2026 — Phase 4 tenant DB registry and host routing foundation
 
 ### feat: add tenant-aware pool registry and host-based tenant context middleware

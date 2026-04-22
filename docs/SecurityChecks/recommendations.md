@@ -58,8 +58,8 @@
 - Effort: S
 - Suggested owner: Backend, DevOps
 - Recommendation: Require strict unknown-tenant rejection and explicit tenant allowlisting in every non-local environment that uses host-based tenant routing.
-- Implementation notes: Set `TENANT_STRICT_HOST_ROUTING=true`, configure `TENANT_ALLOWED_SLUGS`, and ensure per-tenant DB mappings are present before accepting tenant host traffic. Add deployment checks that fail if strict routing is disabled in SaaS environments.
-- Definition of done: Unknown tenant hosts always return 404 in staging/production and cannot fall back to default tenant handling.
+- Implementation notes: Runtime now fails fast when `ENABLE_TENANT_HOST_ROUTING=true` in non-local runtime without strict mode. Complete rollout by enforcing deployment policy that always enables tenant-host mode and strict mode together for SaaS traffic, and validate provisioning-driven slug sets match active tenants.
+- Definition of done: Unknown tenant hosts always return 404 in staging/production, startup guard is active in deployment policy checks, and active tenant slugs are sourced from provisioning data.
 
 ## Quick Wins
 - Remove `temporaryPassword` from public and admin portal API responses.

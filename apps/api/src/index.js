@@ -46,7 +46,14 @@ import { translateMessages } from './lib/translate.js';
 import { handleCors, checkRateLimit, enforceRbac, enforceTenantScope, callerIdentity } from './lib/security.js';
 import { searchDsm5TrDiagnoses } from './lib/dsm5-tr-reference.js';
 import pool, { verifyConnection, runWithTenantContext } from './db/pool.js';
-import { resolveTenantContext, denyUnknownTenantHost } from './middleware/tenant.js';
+import { getKnownTenantSlugs } from './db/pools.js';
+import {
+  resolveTenantContext,
+  denyUnknownTenantHost,
+  isTenantHostRoutingEnabled,
+  isStrictTenantRoutingEnabled,
+  isNonLocalRuntime,
+} from './middleware/tenant.js';
 import { encrypt, decrypt, encryptJson, decryptJson, deriveLookupHash } from './lib/encrypt.js';
 import {
   login,
@@ -229,6 +236,16 @@ if (process.env.DB_NAME) {
     });
     throw error;
   }
+}
+
+if (isTenantHostRoutingEnabled() && isNonLocalRuntime() && !isStrictTenantRoutingEnabled()) {
+  logError('startup.tenant_routing_configuration_invalid', {
+    reason: 'strict_mode_required_non_local',
+    enableTenantHostRouting: true,
+    strictRouting: false,
+    nodeEnv: process.env.NODE_ENV || 'undefined',
+  });
+  throw new Error('TENANT_STRICT_HOST_ROUTING must be true when ENABLE_TENANT_HOST_ROUTING is enabled outside local runtime.');
 }
 
 process.on('unhandledRejection', (reason) => {
@@ -2039,21 +2056,33 @@ export const server = http.createServer((request, response) => {
   const tenantContext = resolveTenantContext(request.headers.host);
   request.tenantId = tenantContext.tenantId;
   request.tenantHost = tenantContext.host;
+  getKnownTenantSlugs()
+    .then((knownTenantSlugs) => {
+      if (denyUnknownTenantHost(response, tenantContext, knownTenantSlugs)) {
+        return;
+      }
 
-  if (denyUnknownTenantHost(response, tenantContext)) {
-    return;
-  }
-
-  runWithTenantContext(tenantContext, () => handleApiRequest(request, response)).catch((error) => {
-    logError('request.tenant_context_failure', {
-      requestId: request.requestId,
-      tenantId: tenantContext.tenantId,
-      tenantHost: tenantContext.host,
-      error,
-    });
-    if (!response.headersSent) {
-      writeJson(response, 500, { error: 'Unexpected server error' });
-    }
+      runWithTenantContext(tenantContext, () => handleApiRequest(request, response)).catch((error) => {
+        logError('request.tenant_context_failure', {
+          requestId: request.requestId,
+          tenantId: tenantContext.tenantId,
+          tenantHost: tenantContext.host,
+          error,
+        });
+        if (!response.headersSent) {
+          writeJson(response, 500, { error: 'Unexpected server error' });
+        }
+      });
+    })
+    .catch((error) => {
+      logError('request.tenant_lookup_failure', {
+        requestId: request.requestId,
+        tenantHost: tenantContext.host,
+        error,
+      });
+      if (!response.headersSent) {
+        writeJson(response, 500, { error: 'Unexpected server error' });
+      }
   });
 });
 
