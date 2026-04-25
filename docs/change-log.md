@@ -2,6 +2,19 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 25, 2026 — Workspace Studio surface tab expansion
+
+### feat: extend Workspace Studio shared surface primitives across core tabs
+
+**Date:** April 25, 2026
+**Affected area:** `apps/web/src/components/ui/surface.jsx`, `apps/web/src/components/WorkspaceStudio/tabs/PracticeTab.jsx`, `apps/web/src/components/WorkspaceStudio/tabs/LocationsTab.jsx`, `apps/web/src/components/WorkspaceStudio/tabs/LifecycleTab.jsx`, `README.md`, `apps/web/README.md`
+
+Continued the Mantine-first Workspace Studio refactor:
+
+- extended the shared stat card primitive so tab-specific status cards can keep progress indicators and click behavior
+- refactored Practice, Locations, and Lifecycle loading/error/empty states and section headers onto shared surface primitives
+- replaced the remaining text-only location removal affordance with a Lucide icon button while preserving the existing CRUD workflow
+
 ## April 25, 2026 — Startup preflight and Workspace Studio UI primitives
 
 ### feat: add shared Workspace Studio surface primitives and configured database startup preflight

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import {
-  Stack, Title, Text, Paper, TextInput, Group, Button, Alert, Loader,
+  Stack, Text, TextInput, Group, Button,
   Badge, Switch, ActionIcon, Divider, Modal,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import { Plus, X } from 'lucide-react';
 import { csrfHeaders } from '../../../lib/csrf.js';
+import { SectionHeader, SectionSurface, SurfaceState } from '../../ui/surface.jsx';
 
 async function apiFetch(url, options = {}) {
   const res = await fetch(url, options);
@@ -139,27 +141,33 @@ export default function LocationsTab() {
     }
   }
 
-  if (loading) return <Group justify="center" py="xl"><Loader size="sm" /></Group>;
-  if (error) return <Alert color="red" title="Unable to load locations">{error}</Alert>;
+  if (loading) return <SurfaceState type="loading" message="Loading locations..." />;
+  if (error) return <SurfaceState type="error" title="Unable to load locations" message={error} />;
 
   return (
     <Stack gap="md">
-      <Paper withBorder radius="md" p="md">
-        <Group justify="space-between" align="flex-start" mb="md">
-          <Stack gap={2}>
-            <Title order={3} fz="md">Locations</Title>
-            <Text fz="sm" c="dimmed">Practice locations used for scheduling and client appointments.</Text>
-          </Stack>
-          <Button size="xs" onClick={() => { setAddDraft(BLANK_FORM); setAddOpen(true); }}>+ Add Location</Button>
-        </Group>
+      <SectionSurface>
+        <SectionHeader
+          title="Locations"
+          description="Practice locations used for scheduling and client appointments."
+          actions={(
+            <Button
+              size="xs"
+              leftSection={<Plus size={14} />}
+              onClick={() => { setAddDraft(BLANK_FORM); setAddOpen(true); }}
+            >
+              Add Location
+            </Button>
+          )}
+        />
         <Divider mb="md" />
 
         {!locations.length ? (
-          <Text c="dimmed" fz="sm">No locations configured. Add one to enable location-based scheduling.</Text>
+          <SurfaceState message="No locations configured. Add one to enable location-based scheduling." />
         ) : (
           <Stack gap="sm">
             {locations.map((loc) => (
-              <Paper key={loc.id} withBorder radius="sm" p="sm">
+              <SectionSurface key={loc.id} radius="sm" p="sm">
                 {editingId === loc.id ? (
                   <Stack gap="sm">
                     <LocationForm draft={editDraft} onChange={(f, v) => setEditDraft((d) => ({ ...d, [f]: v }))} />
@@ -188,16 +196,16 @@ export default function LocationsTab() {
                         onClick={() => deleteLocation(loc.id, loc.name)}
                         title="Remove location"
                       >
-                        ✕
+                        <X size={14} />
                       </ActionIcon>
                     </Group>
                   </Group>
                 )}
-              </Paper>
+              </SectionSurface>
             ))}
           </Stack>
         )}
-      </Paper>
+      </SectionSurface>
 
       <Modal opened={addOpen} onClose={() => setAddOpen(false)} title="Add Location">
         <Stack gap="sm">

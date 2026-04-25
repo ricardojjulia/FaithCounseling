@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Stack, Title, Text, Paper, Group, Button, Alert, Loader, Badge,
+  Stack, Text, Group, Button, Badge,
   Divider, SimpleGrid, Select, TextInput, Modal, Box, Progress,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { csrfHeaders } from '../../../lib/csrf.js';
+import { SectionHeader, SectionSurface, SurfaceState, SurfaceStatCard } from '../../ui/surface.jsx';
 
 async function apiFetch(url, options = {}) {
   const res = await fetch(url, options);
@@ -111,8 +112,8 @@ export default function LifecycleTab({ onOpenClient }) {
     }
   }
 
-  if (loading) return <Group justify="center" py="xl"><Loader size="sm" /></Group>;
-  if (error) return <Alert color="red" title="Unable to load lifecycle data">{error}</Alert>;
+  if (loading) return <SurfaceState type="loading" message="Loading lifecycle data..." />;
+  if (error) return <SurfaceState type="error" title="Unable to load lifecycle data" message={error} />;
 
   const withStatus = clients.map((c) => ({ ...c, caseStatus: lifecycles[c.id]?.caseStatus ?? 'active' }));
   const counts = Object.fromEntries(Object.keys(CASE_STATUS_META).map((s) => [s, withStatus.filter((c) => c.caseStatus === s).length]));
@@ -133,27 +134,25 @@ export default function LifecycleTab({ onOpenClient }) {
       {/* Status summary */}
       <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
         {Object.entries(CASE_STATUS_META).sort((a, b) => a[1].order - b[1].order).map(([status, meta]) => (
-          <Paper
+          <SurfaceStatCard
             key={status}
-            withBorder
-            radius="md"
-            p="md"
+            label={meta.label}
+            value={counts[status] ?? 0}
+            color={meta.color}
             style={{ cursor: 'pointer', opacity: filterStatus !== 'all' && filterStatus !== status ? 0.5 : 1 }}
             onClick={() => setFilterStatus(filterStatus === status ? 'all' : status)}
           >
-            <Text fz="xs" c="dimmed" tt="uppercase" fw={700}>{meta.label}</Text>
-            <Text fz="2rem" fw={700} c={meta.color}>{counts[status] ?? 0}</Text>
             {total > 0 && (
               <Progress value={((counts[status] ?? 0) / total) * 100} color={meta.color} size="xs" mt="xs" />
             )}
-          </Paper>
+          </SurfaceStatCard>
         ))}
       </SimpleGrid>
 
       {/* Referral sources */}
       {sortedSources.length > 0 && (
-        <Paper withBorder radius="md" p="md">
-          <Title order={4} fz="sm" mb="sm">Referral Sources</Title>
+        <SectionSurface>
+          <SectionHeader title="Referral Sources" />
           <Stack gap="xs">
             {sortedSources.map(([src, count]) => (
               <Group key={src} justify="space-between" wrap="nowrap">
@@ -165,29 +164,27 @@ export default function LifecycleTab({ onOpenClient }) {
               </Group>
             ))}
           </Stack>
-        </Paper>
+        </SectionSurface>
       )}
 
       {/* Client caseload list */}
-      <Paper withBorder radius="md" p="md">
-        <Group justify="space-between" mb="md">
-          <Stack gap={2}>
-            <Title order={3} fz="md">
-              Caseload {filterStatus !== 'all' && `— ${statusLabel(filterStatus)}`}
-            </Title>
-            <Text fz="sm" c="dimmed">{filtered.length} client{filtered.length !== 1 ? 's' : ''}</Text>
-          </Stack>
-          <Group gap="xs">
-            {filterStatus !== 'all' && (
-              <Button size="xs" variant="subtle" onClick={() => setFilterStatus('all')}>Show all</Button>
-            )}
-            <Button size="xs" variant="default" onClick={load}>Refresh</Button>
-          </Group>
-        </Group>
+      <SectionSurface>
+        <SectionHeader
+          title={`Caseload${filterStatus !== 'all' ? ` - ${statusLabel(filterStatus)}` : ''}`}
+          description={`${filtered.length} client${filtered.length !== 1 ? 's' : ''}`}
+          actions={(
+            <>
+              {filterStatus !== 'all' && (
+                <Button size="xs" variant="subtle" onClick={() => setFilterStatus('all')}>Show all</Button>
+              )}
+              <Button size="xs" variant="default" onClick={load}>Refresh</Button>
+            </>
+          )}
+        />
         <Divider mb="md" />
 
         {!filtered.length ? (
-          <Text c="dimmed" fz="sm">No clients in this status.</Text>
+          <SurfaceState message="No clients in this status." />
         ) : (
           <Stack gap="xs">
             {filtered.map((client) => {
@@ -195,7 +192,7 @@ export default function LifecycleTab({ onOpenClient }) {
               const currentStatus = lc.caseStatus ?? 'active';
               const nextStatuses = CASE_STATUS_OPTIONS.filter((o) => o.value !== currentStatus);
               return (
-                <Paper key={client.id} withBorder radius="sm" p="sm">
+                <SectionSurface key={client.id} radius="sm" p="sm">
                   <Group justify="space-between" align="flex-start" wrap="wrap">
                     <Box>
                       <Group gap="xs" mb={2}>
@@ -232,12 +229,12 @@ export default function LifecycleTab({ onOpenClient }) {
                       />
                     </Group>
                   </Group>
-                </Paper>
+                </SectionSurface>
               );
             })}
           </Stack>
         )}
-      </Paper>
+      </SectionSurface>
 
       {/* Discharge modal */}
       <Modal

@@ -205,10 +205,10 @@ All `DateInput` components (Mantine v8) across the application accept dates in `
 
 Workspace Studio is the practice administration hub, accessible from the main navigation. It provides a tabbed interface covering all practice management surfaces:
 
-- **Practice** — edit the practice profile: name, type (solo/group/multi-location), timezone, faith tradition, and contact information.
-- **Locations** — add, edit, and delete scheduling locations. Each location tracks name, address, capacity, and telehealth/remote-enabled flag.
+- **Practice** — edit the practice profile through shared Workspace Studio surface primitives: name, type (solo/group/multi-location), timezone, faith tradition, contact information, and telehealth configuration.
+- **Locations** — add, edit, and delete scheduling locations through the shared Studio section layout. Each location tracks name, address, capacity, and telehealth/remote-enabled flag.
 - **Staff** — read-only staff roster showing counselor cards (role, license type/number, supervision status, bio) and admin accounts. Links to the full Staff Management page for account creation and password resets.
-- **Lifecycle** — caseload management board. Clickable status summary cards (Active, Waitlist, Inactive, Discharged) filter the client list. Referral source breakdown. Per-client status transitions with a discharge modal capturing reason and notes.
+- **Lifecycle** — caseload management board using shared Studio stat and section surfaces. Clickable status summary cards (Active, Waitlist, Inactive, Discharged) filter the client list. Referral source breakdown. Per-client status transitions with a discharge modal capturing reason and notes.
 - **Appointments** — service code configuration (CPT/billing codes). Manage codes with category, default session duration, and active/inactive status.
 - **Documents** — assign forms to clients and review submission history. Supports direct navigation from a client record with the client pre-selected.
 - **Offerings** — track client service offerings and financial arrangements.
