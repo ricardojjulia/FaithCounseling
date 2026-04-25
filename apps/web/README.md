@@ -64,6 +64,7 @@ Default URL: `http://localhost:3000`
 - interactive API docs served through the same-origin proxy at `/api/docs`
 - branded static About page at `/about` with a stronger counselor-first product narrative, shared light-indigo app palette, and operational linkouts
 - UI foundation now includes Tailwind v4 tokens mapped to the app CSS variables, a shadcn-compatible `cn` helper, and Lucide icons for React surfaces
+- Workspace Studio now uses shared surface primitives for its shell, Clients tab summary cards, and Chart tab loading/error/empty states
 
 ## Monitoring Notes
 

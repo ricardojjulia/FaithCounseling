@@ -2,6 +2,19 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 25, 2026 — Startup preflight and Workspace Studio UI primitives
+
+### feat: add shared Workspace Studio surface primitives and configured database startup preflight
+
+**Date:** April 25, 2026
+**Affected area:** `ops/start-all.mjs`, `apps/web/src/components/ui/surface.jsx`, `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx`, `apps/web/src/components/WorkspaceStudio/tabs/ClientsTab.jsx`, `apps/web/src/components/WorkspaceStudio/tabs/ChartTab.jsx`, `README.md`, `apps/web/README.md`
+
+Improved the canonical local startup path and started the next UI refactor slice:
+
+- `pnpm start` now checks the configured `DB_HOST`/`DB_PORT` listener before trying to start the local compose database, so existing local database stacks can satisfy preflight without a stale compose service blocking startup
+- added shared Mantine-first surface primitives for page shells, section cards, section headers, stat cards, and loading/error/empty states
+- refactored Workspace Studio shell plus the Clients and Chart tabs to use the shared primitives while preserving the existing monitored surfaces and workflows
+
 ## April 25, 2026 — React UI stack foundation refactor
 
 ### feat: wire Tailwind v4, shadcn/ui configuration, and Lucide icons into the web app

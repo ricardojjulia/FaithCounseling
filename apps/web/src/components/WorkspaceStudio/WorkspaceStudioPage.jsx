@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Tabs, Text, Stack, Title, Paper } from '@mantine/core';
+import { Tabs, Text } from '@mantine/core';
 import PortalTab from './tabs/PortalTab.jsx';
 import DocumentsStudioTab from './tabs/DocumentsStudioTab.jsx';
 import OfferingsTab from './tabs/OfferingsTab.jsx';
@@ -11,6 +11,7 @@ import AppointmentsTab from './tabs/AppointmentsTab.jsx';
 import ChartTab from './tabs/ChartTab.jsx';
 import ClientsTab from './tabs/ClientsTab.jsx';
 import { useI18n } from '../../lib/i18nContext.jsx';
+import { PageSurface, SectionSurface } from '../ui/surface.jsx';
 
 const STUDIO_TABS = [
   { id: 'practice', labelKey: 'studio.tab.practice' },
@@ -33,9 +34,8 @@ export default function WorkspaceStudioPage({ initialTab = 'portal', onScheduleP
   }, [initialTab]);
 
   return (
-    <Stack gap="md" p="md">
-      <Title order={2} fz="lg">{t('studio.title')}</Title>
-      <Paper withBorder radius="md" p="md">
+    <PageSurface title={t('studio.title')}>
+      <SectionSurface>
         <Tabs value={activeTab} onChange={(value) => setActiveTab(value || 'portal')}>
           <Tabs.List style={{ overflowX: 'auto', flexWrap: 'nowrap' }}>
             {STUDIO_TABS.map((tab) => (
@@ -72,7 +72,7 @@ export default function WorkspaceStudioPage({ initialTab = 'portal', onScheduleP
             </Tabs.Panel>
           ))}
         </Tabs>
-      </Paper>
-    </Stack>
+      </SectionSurface>
+    </PageSurface>
   );
 }

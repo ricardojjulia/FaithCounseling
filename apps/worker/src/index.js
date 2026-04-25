@@ -1,8 +1,9 @@
-import mysql from 'mysql2/promise';
+import pg from 'pg';
 import { decrypt } from './decrypt.js';
 import { sendEmail, sendSms } from './notify.js';
 
 const workerName = 'reminder-worker';
+const { Pool } = pg;
 
 console.log(`${workerName} initialized`);
 
@@ -12,21 +13,72 @@ console.log(`${workerName} initialized`);
 
 const tenantPools = new Map();
 
+function toPositional(sql) {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
+}
+
+function adaptResult(result) {
+  const rows = result.rows ?? [];
+  rows.affectedRows = result.rowCount ?? 0;
+  return [rows, result.fields ?? []];
+}
+
 function getPool(tenantId, config) {
   if (tenantPools.has(tenantId)) return tenantPools.get(tenantId);
-  const pool = mysql.createPool({
+  const pgPool = new Pool({
     host: config.host || '127.0.0.1',
-    port: Number(config.port || 3306),
+    port: Number(config.port || 57322),
     database: config.database,
     user: config.user,
     password: config.password,
     ssl: String(config.ssl).toLowerCase() === 'true' ? { rejectUnauthorized: true } : false,
-    connectionLimit: 3,
-    waitForConnections: true,
-    timezone: 'Z',
+    max: 3,
+    connectionTimeoutMillis: 10_000,
+    idleTimeoutMillis: 30_000,
   });
+  pgPool.on('error', () => {});
+  const pool = {
+    query(sql, params = []) {
+      return pgPool.query(toPositional(sql), params).then(adaptResult);
+    },
+    end() {
+      return pgPool.end();
+    },
+  };
   tenantPools.set(tenantId, pool);
   return pool;
+}
+
+function defaultDbConfigFromEnv() {
+  return {
+    host: process.env.DB_HOST ?? '127.0.0.1',
+    port: process.env.DB_PORT ?? 57322,
+    database: process.env.DB_NAME,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    ssl: process.env.DB_SSL ?? 'false',
+  };
+}
+
+function normalizeTenantConfig(tenantId, config) {
+  return {
+    tenantId,
+    config: {
+      ...defaultDbConfigFromEnv(),
+      ...(config && typeof config === 'object' ? config : {}),
+    },
+  };
+}
+
+function tenantConfigsFromMap(map) {
+  return Object.entries(map).map(([tenantId, config]) => {
+    const database = typeof config === 'string' ? config : config?.database;
+    return normalizeTenantConfig(tenantId, {
+      ...(typeof config === 'object' ? config : {}),
+      database: database || process.env.DB_NAME,
+    });
+  });
 }
 
 async function closeAllPools() {
@@ -43,7 +95,7 @@ function resolveTenantConfigs() {
     try {
       const map = JSON.parse(process.env.TENANT_DB_MAP);
       if (map && typeof map === 'object') {
-        return Object.entries(map).map(([tenantId, config]) => ({ tenantId, config }));
+        return tenantConfigsFromMap(map);
       }
     } catch {
       console.error(`[${workerName}] Invalid TENANT_DB_MAP JSON — falling back to DB_NAME`);
@@ -51,17 +103,7 @@ function resolveTenantConfigs() {
   }
 
   if (process.env.DB_NAME) {
-    return [{
-      tenantId: process.env.DB_NAME,
-      config: {
-        host: process.env.DB_HOST ?? 'localhost',
-        port: process.env.DB_PORT ?? 3306,
-        database: process.env.DB_NAME,
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-        ssl: process.env.DB_SSL ?? 'false',
-      },
-    }];
+    return [normalizeTenantConfig('system', defaultDbConfigFromEnv())];
   }
 
   return [];
@@ -78,7 +120,7 @@ async function getClientContact(pool, clientId, tenantId) {
   );
   const [[phone]] = await pool.query(
     `SELECT number_enc FROM client_phones
-     WHERE client_id = ? AND tenant_id = ? AND ok_to_text = 1
+     WHERE client_id = ? AND tenant_id = ? AND ok_to_text = TRUE
      ORDER BY is_preferred DESC LIMIT 1`,
     [clientId, tenantId],
   );
@@ -166,7 +208,7 @@ async function expireStaleReminders(pool, tenantId) {
     `UPDATE reminders
      SET status = 'expired', updated_at = NOW()
      WHERE status = 'pending'
-       AND reminder_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)
+       AND reminder_at < (NOW() - INTERVAL '24 hours')
        AND tenant_id = ?`,
     [tenantId],
   );

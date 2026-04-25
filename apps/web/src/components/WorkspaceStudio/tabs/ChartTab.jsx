@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import {
-  Stack, Title, Text, Paper, Group, Badge, Switch, Loader, Alert, Divider,
-  Table, Button, ActionIcon, Tooltip, TextInput, Select,
+  Stack, Text, Badge, Switch, Divider,
+  Table, ActionIcon, Tooltip, TextInput, Select,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { RefreshCw, Search } from 'lucide-react';
 import { csrfHeaders } from '../../../lib/csrf.js';
+import { SectionHeader, SectionSurface, SurfaceState } from '../../ui/surface.jsx';
 
 const CATEGORY_ORDER = [
   'intake', 'administrative', 'assessment', 'clinical', 'treatment',
@@ -124,32 +125,34 @@ export default function ChartTab() {
   const activeCount = items.filter((i) => i.isActive).length;
   const signupCount = items.filter((i) => i.isStandardOnSignup).length;
 
-  if (loading) return <Group justify="center" py="xl"><Loader size="sm" /></Group>;
-  if (error) return <Alert color="red" title="Unable to load form catalog">{error}</Alert>;
+  if (loading) return <SurfaceState type="loading" message="Loading form catalog..." />;
+  if (error) return <SurfaceState type="error" title="Unable to load form catalog" message={error} />;
 
   return (
     <Stack gap="md">
-      <Paper withBorder radius="md" p="md">
-        <Stack gap="xs" mb="md">
-          <Group justify="space-between" align="flex-start">
-            <div>
-              <Title order={3} fz="md">Clinical Form &amp; Instrument Catalog</Title>
-              <Text fz="sm" c="dimmed">
-                Control which assessments, worksheets, and forms are available for this practice.
-                Forms marked <strong>Standard on Signup</strong> are automatically included in new
-                client intake packets.
-              </Text>
-            </div>
+      <SectionSurface>
+        <SectionHeader
+          title="Clinical Form & Instrument Catalog"
+          description={(
+            <>
+              Control which assessments, worksheets, and forms are available for this practice.
+              Forms marked <strong> Standard on Signup</strong> are automatically included in new
+              client intake packets.
+            </>
+          )}
+          actions={(
             <Tooltip label="Refresh">
               <ActionIcon variant="subtle" onClick={load}><RefreshCw size={16} /></ActionIcon>
             </Tooltip>
-          </Group>
-          <Group gap="sm">
+          )}
+          meta={(
+            <>
             <Badge variant="light" color="teal">{activeCount} active</Badge>
             <Badge variant="light" color="blue">{signupCount} on signup</Badge>
             <Badge variant="light" color="gray">{items.length} total</Badge>
-          </Group>
-        </Stack>
+            </>
+          )}
+        />
         <Divider mb="md" />
         <Group mb="md" gap="sm">
           <TextInput
@@ -170,7 +173,7 @@ export default function ChartTab() {
         </Group>
 
         {grouped.length === 0 && (
-          <Text c="dimmed" fz="sm" ta="center" py="xl">No forms match the current filter.</Text>
+          <SurfaceState message="No forms match the current filter." />
         )}
 
         {grouped.map(({ cat, rows }) => (
@@ -222,7 +225,7 @@ export default function ChartTab() {
             </Table>
           </div>
         ))}
-      </Paper>
+      </SectionSurface>
     </Stack>
   );
 }

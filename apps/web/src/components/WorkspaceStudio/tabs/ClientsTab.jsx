@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import {
-  Stack, Title, Text, Paper, Group, Badge, Loader, Alert,
-  Table, Button, TextInput, Select, SimpleGrid, Divider, ActionIcon, Tooltip,
+  Stack, Text, Group, Badge,
+  Table, TextInput, Select, SimpleGrid, Divider, ActionIcon, Tooltip,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { ExternalLink, RefreshCw, Search, Users } from 'lucide-react';
 import { useI18n } from '../../../lib/i18nContext.jsx';
+import { SectionHeader, SectionSurface, SurfaceState, SurfaceStatCard } from '../../ui/surface.jsx';
 
 const CLIENT_STATUSES = ['active', 'waitlist', 'inactive', 'discharged'];
 
@@ -31,15 +32,6 @@ async function apiFetch(url) {
     throw new Error(msg);
   }
   return res.json();
-}
-
-function SummaryCard({ label, value, color = 'blue' }) {
-  return (
-    <Paper withBorder radius="md" p="md" style={{ textAlign: 'center' }}>
-      <Text fz="xs" c="dimmed" tt="uppercase" fw={700} mb={4}>{label}</Text>
-      <Badge size="xl" variant="light" color={color} radius="sm">{value}</Badge>
-    </Paper>
-  );
 }
 
 export default function ClientsTab({ onViewClient }) {
@@ -95,27 +87,24 @@ export default function ClientsTab({ onViewClient }) {
     <Stack gap="md">
       {/* Summary stats */}
       <SimpleGrid cols={{ base: 2, sm: 3, md: 6 }} spacing="sm">
-        <SummaryCard label="Active"     value={activeCount}     color="green" />
-        <SummaryCard label="Waitlist"   value={waitlistCount}   color="yellow" />
-        <SummaryCard label="Inactive"   value={inactiveCount}   color="gray" />
-        <SummaryCard label="Discharged" value={dischargedCount} color="blue" />
-        <SummaryCard label="High Touchpoint" value={highTpCount} color="red" />
-        <SummaryCard label="Minors"     value={minorCount}      color="orange" />
+        <SurfaceStatCard label="Active"     value={activeCount}     color="green" />
+        <SurfaceStatCard label="Waitlist"   value={waitlistCount}   color="yellow" />
+        <SurfaceStatCard label="Inactive"   value={inactiveCount}   color="gray" />
+        <SurfaceStatCard label="Discharged" value={dischargedCount} color="blue" />
+        <SurfaceStatCard label="High Touchpoint" value={highTpCount} color="red" />
+        <SurfaceStatCard label="Minors"     value={minorCount}      color="orange" />
       </SimpleGrid>
 
-      <Paper withBorder radius="md" p="md">
-        <Group justify="space-between" align="flex-start" mb="xs">
-          <div>
-            <Title order={3} fz="md">Client Directory</Title>
-            <Text fz="sm" c="dimmed">
-              {items.length} client{items.length === 1 ? '' : 's'} on record.{' '}
-              Click any row to open the client&apos;s chart.
-            </Text>
-          </div>
-          <Tooltip label="Refresh">
+      <SectionSurface>
+        <SectionHeader
+          title="Client Directory"
+          description={`${items.length} client${items.length === 1 ? '' : 's'} on record. Click any row to open the client's chart.`}
+          actions={(
+            <Tooltip label="Refresh">
             <ActionIcon variant="subtle" onClick={load}><RefreshCw size={16} /></ActionIcon>
-          </Tooltip>
-        </Group>
+            </Tooltip>
+          )}
+        />
         <Divider mb="md" />
         <Group mb="md" gap="sm">
           <TextInput
@@ -136,14 +125,11 @@ export default function ClientsTab({ onViewClient }) {
         </Group>
 
         {loading ? (
-          <Group justify="center" py="xl"><Loader size="sm" /></Group>
+          <SurfaceState type="loading" message="Loading client directory..." />
         ) : error ? (
-          <Alert color="red" title="Unable to load clients">{error}</Alert>
+          <SurfaceState type="error" title="Unable to load clients" message={error} />
         ) : filtered.length === 0 ? (
-          <Group justify="center" py="xl" gap="xs" c="dimmed">
-            <Users size={24} opacity={0.4} />
-            <Text fz="sm">No clients match the current filter.</Text>
-          </Group>
+          <SurfaceState message="No clients match the current filter." icon={<Users size={24} opacity={0.4} />} />
         ) : (
           <Table striped highlightOnHover withTableBorder withColumnBorders fz="sm">
             <Table.Thead>
@@ -218,7 +204,7 @@ export default function ClientsTab({ onViewClient }) {
             </Table.Tbody>
           </Table>
         )}
-      </Paper>
+      </SectionSurface>
     </Stack>
   );
 }

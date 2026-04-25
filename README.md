@@ -232,7 +232,7 @@ The static public surfaces are meant to reflect the current product posture, not
 ## Architecture At A Glance
 
 - `apps/web`: React 19 + Mantine UI v9 web UI, with Tailwind CSS v4 utilities, shadcn/ui configuration, Lucide icons, and a lightweight Node server
-- `apps/api`: Node.js API with MySQL persistence and migration flow
+- `apps/api`: Node.js API with PostgreSQL persistence and migration flow
 - `apps/worker`: background process surface for asynchronous work
 - `packages/domain`: shared domain contracts and enums
 - `packages/i18n`: localization utilities and message catalogs
@@ -280,12 +280,12 @@ flowchart TB
     end
 
     subgraph ops[" 🚀  Local Startup & Demo Ops "]
-        START["▶️ pnpm start\nEnv Load · Docker/MySQL Preflight · Migrations"]
+        START["▶️ pnpm start\nEnv Load · DB Preflight · Migrations"]
         DEMO["🧪 Demo Dataset SQL\nGenerate · Apply · Verify"]
     end
 
     subgraph infra[" 🗄️  Data & Runtime Ops "]
-        DB[("MySQL\nEncrypted at Rest · Migrations")]
+        DB[("PostgreSQL\nEncrypted at Rest · Migrations")]
         AGENT["🤖 Translation Guardian\nPython Agent · Docker"]
     end
 
@@ -312,7 +312,7 @@ flowchart TB
 - Runtime: Node.js 20+
 - Package manager: pnpm 10
 - Frontend: React 19, Mantine UI v9, Tailwind CSS v4, shadcn/ui configuration, Lucide React, Vite
-- Backend: Node.js (ESM), MySQL, mysql2
+- Backend: Node.js (ESM), PostgreSQL, pg
 - E2E testing: Playwright
 - Optional agent tooling: Translation Guardian via Docker Compose
 
@@ -327,9 +327,10 @@ pnpm start
 `pnpm start` is the canonical local startup command. It now performs environment and database preflight automatically:
 
 - loads `.env` via `node --env-file=.env`
+- uses the configured `DB_HOST` and `DB_PORT` first when a database listener is already available
 - ensures Docker is running (launches Docker Desktop when needed)
-- ensures `churchcore-postgres` is running
-- waits for MySQL readiness
+- starts the local compose database only when the configured listener is unavailable
+- waits for database readiness
 - runs API migration when DB is configured
 - starts API, web, and worker services
 - restarts existing repo-managed API, web, and worker processes on ports `3001`, `3002`, and `9465` so local changes are not served from stale long-running processes

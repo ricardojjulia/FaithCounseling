@@ -1,4 +1,5 @@
 import { spawn, execSync } from 'node:child_process';
+import net from 'node:net';
 import process from 'node:process';
 
 const node = process.execPath;
@@ -89,6 +90,25 @@ function dockerExec(cmd) {
   try { execSync(cmd, { stdio: 'pipe' }); return true; } catch { return false; }
 }
 
+function canConnectTcp(host, port, timeoutMs = 1200) {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host, port });
+    let settled = false;
+
+    function done(result) {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(result);
+    }
+
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => done(true));
+    socket.once('timeout', () => done(false));
+    socket.once('error', () => done(false));
+  });
+}
+
 function getListeningProcess(port) {
   try {
     const output = execSync(`lsof -nP -iTCP:${port} -sTCP:LISTEN -Fp`, { stdio: 'pipe', encoding: 'utf8' });
@@ -145,6 +165,14 @@ async function ensureDatabase() {
     return;
   }
 
+  const dbHost = process.env.DB_HOST || '127.0.0.1';
+  const dbPort = Number(process.env.DB_PORT || 57322);
+
+  if (await canConnectTcp(dbHost, dbPort)) {
+    console.log(`[start-all] Database listener ready at ${dbHost}:${dbPort}.`);
+    return;
+  }
+
   // Ensure Docker daemon is running
   if (!dockerExec('docker info')) {
     console.log('[start-all] Docker not running — launching Docker Desktop...');
@@ -162,25 +190,26 @@ async function ensureDatabase() {
     }
   }
 
-  // Ensure MySQL container is up
+  // Ensure the local compose database container is up when no configured DB listener is available.
   const isUp = dockerExec('docker compose ps --status running mysql 2>/dev/null | grep -q churchcore-postgres');
   if (!isUp) {
-    console.log('[start-all] Starting MySQL container...');
+    console.log('[start-all] Starting local compose database container...');
     dockerExec('docker compose up -d mysql');
   }
 
-  // Wait until MySQL is accepting connections
+  // Wait until the configured database port is accepting connections.
   const user = process.env.DB_USER || 'churchcore_app';
   const pass = process.env.DB_PASSWORD || '';
-  process.stdout.write('[start-all] Waiting for MySQL');
+  process.stdout.write('[start-all] Waiting for configured database');
   for (let i = 0; i < 30; i++) {
-    const ok = dockerExec(`docker compose exec mysql mysqladmin ping -h 127.0.0.1 -u${user} -p${pass} --silent 2>/dev/null`);
+    const ok = await canConnectTcp(dbHost, dbPort)
+      || dockerExec(`docker compose exec mysql mysqladmin ping -h 127.0.0.1 -u${user} -p${pass} --silent 2>/dev/null`);
     if (ok) { console.log(' ready.'); return; }
     await new Promise(r => setTimeout(r, 2000));
     process.stdout.write('.');
   }
   process.stdout.write('\n');
-  console.error('[start-all] MySQL did not become healthy in time. Check Docker logs.');
+  console.error('[start-all] Database did not become healthy in time. Check Docker logs or DB_HOST/DB_PORT.');
   process.exit(1);
 }
 
