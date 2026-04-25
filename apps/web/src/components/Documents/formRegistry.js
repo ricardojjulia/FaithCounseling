@@ -46,7 +46,7 @@ import {
 import {
   FaithHistoryQuestionnaire,
   ValuesAndBiblicalIdentityWorksheet,
-} from './forms/ChurchCore CareForms.js';
+} from './forms/FaithCounselingForms.js';
 
 export const CATEGORIES = [
   { id: 'intake', label: 'Intake Forms', icon: '📋' },

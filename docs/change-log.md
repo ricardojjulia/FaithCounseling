@@ -2,6 +2,20 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 25, 2026 — React UI stack foundation refactor
+
+### feat: wire Tailwind v4, shadcn/ui configuration, and Lucide icons into the web app
+
+**Date:** April 25, 2026
+**Affected area:** `apps/web/package.json`, `apps/web/postcss.config.cjs`, `apps/web/src/index.css`, `components.json`, `apps/web/src/components/ui/button.jsx`, `apps/web/src/lib/utils.js`, `apps/web/src/components/*`, `README.md`, `apps/web/README.md`
+
+Added the frontend foundation for the requested UI stack:
+
+- kept Mantine UI v9 as the primary component library
+- added Tailwind CSS v4 through the official PostCSS plugin and mapped Tailwind tokens to the existing app CSS variables
+- added shadcn/ui `new-york` configuration, aliases, `cn` helper, and a shadcn-compatible button primitive
+- migrated existing React icon call sites from Tabler icons to Lucide React and removed the unused Tabler package
+
 ## April 25, 2026 — GitHub Actions pnpm version source alignment
 
 ### fix: remove duplicate pnpm version declarations from workflows

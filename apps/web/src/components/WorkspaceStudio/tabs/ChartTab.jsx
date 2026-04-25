@@ -4,7 +4,7 @@ import {
   Table, Button, ActionIcon, Tooltip, TextInput, Select,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconSearch, IconRefresh } from '@tabler/icons-react';
+import { RefreshCw, Search } from 'lucide-react';
 import { csrfHeaders } from '../../../lib/csrf.js';
 
 const CATEGORY_ORDER = [
@@ -141,7 +141,7 @@ export default function ChartTab() {
               </Text>
             </div>
             <Tooltip label="Refresh">
-              <ActionIcon variant="subtle" onClick={load}><IconRefresh size={16} /></ActionIcon>
+              <ActionIcon variant="subtle" onClick={load}><RefreshCw size={16} /></ActionIcon>
             </Tooltip>
           </Group>
           <Group gap="sm">
@@ -154,7 +154,7 @@ export default function ChartTab() {
         <Group mb="md" gap="sm">
           <TextInput
             placeholder="Search by name or key…"
-            leftSection={<IconSearch size={14} />}
+            leftSection={<Search size={14} />}
             value={search}
             onChange={(e) => setSearch(e.currentTarget.value)}
             style={{ flex: 1 }}

@@ -1,0 +1,1 @@
+function e(){let e=document.cookie.split(`;`).find(e=>e.trim().startsWith(`csrf_token=`));return e?e.trim().slice(11):``}function t(t={}){return{"content-type":`application/json`,"x-csrf-token":e(),...t}}export{t};

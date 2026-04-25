@@ -20,7 +20,7 @@ import {
   Textarea,
   Title,
 } from '@mantine/core';
-import { IconVideo } from '@tabler/icons-react';
+import { Video } from 'lucide-react';
 import { notifications } from '@mantine/notifications';
 import {
   changeAuthenticatedPassword,
@@ -699,7 +699,7 @@ export default function ClientPortalPage({
                   color="green"
                   variant="filled"
                   title="Video Session Ready"
-                  icon={<IconVideo size={20} />}
+                  icon={<Video size={20} />}
                 >
                   <Group justify="space-between" align="center" wrap="nowrap">
                     <Text size="sm">
@@ -716,7 +716,7 @@ export default function ClientPortalPage({
                       color="white"
                       variant="white"
                       c="green.9"
-                      leftSection={<IconVideo size={16} />}
+                      leftSection={<Video size={16} />}
                       size="sm"
                       style={{ flexShrink: 0 }}
                     >

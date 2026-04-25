@@ -10,6 +10,13 @@ Lightweight modern UI shell for Faith Counseling, with counselor-first daily wor
 - light runtime footprint without framework overhead
 - responsive behavior across desktop and mobile
 
+## UI Stack
+
+- Mantine UI v9 remains the primary component library for application screens and workflows.
+- Tailwind CSS v4 is available for utility styling and shared low-level primitives.
+- shadcn/ui is configured with the `new-york` style in the repository root `components.json`; generated primitives live under `apps/web/src/components/ui`.
+- Lucide React is the standard icon library for React UI surfaces.
+
 ## Run Locally
 
 From the repository root:
@@ -56,6 +63,7 @@ Default URL: `http://localhost:3000`
 - branded Operations Studio page at `/operations.html` aligned to the same indigo/light workspace palette as the main app
 - interactive API docs served through the same-origin proxy at `/api/docs`
 - branded static About page at `/about` with a stronger counselor-first product narrative, shared light-indigo app palette, and operational linkouts
+- UI foundation now includes Tailwind v4 tokens mapped to the app CSS variables, a shadcn-compatible `cn` helper, and Lucide icons for React surfaces
 
 ## Monitoring Notes
 

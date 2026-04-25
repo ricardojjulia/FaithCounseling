@@ -231,7 +231,7 @@ The static public surfaces are meant to reflect the current product posture, not
 
 ## Architecture At A Glance
 
-- `apps/web`: React + Mantine web UI, served by a lightweight Node server
+- `apps/web`: React 19 + Mantine UI v9 web UI, with Tailwind CSS v4 utilities, shadcn/ui configuration, Lucide icons, and a lightweight Node server
 - `apps/api`: Node.js API with MySQL persistence and migration flow
 - `apps/worker`: background process surface for asynchronous work
 - `packages/domain`: shared domain contracts and enums
@@ -262,7 +262,7 @@ flowchart TB
     end
 
     subgraph frontend[" 🌐  Frontend — apps/web "]
-        WEB["React 18 + Mantine + Vite\nNode.js BFF · CSRF Protection · Session Proxy\nI18N Runtime · Local Monitoring"]
+        WEB["React 19 + Mantine UI v9 + Tailwind CSS v4 + Vite\nNode.js BFF · CSRF Protection · Session Proxy\nI18N Runtime · Local Monitoring"]
     end
 
     subgraph backend[" 🔌  Backend — apps/api "]
@@ -311,7 +311,7 @@ flowchart TB
 
 - Runtime: Node.js 20+
 - Package manager: pnpm 10
-- Frontend: React 18, Mantine, Vite
+- Frontend: React 19, Mantine UI v9, Tailwind CSS v4, shadcn/ui configuration, Lucide React, Vite
 - Backend: Node.js (ESM), MySQL, mysql2
 - E2E testing: Playwright
 - Optional agent tooling: Translation Guardian via Docker Compose

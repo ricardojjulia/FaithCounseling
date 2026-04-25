@@ -3,7 +3,7 @@ import {
   Stack, Paper, Group, Title, Text, Button, Badge, Table, Loader,
   Alert, ActionIcon, Select,
 } from '@mantine/core';
-import { IconPlus, IconTrash, IconDownload, IconCheck } from '@tabler/icons-react';
+import { Check, Download, Plus, Trash2 } from 'lucide-react';
 import { notifications } from '@mantine/notifications';
 import { csrfHeaders } from '../../lib/csrf.js';
 import QuickLogModal from './QuickLogModal.jsx';
@@ -138,7 +138,7 @@ function PendingVerificationSection({ items, staffById, verifyingId, onVerify })
                 <Table.Td>
                   <Button
                     size="xs"
-                    leftSection={<IconCheck size={14} />}
+                    leftSection={<Check size={14} />}
                     loading={verifyingId === entry.id}
                     onClick={() => onVerify(entry)}
                   >
@@ -321,14 +321,14 @@ export default function TimeTrackingPage({ currentUser }) {
         </div>
         <Group gap="xs">
           <Button
-            leftSection={<IconDownload size={16} />}
+            leftSection={<Download size={16} />}
             variant="default"
             onClick={handleExportCsv}
           >
             Export CSV
           </Button>
           <Button
-            leftSection={<IconPlus size={16} />}
+            leftSection={<Plus size={16} />}
             onClick={() => setLogOpen(true)}
             disabled={!isViewingOwnEntries}
           >
@@ -432,7 +432,7 @@ export default function TimeTrackingPage({ currentUser }) {
                         onClick={() => handleDelete(entry.id)}
                         aria-label="Delete entry"
                       >
-                        <IconTrash size={14} />
+                        <Trash2 size={14} />
                       </ActionIcon>
                     )}
                   </Table.Td>

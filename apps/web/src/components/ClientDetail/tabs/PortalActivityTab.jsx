@@ -4,7 +4,7 @@ import {
   Stack, Title, Text, Badge, Paper, Group, Button, Textarea,
   Divider, Loader, Center, Alert, ScrollArea, Box,
 } from '@mantine/core';
-import { IconMessageCircle, IconCalendarCheck, IconFileUpload, IconSend } from '@tabler/icons-react';
+import { CalendarCheck, FileUp, MessageCircle, Send } from 'lucide-react';
 import {
   fetchPortalMessages, sendPortalMessage,
   fetchPortalUploads,
@@ -113,7 +113,7 @@ function MessageThreads({ clientId }) {
                   maxRows={4}
                   style={{ flex: 1 }}
                 />
-                <Button leftSection={<IconSend size={14} />} loading={sending} onClick={sendReply} disabled={!replyBody.trim()}>
+                <Button leftSection={<Send size={14} />} loading={sending} onClick={sendReply} disabled={!replyBody.trim()}>
                   Send
                 </Button>
               </Group>
@@ -226,7 +226,7 @@ export default function PortalActivityTab({ clientId }) {
     <Stack gap="xl" maw={900}>
       <Stack gap="sm">
         <Group gap="xs">
-          <IconMessageCircle size={16} />
+          <MessageCircle size={16} />
           <Title order={4} fz="sm" tt="uppercase" c="dimmed">Portal Messages</Title>
         </Group>
         <MessageThreads clientId={clientId} />
@@ -236,7 +236,7 @@ export default function PortalActivityTab({ clientId }) {
 
       <Stack gap="sm">
         <Group gap="xs">
-          <IconCalendarCheck size={16} />
+          <CalendarCheck size={16} />
           <Title order={4} fz="sm" tt="uppercase" c="dimmed">Scheduling Requests</Title>
         </Group>
         <AppointmentRequests clientId={clientId} />
@@ -246,7 +246,7 @@ export default function PortalActivityTab({ clientId }) {
 
       <Stack gap="sm">
         <Group gap="xs">
-          <IconFileUpload size={16} />
+          <FileUp size={16} />
           <Title order={4} fz="sm" tt="uppercase" c="dimmed">Client Uploads</Title>
         </Group>
         <PortalUploads clientId={clientId} />

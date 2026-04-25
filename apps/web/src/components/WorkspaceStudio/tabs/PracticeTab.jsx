@@ -4,7 +4,7 @@ import {
   Textarea,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconVideo } from '@tabler/icons-react';
+import { Video } from 'lucide-react';
 import { csrfHeaders } from '../../../lib/csrf.js';
 
 async function apiFetch(url, options = {}) {
@@ -233,7 +233,7 @@ export default function PracticeTab() {
         <Paper withBorder radius="md" p="md">
           <Stack gap="xs" mb="md">
             <Group gap="xs">
-              <IconVideo size={18} />
+              <Video size={18} />
               <Title order={3} fz="md">Video / Telehealth Configuration</Title>
             </Group>
             <Text fz="sm" c="dimmed">

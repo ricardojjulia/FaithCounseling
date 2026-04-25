@@ -4,7 +4,7 @@ import {
   Table, Button, TextInput, Select, SimpleGrid, Divider, ActionIcon, Tooltip,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconSearch, IconRefresh, IconExternalLink, IconUsers } from '@tabler/icons-react';
+import { ExternalLink, RefreshCw, Search, Users } from 'lucide-react';
 import { useI18n } from '../../../lib/i18nContext.jsx';
 
 const CLIENT_STATUSES = ['active', 'waitlist', 'inactive', 'discharged'];
@@ -113,14 +113,14 @@ export default function ClientsTab({ onViewClient }) {
             </Text>
           </div>
           <Tooltip label="Refresh">
-            <ActionIcon variant="subtle" onClick={load}><IconRefresh size={16} /></ActionIcon>
+            <ActionIcon variant="subtle" onClick={load}><RefreshCw size={16} /></ActionIcon>
           </Tooltip>
         </Group>
         <Divider mb="md" />
         <Group mb="md" gap="sm">
           <TextInput
             placeholder="Search by name or faith background…"
-            leftSection={<IconSearch size={14} />}
+            leftSection={<Search size={14} />}
             value={search}
             onChange={(e) => setSearch(e.currentTarget.value)}
             style={{ flex: 1 }}
@@ -141,7 +141,7 @@ export default function ClientsTab({ onViewClient }) {
           <Alert color="red" title="Unable to load clients">{error}</Alert>
         ) : filtered.length === 0 ? (
           <Group justify="center" py="xl" gap="xs" c="dimmed">
-            <IconUsers size={24} opacity={0.4} />
+            <Users size={24} opacity={0.4} />
             <Text fz="sm">No clients match the current filter.</Text>
           </Group>
         ) : (
@@ -210,7 +210,7 @@ export default function ClientsTab({ onViewClient }) {
                       onClick={(e) => { e.stopPropagation(); handleRowClick(client); }}
                       aria-label="Open client chart"
                     >
-                      <IconExternalLink size={14} />
+                      <ExternalLink size={14} />
                     </ActionIcon>
                   </Table.Td>
                 </Table.Tr>
