@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import {
-  Stack, Title, Text, Paper, TextInput, Select, Group, Button, Alert, Loader, Divider, Badge,
+  Stack, TextInput, Select, Group, Button, Alert, Divider, Badge,
   Textarea,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { Video } from 'lucide-react';
 import { csrfHeaders } from '../../../lib/csrf.js';
+import { SectionHeader, SectionSurface, SurfaceState } from '../../ui/surface.jsx';
 
 async function apiFetch(url, options = {}) {
   const res = await fetch(url, options);
@@ -148,17 +149,17 @@ export default function PracticeTab() {
     }
   }
 
-  if (loading) return <Group justify="center" py="xl"><Loader size="sm" /></Group>;
-  if (error) return <Alert color="red" title="Unable to load practice">{error}</Alert>;
-  if (!draft) return <Text c="dimmed" fz="sm">No practice configured for this tenant.</Text>;
+  if (loading) return <SurfaceState type="loading" message="Loading practice profile..." />;
+  if (error) return <SurfaceState type="error" title="Unable to load practice" message={error} />;
+  if (!draft) return <SurfaceState message="No practice configured for this tenant." />;
 
   return (
     <Stack gap="md">
-      <Paper withBorder radius="md" p="md">
-        <Stack gap="xs" mb="md">
-          <Title order={3} fz="md">Practice Profile</Title>
-          <Text fz="sm" c="dimmed">Core practice identity and contact information. Changes apply across all counselor and portal surfaces.</Text>
-        </Stack>
+      <SectionSurface>
+        <SectionHeader
+          title="Practice Profile"
+          description="Core practice identity and contact information. Changes apply across all counselor and portal surfaces."
+        />
         <Divider mb="md" />
         <Stack gap="sm">
           <TextInput
@@ -207,11 +208,11 @@ export default function PracticeTab() {
             <Button onClick={save} loading={saving} disabled={!dirty}>Save Practice</Button>
           </Group>
         </Stack>
-      </Paper>
+      </SectionSurface>
 
       {practices.length > 1 && (
-        <Paper withBorder radius="md" p="md">
-          <Title order={4} fz="sm" mb="sm">All Practices</Title>
+        <SectionSurface>
+          <SectionHeader title="All Practices" />
           <Stack gap="xs">
             {practices.map((p) => (
               <Group key={p.id} justify="space-between" wrap="nowrap">
@@ -225,23 +226,22 @@ export default function PracticeTab() {
               </Group>
             ))}
           </Stack>
-        </Paper>
+        </SectionSurface>
       )}
 
-      {/* ── Per-Practice Video / Telehealth Config ── */}
       {videoDraft && (
-        <Paper withBorder radius="md" p="md">
-          <Stack gap="xs" mb="md">
-            <Group gap="xs">
-              <Video size={18} />
-              <Title order={3} fz="md">Video / Telehealth Configuration</Title>
-            </Group>
-            <Text fz="sm" c="dimmed">
+        <SectionSurface>
+          <SectionHeader
+            title="Video / Telehealth Configuration"
+            description={(
+              <>
               Configure your practice&apos;s own Jitsi as a Service (JaaS) credentials so that video
               sessions are billed to your account. If left blank, the platform&apos;s default
               configuration will be used.
-            </Text>
-          </Stack>
+              </>
+            )}
+            meta={<Badge leftSection={<Video size={12} />} color="blue" variant="light">Telehealth</Badge>}
+          />
           <Divider mb="md" />
           <Stack gap="sm">
             <Alert color="blue" variant="light" fz="xs">
@@ -300,7 +300,7 @@ export default function PracticeTab() {
               </Button>
             </Group>
           </Stack>
-        </Paper>
+        </SectionSurface>
       )}
     </Stack>
   );

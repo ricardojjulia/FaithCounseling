@@ -48,15 +48,16 @@ export function SectionHeader({ title, description, actions, meta }) {
   );
 }
 
-export function SurfaceStatCard({ label, value, color = 'blue' }) {
+export function SurfaceStatCard({ label, value, color = 'blue', children, style, ...props }) {
   return (
-    <SectionSurface style={{ textAlign: 'center' }}>
+    <SectionSurface style={{ textAlign: 'center', ...style }} {...props}>
       <Text fz="xs" c="dimmed" tt="uppercase" fw={700} mb={4}>
         {label}
       </Text>
       <Badge size="xl" variant="light" color={color} radius="sm">
         {value}
       </Badge>
+      {children}
     </SectionSurface>
   );
 }
