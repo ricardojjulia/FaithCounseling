@@ -2,7 +2,7 @@
 
 ## Description
 This skill enables an agent to:
-- Crawl and map the FaithCounseling application's UI
+- Crawl and map the ChurchCore Care application's UI
 - Generate a structured baseline of screens and navigation
 - Detect regressions and meaningful UI changes after code updates
 

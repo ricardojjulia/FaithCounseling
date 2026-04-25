@@ -70,6 +70,15 @@
 - Implementation notes: Use `PATCH /v1/platform/tenant-provisioning` for status updates, reject invalid transitions, ensure automation scripts do not bypass lifecycle checks with direct DB writes, and keep endpoint-level transition tests in CI coverage.
 - Definition of done: All provisioning transitions are API-driven, invalid jumps are blocked with 409, `completed` is the only status used for active tenant host activation, and regression/smoke scripts follow the same transition flow.
 
+### R-008 - Make tenant host-routing policy checks mandatory in CI and deployment workflows
+- Related findings: F-009
+- Priority: Near-term
+- Effort: S
+- Suggested owner: Platform, DevOps
+- Recommendation: Require the tenant policy guard to pass for pull requests and pre-deployment gates so routing/provisioning configuration cannot drift from fail-closed posture.
+- Implementation notes: Run `pnpm policy:tenant` in CI and release workflows, enforce non-local rule (`ENABLE_TENANT_HOST_ROUTING=true` requires `TENANT_STRICT_HOST_ROUTING=true`), and require at least one canonical tenant source (explicit allowlist or provisioning-backed DB mode). Keep runbook guidance current with any env policy changes.
+- Definition of done: Merge and deployment pipelines block policy-violating env combinations, and operations teams have an up-to-date runbook for remediation when guards fail.
+
 ## Quick Wins
 - Remove `temporaryPassword` from public and admin portal API responses.
 - Remove `resetToken` from password-reset HTTP responses in every environment.

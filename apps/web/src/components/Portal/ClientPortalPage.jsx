@@ -641,7 +641,7 @@ export default function ClientPortalPage({
             <Title order={2}>Client Portal</Title>
           </Group>
           <Text c="dimmed" size="sm">
-            {overview?.settings?.practiceName || 'FaithCounseling'} portal overview, profile preferences, secure uploads, and data-rights self-service.
+            {overview?.settings?.practiceName || 'ChurchCore Care'} portal overview, profile preferences, secure uploads, and data-rights self-service.
           </Text>
         </Box>
         {!isClientRole ? (

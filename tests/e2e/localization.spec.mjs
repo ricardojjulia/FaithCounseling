@@ -50,7 +50,7 @@ async function switchToSpanish(page) {
   }
 
   // Fallback: inject locale switch directly via localStorage + reload.
-  await page.evaluate(() => { localStorage.setItem('faith.locale', 'es'); });
+  await page.evaluate(() => { localStorage.setItem('churchcore.locale', 'es'); });
   await page.reload();
   await page.waitForLoadState('networkidle').catch(() => {});
 }

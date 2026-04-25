@@ -2,8 +2,8 @@
  * Client clinical history query helpers (singleton per client).
  *
  * PHI columns use encrypt/decrypt or encryptJson/decryptJson as appropriate.
- * The upsert function uses INSERT ... ON DUPLICATE KEY UPDATE to maintain
- * a single row per client enforced by the UNIQUE KEY uq_cclinical_client.
+ * The upsert function uses INSERT ... ON CONFLICT DO UPDATE to maintain
+ * a single row per client enforced by the UNIQUE constraint uq_cclinical_client.
  *
  * All queries are tenant-scoped and parameterised — no string interpolation.
  */
@@ -70,7 +70,7 @@ export async function getClientClinicalHistory(clientId, tenantId) {
 
 /**
  * Inserts or updates the clinical history singleton for a client.
- * Uses INSERT ... ON DUPLICATE KEY UPDATE keyed on the UNIQUE (client_id) constraint.
+ * Uses INSERT ... ON CONFLICT DO UPDATE keyed on the UNIQUE (client_id) constraint.
  * @param {{
  *   id: string, tenantId: string, clientId: string,
  *   pastHospitalizations?: boolean, hospitalizations?: string,
@@ -146,34 +146,34 @@ export async function upsertClientClinicalHistory({
         hi_current, hi_history, self_harm_history,
         risk_notes_enc, last_risk_assessment_at, risk_assessed_by)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       tenant_id = VALUES(tenant_id),
-       past_hospitalizations = VALUES(past_hospitalizations),
-       hospitalizations_enc = VALUES(hospitalizations_enc),
-       past_surgeries = VALUES(past_surgeries),
-       surgeries_enc = VALUES(surgeries_enc),
-       chronic_conditions_enc = VALUES(chronic_conditions_enc),
-       pcp_name_enc = VALUES(pcp_name_enc),
-       pcp_practice_enc = VALUES(pcp_practice_enc),
-       pcp_phone_enc = VALUES(pcp_phone_enc),
-       preferred_pharmacy_enc = VALUES(preferred_pharmacy_enc),
-       substance_use_screen_enc = VALUES(substance_use_screen_enc),
-       mh_prior_treatment = VALUES(mh_prior_treatment),
-       mh_prior_treatment_enc = VALUES(mh_prior_treatment_enc),
-       mh_prior_hospitalizations = VALUES(mh_prior_hospitalizations),
-       mh_hospitalizations_enc = VALUES(mh_hospitalizations_enc),
-       mh_prior_diagnoses_enc = VALUES(mh_prior_diagnoses_enc),
-       si_current = VALUES(si_current),
-       si_history = VALUES(si_history),
-       si_plan = VALUES(si_plan),
-       si_means_access = VALUES(si_means_access),
-       si_intent = VALUES(si_intent),
-       hi_current = VALUES(hi_current),
-       hi_history = VALUES(hi_history),
-       self_harm_history = VALUES(self_harm_history),
-       risk_notes_enc = VALUES(risk_notes_enc),
-       last_risk_assessment_at = VALUES(last_risk_assessment_at),
-       risk_assessed_by = VALUES(risk_assessed_by)`,
+     ON CONFLICT ON CONSTRAINT uq_cclinical_client DO UPDATE SET
+       tenant_id = EXCLUDED.tenant_id,
+       past_hospitalizations = EXCLUDED.past_hospitalizations,
+       hospitalizations_enc = EXCLUDED.hospitalizations_enc,
+       past_surgeries = EXCLUDED.past_surgeries,
+       surgeries_enc = EXCLUDED.surgeries_enc,
+       chronic_conditions_enc = EXCLUDED.chronic_conditions_enc,
+       pcp_name_enc = EXCLUDED.pcp_name_enc,
+       pcp_practice_enc = EXCLUDED.pcp_practice_enc,
+       pcp_phone_enc = EXCLUDED.pcp_phone_enc,
+       preferred_pharmacy_enc = EXCLUDED.preferred_pharmacy_enc,
+       substance_use_screen_enc = EXCLUDED.substance_use_screen_enc,
+       mh_prior_treatment = EXCLUDED.mh_prior_treatment,
+       mh_prior_treatment_enc = EXCLUDED.mh_prior_treatment_enc,
+       mh_prior_hospitalizations = EXCLUDED.mh_prior_hospitalizations,
+       mh_hospitalizations_enc = EXCLUDED.mh_hospitalizations_enc,
+       mh_prior_diagnoses_enc = EXCLUDED.mh_prior_diagnoses_enc,
+       si_current = EXCLUDED.si_current,
+       si_history = EXCLUDED.si_history,
+       si_plan = EXCLUDED.si_plan,
+       si_means_access = EXCLUDED.si_means_access,
+       si_intent = EXCLUDED.si_intent,
+       hi_current = EXCLUDED.hi_current,
+       hi_history = EXCLUDED.hi_history,
+       self_harm_history = EXCLUDED.self_harm_history,
+       risk_notes_enc = EXCLUDED.risk_notes_enc,
+       last_risk_assessment_at = EXCLUDED.last_risk_assessment_at,
+       risk_assessed_by = EXCLUDED.risk_assessed_by`,
     [
       id,
       tenantId,

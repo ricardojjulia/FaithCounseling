@@ -11,7 +11,7 @@ import '@mantine/notifications/styles.css';
 import '@mantine/dates/styles.css';
 import './index.css';
 
-const colorSchemeManager = localStorageColorSchemeManager({ key: 'faith.colorScheme' });
+const colorSchemeManager = localStorageColorSchemeManager({ key: 'churchcore.colorScheme' });
 
 function AppRuntime() {
   const { locale } = useI18n();

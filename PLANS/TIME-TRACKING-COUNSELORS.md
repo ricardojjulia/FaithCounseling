@@ -14,7 +14,7 @@ documentation of their "seat time." Secular tools like Time2Track are often disc
 from the EHR, leading to double-entry and version drift between what the EHR records and
 what the licensure board receives.
 
-This feature integrates time tracking directly into the FaithCounseling workflow:
+This feature integrates time tracking directly into the ChurchCore Care workflow:
 - Direct (client-facing) hours are auto-synced from completed appointments.
 - Indirect hours (supervision, prep, spiritual direction, CE) are logged manually.
 - Progress toward state/board licensure goals is visualized on the counselor profile.

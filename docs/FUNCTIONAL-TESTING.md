@@ -7,7 +7,7 @@
 - Environment:
   - API: <http://127.0.0.1:3001>
   - Web: <http://127.0.0.1:3002>
-  - Auth account used for admin flow validation: `admin@faithcounseling.local`
+  - Auth account used for admin flow validation: `admin@churchcorecare.local`
 
 ## Executive Results
 

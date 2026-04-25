@@ -267,8 +267,9 @@ export async function listSupervisorAssignments(tenantId, { supervisorId, intern
 
 export async function createSupervisorAssignment({ id, tenantId, supervisorId, internId, practiceId }) {
   await pool.query(
-    `INSERT IGNORE INTO supervisor_assignments (id, tenant_id, supervisor_id, intern_id, practice_id)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO supervisor_assignments (id, tenant_id, supervisor_id, intern_id, practice_id)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT DO NOTHING`,
     [id, tenantId, supervisorId, internId, practiceId],
   );
   const [rows] = await pool.query(

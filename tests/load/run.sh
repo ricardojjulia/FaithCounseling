@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run k6 load tests for FaithCounseling
+# Run k6 load tests for ChurchCore Care
 #
 # Usage:
 #   ./tests/load/run.sh [scenario] [--vus N] [--duration Xs]
@@ -16,7 +16,7 @@
 # Examples:
 #   ./tests/load/run.sh full
 #   ./tests/load/run.sh full --vus 20 --duration 3m
-#   BASE_URL=https://staging.faithcounseling.app ./tests/load/run.sh all
+#   BASE_URL=https://staging.churchcorecare.app ./tests/load/run.sh all
 
 set -euo pipefail
 

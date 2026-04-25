@@ -1,5 +1,5 @@
 {
-  "name": "@faith/i18n",
+  "name": "@churchcore/i18n",
   "version": "5.4.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "./plural": "./src/plural.js"
   },
   "scripts": {
-    "lint": "node -e \"console.log('No lint rules configured for @faith/i18n yet')\"",
-    "test": "node -e \"console.log('No tests configured for @faith/i18n yet')\""
+    "lint": "node -e \"console.log('No lint rules configured for @churchcore/i18n yet')\"",
+    "test": "node -e \"console.log('No tests configured for @churchcore/i18n yet')\""
   }
 }

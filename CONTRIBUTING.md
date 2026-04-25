@@ -76,8 +76,8 @@ These plan documents are the source of truth. When in doubt, they win.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/faith-counseling.git
-cd faith-counseling
+git clone https://github.com/your-org/churchcore-care.git
+cd churchcore-care
 
 # Install dependencies
 pnpm install
@@ -113,7 +113,7 @@ pnpm start
 `pnpm start` is the **only supported local startup command**. Do not use `node start-servers.js` for development. The start script handles:
 
 - Loading `.env`
-- Ensuring Docker is running and the `faith-mysql` container is up
+- Ensuring Docker is running and the `churchcore-postgres` container is up
 - Waiting for MySQL readiness
 - Running database migrations
 - Starting the API, web, and worker services
@@ -143,7 +143,7 @@ This creates the canonical demo dataset in MySQL so local development looks and 
 ## Project Structure
 
 ```
-faith-counseling/
+churchcore-care/
 ├── apps/
 │   ├── api/          Node.js ESM REST API (MySQL, auth, RBAC, audit)
 │   ├── web/          React 18 + Mantine frontend (Vite build, Node BFF)

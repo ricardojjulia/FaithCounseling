@@ -1,0 +1,240 @@
+name: Deploy
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "staging"
+        type: choice
+        options: ["staging", "production"]
+
+permissions:
+  contents: read
+  id-token: write  # for Workload Identity Federation
+
+jobs:
+  # ─── Build ─────────────────────────────────────────────────────────────────
+  build:
+    name: Build images
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm --filter api test
+
+      - name: Image tag
+        id: meta
+        run: echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/churchcore/api:${{ github.sha }}
+            ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/churchcore/api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Worker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/worker/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/churchcore/worker:${{ github.sha }}
+            ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/churchcore/worker:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build web static files
+        run: pnpm --filter web build
+
+      - name: Upload web dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: apps/web/public/
+          retention-days: 1
+
+  # ─── Deploy to staging ─────────────────────────────────────────────────────
+  deploy-staging:
+    name: Deploy → staging
+    needs: build
+    runs-on: ubuntu-latest
+    environment: staging
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Deploy API to staging Cloud Run
+        run: |
+          gcloud run deploy churchcore-care-api-staging \
+            --image="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/churchcore/api:${{ github.sha }}" \
+            --region="${{ secrets.GCP_REGION }}" \
+            --platform=managed \
+            --allow-unauthenticated \
+            --set-secrets="DB_ENCRYPTION_KEY=staging-db-encryption-key:latest,SESSION_SECRET=staging-session-secret:latest,TENANT_DB_MAP=staging-tenant-db-map:latest" \
+            --set-env-vars="NODE_ENV=production,ENABLE_TENANT_HOST_ROUTING=true,TENANT_STRICT_HOST_ROUTING=true" \
+            --min-instances=1 \
+            --max-instances=5 \
+            --timeout=30 \
+            --quiet
+
+      - name: Deploy Worker to staging Cloud Run
+        run: |
+          gcloud run deploy churchcore-care-worker-staging \
+            --image="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/churchcore/worker:${{ github.sha }}" \
+            --region="${{ secrets.GCP_REGION }}" \
+            --platform=managed \
+            --no-allow-unauthenticated \
+            --set-secrets="DB_ENCRYPTION_KEY=staging-db-encryption-key:latest,TENANT_DB_MAP=staging-tenant-db-map:latest,SENDGRID_API_KEY=staging-sendgrid-api-key:latest,TWILIO_AUTH_TOKEN=staging-twilio-auth-token:latest" \
+            --set-env-vars="NODE_ENV=production" \
+            --min-instances=1 \
+            --max-instances=1 \
+            --timeout=3600 \
+            --quiet
+
+      - name: Download web dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: apps/web/public/
+
+      - name: Deploy web to Firebase Hosting (staging)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_STAGING }}
+          channelId: staging
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+
+      - name: Smoke test staging
+        run: |
+          STAGING_URL="https://system.staging.churchcorecare.com"
+          echo "Running smoke tests against $STAGING_URL"
+          # Health check
+          curl --fail --silent --max-time 10 "$STAGING_URL/health/live" | grep -q '"status":"ok"'
+          curl --fail --silent --max-time 10 "$STAGING_URL/health/ready" | grep -q '"status":'
+          echo "Smoke tests passed"
+
+  # ─── Deploy to production ──────────────────────────────────────────────────
+  deploy-production:
+    name: Deploy → production
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    # Only auto-promote on push to main; manual dispatch can target staging only
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Run schema migrations on all tenant DBs
+        env:
+          TENANT_DB_MAP: ${{ secrets.PROD_TENANT_DB_MAP }}
+          DB_ENCRYPTION_KEY: ${{ secrets.PROD_DB_ENCRYPTION_KEY }}
+        run: |
+          pnpm install --frozen-lockfile --filter @churchcore/api
+          node ops/migrate-all-tenants.mjs --concurrency=5
+
+      - name: Deploy API to production Cloud Run
+        run: |
+          gcloud run deploy churchcore-care-api \
+            --image="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/churchcore/api:${{ github.sha }}" \
+            --region="${{ secrets.GCP_REGION }}" \
+            --platform=managed \
+            --allow-unauthenticated \
+            --set-secrets="DB_ENCRYPTION_KEY=prod-db-encryption-key:latest,SESSION_SECRET=prod-session-secret:latest,TENANT_DB_MAP=prod-tenant-db-map:latest,JITSI_APP_ID=prod-jitsi-app-id:latest,JITSI_API_KEY_ID=prod-jitsi-api-key-id:latest,JITSI_PRIVATE_KEY_BASE64=prod-jitsi-private-key:latest,SENDGRID_API_KEY=prod-sendgrid-api-key:latest,TWILIO_AUTH_TOKEN=prod-twilio-auth-token:latest" \
+            --set-env-vars="NODE_ENV=production,ENABLE_TENANT_HOST_ROUTING=true,TENANT_STRICT_HOST_ROUTING=true,JITSI_DOMAIN=8x8.vc,SENDGRID_FROM_EMAIL=noreply@churchcorecare.com" \
+            --min-instances=1 \
+            --max-instances=20 \
+            --timeout=30 \
+            --quiet
+
+      - name: Deploy Worker to production Cloud Run
+        run: |
+          gcloud run deploy churchcore-care-worker \
+            --image="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/churchcore/worker:${{ github.sha }}" \
+            --region="${{ secrets.GCP_REGION }}" \
+            --platform=managed \
+            --no-allow-unauthenticated \
+            --set-secrets="DB_ENCRYPTION_KEY=prod-db-encryption-key:latest,TENANT_DB_MAP=prod-tenant-db-map:latest,SENDGRID_API_KEY=prod-sendgrid-api-key:latest,TWILIO_ACCOUNT_SID=prod-twilio-account-sid:latest,TWILIO_AUTH_TOKEN=prod-twilio-auth-token:latest" \
+            --set-env-vars="NODE_ENV=production,TWILIO_FROM_NUMBER=${{ secrets.TWILIO_FROM_NUMBER }},SENDGRID_FROM_EMAIL=noreply@churchcorecare.com" \
+            --min-instances=1 \
+            --max-instances=1 \
+            --timeout=3600 \
+            --quiet
+
+      - name: Download web dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: apps/web/public/
+
+      - name: Deploy web to Firebase Hosting (production)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PROD }}
+          channelId: live
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+
+      - name: Production smoke test
+        run: |
+          PROD_URL="https://system.churchcorecare.com"
+          curl --fail --silent --max-time 10 "$PROD_URL/health/live" | grep -q '"status":"ok"'
+          echo "Production health check passed"

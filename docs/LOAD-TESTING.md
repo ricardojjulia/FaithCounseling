@@ -199,10 +199,10 @@ All scenarios read `BASE_URL` from the environment:
 pnpm test:load:full
 
 # Staging
-BASE_URL=https://staging.faithcounseling.app pnpm test:load:full
+BASE_URL=https://staging.churchcorecare.app pnpm test:load:full
 
 # Custom credentials
-BASE_URL=https://staging.faithcounseling.app \
+BASE_URL=https://staging.churchcorecare.app \
 ADMIN_EMAIL=admin@yourdomain.com \
 ADMIN_PASSWORD=YourPassword123 \
 ./tests/load/run.sh full
@@ -213,7 +213,7 @@ Environment variables recognized by `config.js`:
 | Variable         | Default                          | Purpose                        |
 |------------------|----------------------------------|--------------------------------|
 | `BASE_URL`       | `http://127.0.0.1:3101`          | API base URL                   |
-| `ADMIN_EMAIL`    | `admin@faithcounseling.local`    | Staff admin login              |
+| `ADMIN_EMAIL`    | `admin@churchcorecare.local`    | Staff admin login              |
 | `ADMIN_PASSWORD` | `ChangeMe!Dev2024#`              | Staff admin password           |
 | `CLIENT_EMAIL`   | `sarah.kim@example.test`         | Portal client login            |
 | `CLIENT_PASSWORD`| `ChangeMe!Client2026#`           | Portal client password         |

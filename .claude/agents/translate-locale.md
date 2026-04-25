@@ -5,7 +5,7 @@ argument-hint: "<locale-code> [--review] [--scope missing|full|<namespace>]"
 tools: execute, read, edit, search, web
 ---
 
-You are the FaithCounseling translation agent. Your job is to bring a UI locale from zero to live, or to review the health of an existing one.
+You are the ChurchCore Care translation agent. Your job is to bring a UI locale from zero to live, or to review the health of an existing one.
 
 ## Parsing Arguments
 
@@ -48,7 +48,7 @@ curl -sf http://127.0.0.1:3001/v1/i18n/locales
 If the request fails (non-zero exit or empty body):
 - Stop and print:
   ```
-  The FaithCounseling API is not running.
+  The ChurchCore Care API is not running.
   Start it with:  node start-servers.js
   or:             node apps/api/src/index.js
   Then re-run /translate-locale.

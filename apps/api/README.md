@@ -1,6 +1,6 @@
-# @faith/api
+# @churchcore/api
 
-Node.js HTTP API for the FaithCounseling platform.
+Node.js HTTP API for the ChurchCore Care platform.
 
 ## Development Credentials
 
@@ -8,7 +8,7 @@ The migration script seeds a default admin account and a demo client portal acco
 
 | Account | Email | Default password |
 |---------|-------|-----------------|
-| Staff admin | `admin@faithcounseling.local` | `ChangeMe!Dev2024#` |
+| Staff admin | `admin@churchcorecare.local` | `ChangeMe!Dev2024#` |
 | Client portal (demo) | `sarah.kim@example.test` | `ChangeMe!Client2026#` |
 
 > **Important:** Change these immediately if you are running a shared or semi-public environment. The passwords above are well-known and offer no security.

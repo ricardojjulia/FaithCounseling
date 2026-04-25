@@ -1,4 +1,4 @@
--- Generated demo dataset seed SQL for FaithCounseling
+-- Generated demo dataset seed SQL for ChurchCore Care
 
 -- Reference date: 2026-04-06T00:00:00.000Z
 

@@ -272,12 +272,12 @@ export async function upsertPortalClientProfile({
     `INSERT INTO portal_client_profiles
       (id, tenant_id, client_id, preferred_name_enc, contact_email_enc, contact_phone_enc, contact_preferences_enc, profile_details_enc)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       preferred_name_enc = VALUES(preferred_name_enc),
-       contact_email_enc = VALUES(contact_email_enc),
-       contact_phone_enc = VALUES(contact_phone_enc),
-       contact_preferences_enc = VALUES(contact_preferences_enc),
-       profile_details_enc = VALUES(profile_details_enc)`,
+     ON CONFLICT (id) DO UPDATE SET
+       preferred_name_enc = EXCLUDED.preferred_name_enc,
+       contact_email_enc = EXCLUDED.contact_email_enc,
+       contact_phone_enc = EXCLUDED.contact_phone_enc,
+       contact_preferences_enc = EXCLUDED.contact_preferences_enc,
+       profile_details_enc = EXCLUDED.profile_details_enc`,
     [
       targetId,
       tenantId,
@@ -340,25 +340,25 @@ export async function upsertPortalSettings({
        support_email_enc, registration_mode, allow_create_account, allow_care_requests, allow_scheduling_requests,
        show_public_counselor_directory, financial_mode, suggested_offering_cents, offering_ministry_note, contact_preference_options, default_signup_form_keys)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       practice_name = VALUES(practice_name),
-       logo_url = VALUES(logo_url),
-       brand_color = VALUES(brand_color),
-       accent_color = VALUES(accent_color),
-       welcome_headline = VALUES(welcome_headline),
-       welcome_message = VALUES(welcome_message),
-       help_message = VALUES(help_message),
-       support_email_enc = VALUES(support_email_enc),
-       registration_mode = VALUES(registration_mode),
-       allow_create_account = VALUES(allow_create_account),
-       allow_care_requests = VALUES(allow_care_requests),
-       allow_scheduling_requests = VALUES(allow_scheduling_requests),
-       show_public_counselor_directory = VALUES(show_public_counselor_directory),
-       financial_mode = VALUES(financial_mode),
-       suggested_offering_cents = VALUES(suggested_offering_cents),
-       offering_ministry_note = VALUES(offering_ministry_note),
-       contact_preference_options = VALUES(contact_preference_options),
-       default_signup_form_keys = VALUES(default_signup_form_keys)`,
+     ON CONFLICT (id) DO UPDATE SET
+       practice_name = EXCLUDED.practice_name,
+       logo_url = EXCLUDED.logo_url,
+       brand_color = EXCLUDED.brand_color,
+       accent_color = EXCLUDED.accent_color,
+       welcome_headline = EXCLUDED.welcome_headline,
+       welcome_message = EXCLUDED.welcome_message,
+       help_message = EXCLUDED.help_message,
+       support_email_enc = EXCLUDED.support_email_enc,
+       registration_mode = EXCLUDED.registration_mode,
+       allow_create_account = EXCLUDED.allow_create_account,
+       allow_care_requests = EXCLUDED.allow_care_requests,
+       allow_scheduling_requests = EXCLUDED.allow_scheduling_requests,
+       show_public_counselor_directory = EXCLUDED.show_public_counselor_directory,
+       financial_mode = EXCLUDED.financial_mode,
+       suggested_offering_cents = EXCLUDED.suggested_offering_cents,
+       offering_ministry_note = EXCLUDED.offering_ministry_note,
+       contact_preference_options = EXCLUDED.contact_preference_options,
+       default_signup_form_keys = EXCLUDED.default_signup_form_keys`,
     [
       targetId,
       tenantId,

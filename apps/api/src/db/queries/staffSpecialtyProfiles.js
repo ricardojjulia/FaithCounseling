@@ -9,7 +9,7 @@
  *
  * PHI column: notes_enc (AES-256-GCM encrypted).
  *
- * Uses INSERT ... ON DUPLICATE KEY UPDATE keyed on uq_specialty_staff to
+ * Uses INSERT ... ON CONFLICT DO UPDATE keyed on uq_specialty_staff to
  * maintain exactly one row per staff member.
  *
  * All queries are tenant-scoped and parameterised — no string interpolation.
@@ -56,7 +56,7 @@ export async function getStaffSpecialtyProfile(staffId, tenantId) {
 
 /**
  * Inserts or updates the specialty profile singleton for a staff member.
- * Uses INSERT ... ON DUPLICATE KEY UPDATE keyed on uq_specialty_staff.
+ * Uses INSERT ... ON CONFLICT DO UPDATE keyed on uq_specialty_staff.
  */
 export async function upsertStaffSpecialtyProfile({
   id,
@@ -74,14 +74,14 @@ export async function upsertStaffSpecialtyProfile({
        (id, staff_id, tenant_id, specialties, modalities,
         age_groups_served, languages, max_caseload, notes_enc)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       tenant_id        = VALUES(tenant_id),
-       specialties      = VALUES(specialties),
-       modalities       = VALUES(modalities),
-       age_groups_served = VALUES(age_groups_served),
-       languages        = VALUES(languages),
-       max_caseload     = VALUES(max_caseload),
-       notes_enc        = VALUES(notes_enc)`,
+     ON CONFLICT ON CONSTRAINT uq_specialty_staff DO UPDATE SET
+       tenant_id        = EXCLUDED.tenant_id,
+       specialties      = EXCLUDED.specialties,
+       modalities       = EXCLUDED.modalities,
+       age_groups_served = EXCLUDED.age_groups_served,
+       languages        = EXCLUDED.languages,
+       max_caseload     = EXCLUDED.max_caseload,
+       notes_enc        = EXCLUDED.notes_enc`,
     [
       id, staffId, tenantId,
       JSON.stringify(Array.isArray(specialties) ? specialties : []),

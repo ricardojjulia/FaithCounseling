@@ -30,7 +30,7 @@ test.describe('inclusive smoke coverage', () => {
     await page.keyboard.press('Tab');
     await expect(page.locator('#loginPassword')).toBeFocused();
 
-    await page.locator('#loginEmail').fill(process.env.TEST_ADMIN_EMAIL || 'admin@faithcounseling.local');
+    await page.locator('#loginEmail').fill(process.env.TEST_ADMIN_EMAIL || 'admin@churchcorecare.local');
     await page.locator('#loginPassword').fill(process.env.TEST_ADMIN_PASSWORD || 'ChangeMe!Dev2024#');
     await page.locator('#loginPassword').press('Enter');
 

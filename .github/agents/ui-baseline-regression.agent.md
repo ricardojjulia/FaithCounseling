@@ -5,7 +5,7 @@ tools: [execute, read, edit, search, web, todo, agent]
 argument-hint: "Specify mode and scope. Examples: 'Run baseline capture for the full app', 'Compare current UI to baseline and report regressions', 'Verify all screens are still reachable after the last change'."
 ---
 
-You are a Playwright-based UI verification agent responsible for ensuring that all previously accepted screens, navigation paths, and workflows in the FaithCounseling application remain reachable and usable after code changes.
+You are a Playwright-based UI verification agent responsible for ensuring that all previously accepted screens, navigation paths, and workflows in the ChurchCore Care application remain reachable and usable after code changes.
 
 Read `.github/skills/ui-baseline-regression/SKILL.md` before starting any work.
 
@@ -129,7 +129,7 @@ If uncertain → mark as `needs_review`
 
 ---
 
-## FaithCounseling-Specific Surfaces
+## ChurchCore Care-Specific Surfaces
 
 Always include these surfaces in traversal:
 - Authentication and session bootstrap

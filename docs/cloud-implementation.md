@@ -1,4 +1,4 @@
-# Cloud Implementation Plan — FaithCounseling SaaS
+# Cloud Implementation Plan — ChurchCore Care SaaS
 
 **Date:** April 17, 2026
 **Status:** Planning / Pre-implementation
@@ -7,14 +7,14 @@
 
 ## Overview
 
-This document describes the recommended cloud architecture for operating FaithCounseling as a fully hosted, multi-tenant SaaS platform where each counseling practice has its own isolated MySQL database and its own subdomain.
+This document describes the recommended cloud architecture for operating ChurchCore Care as a fully hosted, multi-tenant SaaS platform where each counseling practice has its own isolated MySQL database and its own subdomain.
 
 The platform consists of **two distinct applications**:
 
 | App | URL | Purpose |
-|---|---|---|
-| **Platform Admin** | `tenantadmin.faithcounseling.com` | FaithCounseling staff portal — provisions new practices, manages billing, monitors the platform |
-| **Practice App** | `clientname.faithcounseling.com` | The counseling platform — one subdomain per practice, used by counselors and clients |
+| --- | --- | --- |
+| **Platform Admin** | `tenantadmin.churchcorecare.com` | ChurchCore Care staff portal — provisions new practices, manages billing, monitors the platform |
+| **Practice App** | `clientname.churchcorecare.com` | The counseling platform — one subdomain per practice, used by counselors and clients |
 
 These are separate frontends backed by either a shared API (with route-level authorization separation) or two separate Cloud Run services.
 
@@ -25,30 +25,37 @@ These are separate frontends backed by either a shared API (with route-level aut
 This application handles PHI (clients, diagnoses, addresses, SSNs, clinical notes). Every infrastructure provider that touches compute or database resources must be willing to sign a Business Associate Agreement (BAA).
 
 **Providers with HIPAA BAA (no additional cost):**
+
 - Google Cloud Platform ✓
 - AWS ✓
 - Azure ✓
 
 **Frontend CDN only (no PHI passes through):**
+
 - Firebase Hosting (GCP) ✓ — covered under the same GCP BAA
 
 ---
 
 ## Recommended Stack: GCP Only
 
-```
- faithcounseling.com DNS
+```text
+ churchcorecare.com DNS
  ┌──────────────────────────────────────────────────────────────────┐
- │  *.faithcounseling.com  →  GCP Cloud Load Balancer               │
- │  tenantadmin.faithcounseling.com  →  Firebase Hosting            │
+ │  *.churchcorecare.com  →  GCP Cloud Load Balancer               │
+ │  tenantadmin.churchcorecare.com  →  Firebase Hosting            │
  │  Wildcard TLS cert via GCP Certificate Manager                   │
  └───────┬──────────────────────────────────────┬───────────────────┘
-         │ *.faithcounseling.com                │ tenantadmin.*
+         │ *.churchcorecare.com                │ tenantadmin.*
+         ▼                                      │
+ ┌───────────────────┐                          │
+ │  Cloud Armor WAF  │  managed ruleset +       │
+ │  (edge protection)│  rate limiting           │
+ └───────┬───────────┘                          │
          │                                      │
 ┌────────▼──────────────────┐       ┌───────────▼──────────────────┐
 │  Cloud Run — apps/api     │       │  Firebase Hosting             │
 │  Reads Host header →      │       │  apps/platform (new)          │
-│  extracts slug →          │       │  FaithCounseling staff only   │
+│  extracts slug →          │       │  ChurchCore Care staff only   │
 │  resolves tenant pool     │       │  Provisions practices,        │
 │                           │       │  manages billing, monitors    │
 │  Also serves:             │       └───────────┬──────────────────┘
@@ -58,12 +65,12 @@ This application handles PHI (clients, diagnoses, addresses, SSNs, clinical note
        │              │
 ┌──────▼──────┐  ┌────▼────────────────────────────────────────────┐
 │ Cloud Run   │  │  Cloud SQL for MySQL (GCP, private IP)           │
-│ Job (Worker)│  │                                                  │
-│ + Cloud     │  │  ┌───────────────────────────────────────────┐  │
-│ Scheduler   │  │  │ platform DB  — tenants, slugs, billing,   │  │
-└─────────────┘  │  │ DB credential references, provisioning    │  │
-                 │  └───────────────────────────────────────────┘  │
-                 │  ┌──────────┐  ┌──────────┐  ┌──────────┐      │
+│ Service     │  │                                                  │
+│ (Worker —   │  │  ┌───────────────────────────────────────────┐  │
+│ always-on,  │  │  │ platform DB  — tenants, slugs, billing,   │  │
+│ multi-      │  │  │ DB credential references, provisioning    │  │
+│ tenant poll)│  │  └───────────────────────────────────────────┘  │
+└─────────────┘  │  ┌──────────┐  ┌──────────┐  ┌──────────┐      │
                  │  │  DB      │  │  DB      │  │  DB      │      │
                  │  │ grace-   │  │ river-   │  │ harbor-  │      │
                  │  │ counsel  │  │ view     │  │ hope     │      │
@@ -76,20 +83,21 @@ This application handles PHI (clients, diagnoses, addresses, SSNs, clinical note
 
 ## Two-Application Model
 
-### 1. Practice App — `clientname.faithcounseling.com`
+### 1. Practice App — `clientname.churchcorecare.com`
 
 This is the existing `apps/web` React SPA — the counseling platform used by counselors and clients every day. No code changes are required to the frontend itself.
 
 - Each practice gets a **slug** chosen at sign-up (e.g., `gracecounsel`, `riverview`)
-- The subdomain `gracecounsel.faithcounseling.com` routes to the same Cloud Run API service
+- The subdomain `gracecounsel.churchcorecare.com` routes to the same Cloud Run API service
 - The API extracts the slug from the `Host` header, looks it up in the platform DB, and resolves that practice's DB pool
 - The API already enforces `tenant_id` on every query — this remains unchanged
 
-### 2. Platform Admin App — `tenantadmin.faithcounseling.com`
+### 2. Platform Admin App — `tenantadmin.churchcorecare.com`
 
-This is a **new application** (`apps/platform`) built specifically for FaithCounseling staff. It is entirely separate from the practice app and never shares a session or auth context with practice users.
+This is a **new application** (`apps/platform`) built specifically for ChurchCore Care staff. It is entirely separate from the practice app and never shares a session or auth context with practice users.
 
 **Capabilities:**
+
 - Create a new practice (triggers provisioning flow)
 - Assign a subdomain slug
 - Monitor all Cloud SQL instances
@@ -97,7 +105,7 @@ This is a **new application** (`apps/platform`) built specifically for FaithCoun
 - Suspend or deprovision a practice
 - View platform-level audit logs
 
-**Auth:** Separate login with a hardened admin credential — never shares auth with counselor/client accounts. Recommend Google OAuth restricted to `@faithcounseling.com` staff accounts via Firebase Auth or GCP Identity-Aware Proxy (IAP).
+**Auth:** Separate login with a hardened admin credential — never shares auth with counselor/client accounts. Recommend Google OAuth restricted to `@churchcorecare.com` staff accounts via Firebase Auth or GCP Identity-Aware Proxy (IAP).
 
 ---
 
@@ -105,22 +113,22 @@ This is a **new application** (`apps/platform`) built specifically for FaithCoun
 
 ### DNS
 
-```
-*.faithcounseling.com          A    <GCP Load Balancer IP>
-tenantadmin.faithcounseling.com CNAME <Firebase Hosting target>
+```text
+*.churchcorecare.com          A    <GCP Load Balancer IP>
+tenantadmin.churchcorecare.com CNAME <Firebase Hosting target>
 ```
 
 A wildcard DNS record routes all practice subdomains to the GCP Load Balancer. The `tenantadmin` subdomain is a separate record pointing to Firebase Hosting.
 
 ### TLS
 
-GCP Certificate Manager issues a **wildcard certificate** for `*.faithcounseling.com`. This covers every practice subdomain automatically with no per-practice cert provisioning.
+GCP Certificate Manager issues a **wildcard certificate** for `*.churchcorecare.com`. This covers every practice subdomain automatically with no per-practice cert provisioning.
 
 ### Tenant Resolution in the API
 
 On every incoming request the API:
 
-1. Reads the `Host` header (e.g., `gracecounsel.faithcounseling.com`)
+1. Reads the `Host` header (e.g., `gracecounsel.churchcorecare.com`)
 2. Strips the base domain to extract the slug (`gracecounsel`)
 3. Looks up the slug in the platform DB to get the `tenant_id` and Cloud SQL credentials reference
 4. Resolves the mysql2 pool from the pool registry (cached after first lookup)
@@ -166,9 +174,9 @@ Every query function in `apps/api/src/db/queries/` changes from using the single
 
 ## Practice Provisioning Flow
 
-Triggered by the Platform Admin app when a FaithCounseling staff member creates a new practice.
+Triggered by the Platform Admin app when a ChurchCore Care staff member creates a new practice.
 
-1. Staff completes new-practice form in `tenantadmin.faithcounseling.com` — enters practice name, plan tier, and subdomain slug
+1. Staff completes new-practice form in `tenantadmin.churchcorecare.com` — enters practice name, plan tier, and subdomain slug
 2. Platform API validates slug uniqueness, creates a `tenants` row in the platform DB with `status = 'provisioning'`
 3. Platform API enqueues a **Cloud Tasks** job (or triggers a Cloud Run Job directly) for async provisioning
 4. Provisioning job:
@@ -178,7 +186,7 @@ Triggered by the Platform Admin app when a FaithCounseling staff member creates 
    d. Runs `apps/api/src/db/migrate.js` against the new DB to create all 75 tables
    e. Seeds the practice admin account
    f. Updates `tenants` row to `status = 'active'`, records the `db_secret_name`
-5. DNS is already live via the wildcard record — `slug.faithcounseling.com` starts routing immediately once `status = 'active'`
+5. DNS is already live via the wildcard record — `slug.churchcorecare.com` starts routing immediately once `status = 'active'`
 6. Staff receives a confirmation in the Platform Admin app; practice admin receives a welcome email with their login URL
 
 ---
@@ -190,7 +198,7 @@ Triggered by the Platform Admin app when a FaithCounseling staff member creates 
 Each practice gets a dedicated Cloud SQL instance. Provides the strongest isolation guarantee and enables the marketing claim that each practice's data is fully isolated.
 
 | Practice tier | Cloud SQL SKU | $/month per practice |
-|---|---|---|
+| --- | --- | --- |
 | Solo (1–2 counselors) | `db-g1-small` (shared vCPU, 1.7 GB) | ~$20–25 |
 | Small group (3–10 counselors) | `db-n1-standard-1` (1 vCPU, 3.75 GB) | ~$60–70 |
 | Mid-size (10+ counselors) | `db-n1-standard-2` (2 vCPU, 7.5 GB) | ~$115–130 |
@@ -200,7 +208,7 @@ Each practice gets a dedicated Cloud SQL instance. Provides the strongest isolat
 Multiple practices share one Cloud SQL instance, each isolated to its own MySQL database with a dedicated MySQL user and grant. Suitable for early-stage cost control.
 
 | Instance | Practices hosted | Instance cost | Per-practice effective cost |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `db-n1-standard-2` | 10–15 solo practices | ~$115/month | ~$8–12/month |
 | `db-n1-standard-4` | 30–40 practices | ~$230/month | ~$6–8/month |
 
@@ -213,21 +221,22 @@ Multiple practices share one Cloud SQL instance, each isolated to its own MySQL 
 ### Fixed Platform Costs (regardless of practice count)
 
 | Component | Configuration | $/month |
-|---|---|---|
+| --- | --- | --- |
 | Firebase Hosting | `apps/platform` admin SPA (static, no PHI) | $0–5 |
 | Cloud Run — API | Min 1 instance, 1 vCPU / 1 GB RAM | $35–55 |
-| Cloud Run Job — Worker | Hourly Cloud Scheduler trigger | $3–5 |
+| Cloud Run — Worker | Always-on service, multi-tenant reminder poll | $5–10 |
 | Cloud SQL — Platform DB | `db-g1-small` (tenants, slugs, billing, provisioning) | $20 |
 | GCP Cloud Load Balancer | Wildcard subdomain routing + SSL offload | $18–25 |
-| GCP Certificate Manager | Wildcard `*.faithcounseling.com` TLS cert | $0 (managed) |
+| GCP Certificate Manager | Wildcard `*.churchcorecare.com` TLS cert | $0 (managed) |
+| Cloud Armor WAF | Managed ruleset + rate limiting at edge | $10–20 |
 | GCP Secret Manager | ~100 secrets (DB credentials per practice) | $1 |
 | Cloud Logging / Monitoring | Basic tier | $0–10 |
-| **Fixed subtotal** | | **~$100–130/month** |
+| **Fixed subtotal** | | **~$115–155/month** |
 
 ### Variable Per-Practice Costs (Option A, instance-per-practice)
 
 | Practice count | Per-practice cost | Variable total | **Monthly total** |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 5 practices | $25/ea (solo tier) | $125 | **~$195/month** |
 | 20 practices | $25/ea | $500 | **~$580/month** |
 | 50 practices | $25/ea | $1,250 | **~$1,340/month** |
@@ -239,7 +248,7 @@ Multiple practices share one Cloud SQL instance, each isolated to its own MySQL 
 ## Suggested SaaS Pricing
 
 | Plan | Target practice size | Infra cost | Suggested retail price | Gross margin |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | Solo | 1–2 counselors | ~$25/month | $79–99/month | 68–75% |
 | Practice | 3–10 counselors | ~$65/month | $199–299/month | 67–78% |
 | Group | 10–25 counselors | ~$120/month | $399–599/month | 70–80% |
@@ -253,7 +262,7 @@ The following work items are required before launch. Items marked **Blocks launc
 ### New applications
 
 | Work item | Effort | Blocks launch? |
-|---|---|---|
+| --- | --- | --- |
 | `apps/platform` — Platform Admin SPA (new React app) | Large | Yes |
 | Platform Admin: new practice form, provisioning trigger, slug selection | Medium | Yes |
 | Platform Admin: practice list, status, suspension controls | Medium | Yes |
@@ -263,7 +272,7 @@ The following work items are required before launch. Items marked **Blocks launc
 ### API changes
 
 | Work item | Effort | Blocks launch? |
-|---|---|---|
+| --- | --- | --- |
 | Tenant resolution from `Host` header (`resolveTenant.js`) | Small | Yes |
 | Per-tenant pool registry (`apps/api/src/db/pools.js`) | Medium | Yes |
 | Platform API routes (`/platform-api/*`) for admin operations, guarded separately from practice routes | Medium | Yes |
@@ -274,9 +283,9 @@ The following work items are required before launch. Items marked **Blocks launc
 ### Infrastructure
 
 | Work item | Effort | Blocks launch? |
-|---|---|---|
-| Wildcard DNS record `*.faithcounseling.com` → GCP Load Balancer | Small | Yes |
-| GCP Certificate Manager — wildcard TLS cert for `*.faithcounseling.com` | Small | Yes |
+| --- | --- | --- |
+| Wildcard DNS record `*.churchcorecare.com` → GCP Load Balancer | Small | Yes |
+| GCP Certificate Manager — wildcard TLS cert for `*.churchcorecare.com` | Small | Yes |
 | GCP Cloud Load Balancer config (URL map, backend service to Cloud Run) | Small–Medium | Yes |
 | Cloud Run Dockerfiles for `apps/api` and `apps/worker` | Small | Yes |
 | Firebase Hosting project setup for `apps/platform` + `tenantadmin.*` domain | Small | Yes |
@@ -286,11 +295,50 @@ The following work items are required before launch. Items marked **Blocks launc
 ### No changes required
 
 | Work item | Notes |
-|---|---|
+| --- | --- |
 | `apps/web` (practice frontend) | No code changes — existing SPA, served as-is |
 | `apps/api/src/db/schema.sql` | No changes — 75 tables reused as-is per practice |
 | `apps/api/src/db/migrate.js` | No changes — reused by provisioning job |
 | `apps/api/src/lib/encrypt.js` | No changes — AES-256-GCM layer is DB-agnostic |
+
+---
+
+## Cloud Armor Configuration
+
+Attach Cloud Armor to the GCP Load Balancer backend service. Use the managed OWASP ruleset as the baseline and add a rate-limit rule for the auth endpoints.
+
+```bash
+# Create a security policy
+gcloud compute security-policies create faithcounseling-waf \
+  --description="ChurchCore Care WAF policy"
+
+# Apply the Google-managed OWASP Top 10 ruleset
+gcloud compute security-policies rules create 1000 \
+  --security-policy=faithcounseling-waf \
+  --expression="evaluatePreconfiguredExpr('xss-stable')" \
+  --action=deny-403
+
+gcloud compute security-policies rules create 1001 \
+  --security-policy=faithcounseling-waf \
+  --expression="evaluatePreconfiguredExpr('sqli-stable')" \
+  --action=deny-403
+
+# Rate limit: 100 requests/min per IP on auth endpoints
+gcloud compute security-policies rules create 500 \
+  --security-policy=faithcounseling-waf \
+  --expression="request.path.matches('/v1/auth/.*')" \
+  --action=rate-based-ban \
+  --rate-limit-threshold-count=100 \
+  --rate-limit-threshold-interval-sec=60 \
+  --ban-duration-sec=300
+
+# Attach to the load balancer backend service
+gcloud compute backend-services update faithcounseling-api-backend \
+  --security-policy=faithcounseling-waf \
+  --global
+```
+
+Cloud Armor logs are written to Cloud Logging automatically. Set up an alert for requests denied at a rate above 50/min — this indicates an active attack.
 
 ---
 
@@ -305,6 +353,125 @@ The following work items are required before launch. Items marked **Blocks launc
 - Platform Admin routes (`/platform-api/*`) must verify a staff-level auth token on every request and must never accept practice-user session tokens
 - Subdomain slug resolution must query the platform DB on every request — do not cache tenant status in a JWT, as suspended practices must be blocked immediately
 - Cloud SQL instances should be private IP only, accessed via Cloud SQL Auth Proxy sidecar in Cloud Run
+- Video (JaaS) platform-level credentials (`JITSI_APP_ID`, `JITSI_API_KEY_ID`, `JITSI_PRIVATE_KEY_BASE64`, `JITSI_DOMAIN`) must be stored in Secret Manager; practices override these per-practice via the admin UI. The private key PEM is re-encrypted at rest with `DB_ENCRYPTION_KEY` before being stored in the tenant's DB.
+
+---
+
+## Known Gaps — Must Address Before Launch
+
+Identified April 24, 2026 via codebase audit. Items are ordered by priority. Each gap has a status that should be updated as work completes.
+
+### GAP-1: Worker Deployment Type Is Wrong
+
+**Status:** Resolved | **Severity:** Critical — Blocks launch
+
+`cloud-implementation.md` specifies deploying `apps/worker` as a Cloud Run Job triggered by Cloud Scheduler. The actual worker is a **long-running polling process** (`setInterval` every 60 seconds, runs indefinitely). A Cloud Run Job is run-to-completion — it will exit after the first poll cycle.
+
+**Fix:** Deploy `apps/worker` as a **Cloud Run Service** (always-on, like the API), not a Cloud Run Job. Remove the Cloud Scheduler trigger. The worker manages its own polling interval internally.
+
+---
+
+### GAP-2: Worker Is Single-Tenant
+
+**Status:** Resolved | **Severity:** Critical — Blocks launch
+
+The worker connects to a single database via `DB_NAME` env var. In the per-practice model, each tenant has its own isolated DB. The worker as written processes reminders only for one tenant and ignores all others.
+
+**Fix:** Worker must query the platform DB for all active tenants, then iterate over each tenant's pool using the same pool registry pattern required for the API (`apps/api/src/db/pools.js`). One worker service handles all tenants.
+
+---
+
+### GAP-3: No SIGTERM Handler — Graceful Shutdown Missing
+
+**Status:** Resolved | **Severity:** High — Causes dropped requests on every deploy
+
+The API handles `unhandledRejection` and `uncaughtException` but has no `SIGTERM` handler and no `server.close()`. Cloud Run sends `SIGTERM` before terminating a container during rolling deploys or scaling events. Without a handler, in-flight requests are dropped and DB connection pools are abandoned ungracefully.
+
+**Fix:** Add to `apps/api/src/index.js`:
+
+```js
+process.on('SIGTERM', () => {
+  server.close(() => pool.end(() => process.exit(0)));
+});
+```
+
+Same fix required in `apps/worker/src/index.js` (drain the polling interval and close the pool).
+
+---
+
+### GAP-4: Email/SMS Delivery Is a Stub — No Provider Configured
+
+**Status:** Resolved | **Severity:** High — Core feature non-functional in production
+
+The worker contains the comment "In a production system this would dispatch an email/SMS via a notification provider" but marks reminders as `sent` without actually sending anything. Appointment reminders are a core clinical feature. Neither deployment doc names a provider or includes the required credentials.
+
+**Fix:** Choose and integrate a transactional email provider (AWS SES recommended on the GCP path via cross-cloud call, or SendGrid/Mailgun). Add SMS provider (Twilio) for SMS-type reminders. Add provider credentials to Secret Manager and the env var list. Update the worker to call the provider before marking `sent`.
+
+---
+
+### GAP-5: No Backup Strategy (HIPAA Requirement)
+
+**Status:** Resolved | **Severity:** High — Compliance gap
+
+Neither this document nor `SAAS-DEPLOYMENT-SPEC.md` addresses backups. HIPAA requires documented backup and recovery procedures.
+
+**Fix — minimum required:**
+
+- Enable Cloud SQL automated backups with 35-day retention on all tenant instances
+- Enable point-in-time recovery (PITR) on all tenant Cloud SQL instances
+- Document per-tenant restore procedure (restoring one practice DB without affecting others)
+- Document and test a full restore runbook at least once before launch
+- Store backup configs in Terraform/IaC so they are provisioned automatically with each new tenant
+
+---
+
+### GAP-6: No Schema Migration Strategy for Live Databases
+
+**Status:** Resolved | **Severity:** High — Becomes critical at 10+ tenants
+
+`migrate.js` is safe for new provisioning but has no migration history table and no version tracking. When a schema change ships, there is no automated way to apply it across N live tenant databases and no record of which tenants are on which schema version.
+
+**Fix:** Before go-live, add a `schema_migrations` table to every tenant DB and modify `migrate.js` to record each migration by name with a timestamp. Write a `ops/migrate-all-tenants.mjs` script that reads all active tenants from the platform DB, connects to each tenant pool, and runs any pending migrations. This script becomes part of the deploy pipeline.
+
+---
+
+### GAP-7: Video Provider Not in Provisioning Flow or Env Var List
+
+**Status:** Resolved | **Severity:** Medium
+
+The `video_join_tokens` table references `domain`, `app_id`, `api_key_id` (8x8.vc Jitsi). The per-practice video config endpoint (`PATCH /v1/practices/:id/video-config`) allows per-tenant video credentials. Neither this doc nor `SAAS-DEPLOYMENT-SPEC.md` specifies where video credentials are stored at provisioning time, whether ChurchCore Care provides a shared account or practices bring their own, or what env vars are required.
+
+**Fix:** Decide on the video credential model (shared vs per-practice). Add video provider credentials to Secret Manager and the provisioning flow. Add to env var documentation.
+
+---
+
+### GAP-8: No WAF / Infrastructure-Level Rate Limiting
+
+**Status:** Resolved | **Severity:** Medium
+
+The API has application-level rate limiting in `security.js` but the architecture diagram has no WAF. For a public-internet HIPAA SaaS, infrastructure-level protection is needed before requests reach the application.
+
+**Fix (GCP path):** Add **Cloud Armor** to the GCP Load Balancer — standard managed ruleset + rate limiting at the edge. Add to the architecture diagram and cost model (~$10–20/month base + per-request pricing). Cloud Armor should be added to the Fixed Platform Costs table.
+
+---
+
+### GAP-9: No Staging Environment Strategy
+
+**Status:** Resolved | **Severity:** Medium
+
+There is no staging environment defined. With per-tenant isolated databases, a schema migration bug in production requires manual remediation across N live practice databases. A staging environment mirroring the provisioning flow is the minimum needed to validate deploys safely.
+
+**Fix:** Define a `staging` GCP project (or separate Cloud Run revision with traffic splitting). Staging should have one representative practice DB provisioned, run the same Docker images as production, and be the mandatory deploy target before production promotion. Add a staging deploy step to the CI/CD pipeline.
+
+---
+
+### GAP-10: File Uploads Stored in MySQL — Acknowledged Limitation
+
+**Status:** Accepted for MVP | **Severity:** Low now, medium at growth
+
+`portal_uploads.content_enc` stores encrypted base64 file content in a `MEDIUMTEXT` column (~16MB MySQL limit, so ~12MB raw files max). `http.js` enforces a 1MB JSON body limit which would reject files over ~700KB. At scale, file content in DB rows bloats backups and Cloud SQL storage costs.
+
+**Accepted for MVP.** Migration path when needed: move `content_enc` to GCS (encrypted at rest, with CMEK), store only a GCS object path in the `portal_uploads` row. Requires a one-time data migration and update to the upload/download handlers.
 
 ---
 

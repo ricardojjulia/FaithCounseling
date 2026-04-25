@@ -6,8 +6,8 @@
  * are encrypted at write time and decrypted at read time using AES-256-GCM
  * helpers in lib/encrypt.js.
  *
- * The upsert function uses INSERT ... ON DUPLICATE KEY UPDATE to maintain
- * a single row per client enforced by the UNIQUE KEY uq_cfaith_client.
+ * The upsert function uses INSERT ... ON CONFLICT DO UPDATE to maintain
+ * a single row per client enforced by the UNIQUE constraint uq_cfaith_client.
  *
  * All queries are tenant-scoped and parameterised — no string interpolation.
  */
@@ -58,7 +58,7 @@ export async function getClientFaithProfile(clientId, tenantId) {
 
 /**
  * Inserts or updates the faith profile singleton for a client.
- * Uses INSERT ... ON DUPLICATE KEY UPDATE keyed on the UNIQUE (client_id) constraint.
+ * Uses INSERT ... ON CONFLICT DO UPDATE keyed on the UNIQUE (client_id) constraint.
  * @param {{
  *   id: string, tenantId: string, clientId: string,
  *   denomination?: string, churchName?: string, pastorName?: string,
@@ -94,16 +94,16 @@ export async function upsertClientFaithProfile({
         spiritual_director_enc, faith_integration_level, spiritual_concerns_enc,
         religious_restrictions_enc, faith_strengths_enc)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       tenant_id = VALUES(tenant_id),
-       denomination = VALUES(denomination),
-       church_name_enc = VALUES(church_name_enc),
-       pastor_name_enc = VALUES(pastor_name_enc),
-       spiritual_director_enc = VALUES(spiritual_director_enc),
-       faith_integration_level = VALUES(faith_integration_level),
-       spiritual_concerns_enc = VALUES(spiritual_concerns_enc),
-       religious_restrictions_enc = VALUES(religious_restrictions_enc),
-       faith_strengths_enc = VALUES(faith_strengths_enc)`,
+     ON CONFLICT ON CONSTRAINT uq_cfaith_client DO UPDATE SET
+       tenant_id = EXCLUDED.tenant_id,
+       denomination = EXCLUDED.denomination,
+       church_name_enc = EXCLUDED.church_name_enc,
+       pastor_name_enc = EXCLUDED.pastor_name_enc,
+       spiritual_director_enc = EXCLUDED.spiritual_director_enc,
+       faith_integration_level = EXCLUDED.faith_integration_level,
+       spiritual_concerns_enc = EXCLUDED.spiritual_concerns_enc,
+       religious_restrictions_enc = EXCLUDED.religious_restrictions_enc,
+       faith_strengths_enc = EXCLUDED.faith_strengths_enc`,
     [
       id,
       tenantId,

@@ -1,4 +1,4 @@
-# FaithCounseling — Competitive Analysis
+# ChurchCore Care — Competitive Analysis
 
 **Date:** 2026  
 **Scope:** Mental health practice management / EHR SaaS market, with focus on faith-based positioning and solo/group practice segment
@@ -7,9 +7,9 @@
 
 ## 1. Executive Summary
 
-The mental health EHR market is large, mature, and dominated by a small number of well-funded general-purpose platforms. **No dedicated Christian counseling practice management platform exists at commercial scale.** Every mainstream competitor treats faith integration as a non-issue. This represents FaithCounseling's primary and unchallenged differentiator: it is the only purpose-built practice management platform for Christian counseling practices.
+The mental health EHR market is large, mature, and dominated by a small number of well-funded general-purpose platforms. **No dedicated Christian counseling practice management platform exists at commercial scale.** Every mainstream competitor treats faith integration as a non-issue. This represents ChurchCore Care's primary and unchallenged differentiator: it is the only purpose-built practice management platform for Christian counseling practices.
 
-FaithCounseling enters an adjacent market (general mental health EHR) rather than a true faith-specific one. Its competitive strategy must therefore be **niche dominance first** — capture the underserved Christian counseling segment before feature-competitive generalist platforms add superficial faith content.
+ChurchCore Care enters an adjacent market (general mental health EHR) rather than a true faith-specific one. Its competitive strategy must therefore be **niche dominance first** — capture the underserved Christian counseling segment before feature-competitive generalist platforms add superficial faith content.
 
 ---
 
@@ -259,7 +259,7 @@ An exhaustive search for dedicated Christian counseling EHR or practice manageme
 
 ### The faith integration gap in mainstream platforms
 
-| Feature Category | SimplePractice | TherapyNotes | Therabill | Opus EHR | Alma | **FaithCounseling** |
+| Feature Category | SimplePractice | TherapyNotes | Therabill | Opus EHR | Alma | **ChurchCore Care** |
 |---|---|---|---|---|---|---|
 | Faith-integrated session templates | ✗ | ✗ | ✗ | ✗ | ✗ | **✓** |
 | Scripture reference fields | ✗ | ✗ | ✗ | ✗ | ✗ | **✓** |
@@ -275,9 +275,9 @@ An exhaustive search for dedicated Christian counseling EHR or practice manageme
 
 ## 5. Feature Parity Analysis
 
-FaithCounseling v1 vs. market standard — as defined in the PRD.
+ChurchCore Care v1 vs. market standard — as defined in the PRD.
 
-| Feature | FaithCounseling v1 | SimplePractice | TherapyNotes | Gap/Notes |
+| Feature | ChurchCore Care v1 | SimplePractice | TherapyNotes | Gap/Notes |
 |---|---|---|---|---|
 | Scheduling & calendar | ✓ | ✓ | ✓ | Parity |
 | Appointment reminders | ✓ | ✓ | ✓ | Parity |
@@ -290,12 +290,12 @@ FaithCounseling v1 vs. market standard — as defined in the PRD.
 | Secure messaging | ✓ | ✓ | ✓ | Parity |
 | Invoice and superbill generation | ✓ | ✓ | ✓ | Parity |
 | Role-based permissions (RBAC) | ✓ | ✓ | ✓ | Parity |
-| Audit trails | ✓ | Partial | Partial | FaithCounseling advantage |
+| Audit trails | ✓ | Partial | Partial | ChurchCore Care advantage |
 | Multi-location support | ✓ | ✓ (Plus) | Partial | Parity |
-| Intern/supervision relationships | ✓ | Limited | Limited | FaithCounseling advantage |
-| **Faith-integrated templates** | **✓** | **✗** | **✗** | **FaithCounseling exclusive** |
-| **Christian counseling content** | **✓** | **✗** | **✗** | **FaithCounseling exclusive** |
-| **Configurable faith workflows** | **✓** | **✗** | **✗** | **FaithCounseling exclusive** |
+| Intern/supervision relationships | ✓ | Limited | Limited | ChurchCore Care advantage |
+| **Faith-integrated templates** | **✓** | **✗** | **✗** | **ChurchCore Care exclusive** |
+| **Christian counseling content** | **✓** | **✗** | **✗** | **ChurchCore Care exclusive** |
+| **Configurable faith workflows** | **✓** | **✗** | **✗** | **ChurchCore Care exclusive** |
 | Telehealth video | **✗** (v1 exclusion) | ✓ | ✓ | **Gap — high priority post-v1** |
 | Electronic claim submission | **✗** (v1 exclusion) | ✓ | ✓ | **Gap — medium priority** |
 | Native mobile app | **✗** (v1 exclusion) | ✓ | ✗ | Gap — lower priority |
@@ -315,12 +315,12 @@ FaithCounseling v1 vs. market standard — as defined in the PRD.
 | Alma | $95/mo (membership) | $95/mo | Not applicable (individual) |
 | Therabill | Not public | Not public | Not public |
 | Opus EHR | Free (limited) | Contact | Contact |
-| **FaithCounseling (recommended)** | **$49–$69/mo** | **$79–$99/mo** | **$39–$59/mo** |
+| **ChurchCore Care (recommended)** | **$49–$69/mo** | **$79–$99/mo** | **$39–$59/mo** |
 
 **Pricing strategy observations:**
 - SimplePractice at $49–99 sets market anchor pricing; matching it is appropriate.
 - TherapyNotes at ~$59 flat is a lower-complexity offer — suitable comparison for feature-parity pricing.
-- FaithCounseling can justify a slight **premium over generic EHRs** for its faith-specific content and templates, especially for practices that consider this content essential.
+- ChurchCore Care can justify a slight **premium over generic EHRs** for its faith-specific content and templates, especially for practices that consider this content essential.
 - Practices that value faith integration have zero alternatives at any price — willingness-to-pay should be tested at a modest premium.
 - A **free 14–30 day trial** is now standard in the category and essential for conversion.
 
@@ -329,7 +329,7 @@ FaithCounseling v1 vs. market standard — as defined in the PRD.
 ## 7. Go-to-Market Differentiation
 
 ### Primary differentiator
-**FaithCounseling is the only practice management platform built specifically for Christian counselors.** Every other platform in the market is completely secular. This is a defensible moat that cannot be quickly copied without alienating secular customer bases.
+**ChurchCore Care is the only practice management platform built specifically for Christian counselors.** Every other platform in the market is completely secular. This is a defensible moat that cannot be quickly copied without alienating secular customer bases.
 
 ### Target customer profile (where competition is weakest)
 - Solo LPC, LPCC, LMFT, or pastoral counselor operating a private Christian practice
@@ -345,7 +345,7 @@ FaithCounseling v1 vs. market standard — as defined in the PRD.
 - Church administrator referral networks
 
 ### Positioning statement
-> *FaithCounseling is the practice management platform designed for Christian counselors — the only EHR that integrates faith language, spiritual wellness tracking, scripture references, and Christian counseling templates into every aspect of your practice workflow.*
+> *ChurchCore Care is the practice management platform designed for Christian counselors — the only EHR that integrates faith language, spiritual wellness tracking, scripture references, and Christian counseling templates into every aspect of your practice workflow.*
 
 ---
 
@@ -365,7 +365,7 @@ FaithCounseling v1 vs. market standard — as defined in the PRD.
 ## 9. Strategic Recommendations
 
 ### Immediate (v1 launch)
-1. **Lead with faith differentiation.** Every marketing touchpoint must make clear that FaithCounseling was built for Christian counselors — not adapted for them.
+1. **Lead with faith differentiation.** Every marketing touchpoint must make clear that ChurchCore Care was built for Christian counselors — not adapted for them.
 2. **Target AACC membership.** American Association of Christian Counselors has 50,000+ members. Conference sponsorship or partnership would reach the entire addressable market.
 3. **Price at or slightly below SimplePractice Essential.** Competing at $69–79/month for full features undercuts the market leader while the product builds feature parity.
 4. **Launch with a 30-day free trial.** Category standard; required for credibility.
@@ -384,7 +384,7 @@ FaithCounseling v1 vs. market standard — as defined in the PRD.
 
 ## 10. Summary Scorecard
 
-| Dimension | SimplePractice | TherapyNotes | Alma | FaithCounseling v1 |
+| Dimension | SimplePractice | TherapyNotes | Alma | ChurchCore Care v1 |
 |---|---|---|---|---|
 | Feature completeness | ★★★★★ | ★★★★☆ | ★★★☆☆ | ★★★☆☆ |
 | Faith integration | ✗ | ✗ | ✗ | **★★★★★** |

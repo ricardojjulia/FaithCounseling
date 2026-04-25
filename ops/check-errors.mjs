@@ -10,7 +10,7 @@ const devHeaders = {
 const loginRes = await fetch('http://127.0.0.1:3001/v1/auth/login', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ email: 'admin@faithcounseling.local', password: 'ChangeMe!Dev2024#' })
+  body: JSON.stringify({ email: 'admin@churchcorecare.local', password: 'ChangeMe!Dev2024#' })
 });
 const setCookie = loginRes.headers.get('set-cookie');
 const sessionCookie = setCookie?.split(';')[0];

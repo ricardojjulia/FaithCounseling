@@ -1,0 +1,42 @@
+name: Tenant Policy Guard
+
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tenant-policy-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate tenant-host routing policy (environment baseline)
+        run: pnpm policy:tenant
+
+      - name: Validate fail-closed production routing policy
+        env:
+          NODE_ENV: production
+          ENABLE_TENANT_HOST_ROUTING: "true"
+          TENANT_STRICT_HOST_ROUTING: "true"
+          DB_NAME: churchcore_care
+        run: pnpm policy:tenant

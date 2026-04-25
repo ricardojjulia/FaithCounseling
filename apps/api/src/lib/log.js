@@ -1,4 +1,4 @@
-const SERVICE_NAME = 'faith-api';
+const SERVICE_NAME = 'churchcore-api';
 const MAX_STRING_LENGTH = 240;
 const MAX_OBJECT_KEYS = 40;
 const MAX_ARRAY_ITEMS = 20;

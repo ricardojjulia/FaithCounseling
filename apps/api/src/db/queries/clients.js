@@ -8,7 +8,7 @@
  * and decrypted at read time using the field-level AES-256-GCM helpers
  * in lib/encrypt.js.
  *
- * All queries use parameterized mysql2 syntax — no string interpolation in SQL.
+ * All queries use parameterized PostgreSQL syntax — no string interpolation in SQL.
  */
 
 import pool from '../pool.js';

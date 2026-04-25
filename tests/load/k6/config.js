@@ -2,7 +2,7 @@ export const BASE_URL = __ENV.BASE_URL || 'http://127.0.0.1:3101';
 
 export const CREDENTIALS = {
   admin: {
-    email: __ENV.ADMIN_EMAIL || 'admin@faithcounseling.local',
+    email: __ENV.ADMIN_EMAIL || 'admin@churchcorecare.local',
     password: __ENV.ADMIN_PASSWORD || 'ChangeMe!Dev2024#',
   },
   client: {

@@ -3,19 +3,20 @@ version: '3.9'
 services:
   mysql:
     image: mysql:8
-    container_name: faith-mysql
+    platform: linux/arm64
+    container_name: churchcore-postgres
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: HAPPY47202!
-      MYSQL_DATABASE: faith_counseling
-      MYSQL_USER: faith_app
+      MYSQL_DATABASE: churchcore_care
+      MYSQL_USER: churchcore_app
       MYSQL_PASSWORD: HAPPY522026!
     ports:
       - '3306:3306'
     volumes:
-      - faith_mysql_data:/var/lib/mysql
+      - churchcore_db_data:/var/lib/mysql
     healthcheck:
-      test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '-ufaith_app', '-pHAPPY522026!']
+      test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '-uchurchcore_app', '-pHAPPY522026!']
       interval: 10s
       timeout: 5s
       retries: 6
@@ -26,16 +27,16 @@ services:
     build:
       context: .
       dockerfile: agents/translation_guardian/Dockerfile
-    container_name: faith-translation-guardian
+    container_name: churchcore-translation-guardian
     restart: on-failure
     env_file:
       - .env
     environment:
       TRANSLATION_QA_BASE_URL: ${TRANSLATION_QA_BASE_URL:-http://host.docker.internal:3002/index.html}
-      TRANSLATION_QA_EMAIL: ${TRANSLATION_QA_EMAIL:-admin@faithcounseling.local}
+      TRANSLATION_QA_EMAIL: ${TRANSLATION_QA_EMAIL:-admin@churchcorecare.local}
       TRANSLATION_QA_PASSWORD: ${TRANSLATION_QA_PASSWORD:-ChangeMe!Dev2024#}
     ports:
       - '${TRANSLATION_GUARDIAN_PORT:-8098}:8088'
 
 volumes:
-  faith_mysql_data:
+  churchcore_db_data:

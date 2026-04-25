@@ -2,14 +2,14 @@
 
 **Status:** Planning
 **Prepared:** April 9, 2026
-**Initiative:** FaithCounseling Internationalization System Rewrite
+**Initiative:** ChurchCore Care Internationalization System Rewrite
 **Stack:** Node.js API, React/Mantine web, MySQL, `packages/i18n`, Python Translation Guardian agent, Claude Code skill
 
 ---
 
 ## Executive Summary
 
-The FaithCounseling platform's i18n system is a hand-rolled, single-file translation catalog that conflates three distinct concepts — the language a person speaks, the locale used to format dates and currency, and a faith/pastoral terminology register — under a single 2-letter code. The result is a system that looks functional from the outside but is operationally broken: `fr` and `pt` are empty stubs that break the UI when selected, there is no plural support, all currency is hardcoded to `en-US`/USD even for non-English sessions, and the server has no authoritative knowledge of a user's locale. Every locale operation relies entirely on client-side localStorage.
+The ChurchCore Care platform's i18n system is a hand-rolled, single-file translation catalog that conflates three distinct concepts — the language a person speaks, the locale used to format dates and currency, and a faith/pastoral terminology register — under a single 2-letter code. The result is a system that looks functional from the outside but is operationally broken: `fr` and `pt` are empty stubs that break the UI when selected, there is no plural support, all currency is hardcoded to `en-US`/USD even for non-English sessions, and the server has no authoritative knowledge of a user's locale. Every locale operation relies entirely on client-side localStorage.
 
 This rewrite addresses the entire stack — from the `packages/i18n` shared package up through the API, database schema, frontend context, and developer tooling — in six sequenced phases. Each phase is independently releasable, and Phase 0 ships in one PR to immediately stop the breakage that non-admin users currently experience when selecting French or Portuguese from the locale dropdown.
 
@@ -458,7 +458,7 @@ The skill is a Claude Code agent definition following the same frontmatter forma
 
 1. **Validate the locale code.** Read `packages/i18n/src/locales.js`. Verify the requested code is in the canonical supported locales list. If not, ask the user whether to register it (shows what metadata is needed: label, nativeName, rtl, currencyCode, region). If confirmed, update `locales.js`.
 
-2. **Check API health.** `GET /v1/i18n/locales`. If the API is not running, surface a clear error: `"The FaithCounseling API must be running. Start it with node start-servers.js"`.
+2. **Check API health.** `GET /v1/i18n/locales`. If the API is not running, surface a clear error: `"The ChurchCore Care API must be running. Start it with node start-servers.js"`.
 
 3. **Create the locale slot.** `POST /v1/i18n/locales` with `{ locale: 'es-MX', label: 'Español (México)' }`. If already exists, skip and continue.
 

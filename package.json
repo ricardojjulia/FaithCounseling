@@ -1,10 +1,10 @@
 {
-  "name": "faith-counseling",
+  "name": "churchcore-care",
   "version": "6.1.0",
   "private": true,
-  "packageManager": "pnpm@10.7.0",
+  "packageManager": "pnpm@10.33.2",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "workspaces": [
     "apps/*",
@@ -13,16 +13,17 @@
   "scripts": {
     "start": "node --env-file=.env ops/start-all.mjs",
     "start:all": "node --env-file=.env ops/start-all.mjs",
-    "start:web": "pnpm --filter @faith/web start",
-    "start:api": "pnpm --filter @faith/api start",
-    "start:api:standalone": "pnpm --filter @faith/api start:standalone",
-    "start:worker": "pnpm --filter @faith/worker start",
+    "start:web": "pnpm --filter @churchcore/web start",
+    "start:api": "pnpm --filter @churchcore/api start",
+    "start:api:standalone": "pnpm --filter @churchcore/api start:standalone",
+    "start:worker": "pnpm --filter @churchcore/worker start",
     "reset:language": "node ops/reset-language-settings.mjs && node ops/push-clean-messages.mjs",
     "i18n:status": "node --env-file=.env ops/i18n-status.mjs",
     "i18n:translate": "node --env-file=.env ops/translate-locale.mjs",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "test:step12": "node ops/step12-validate.mjs",
+    "policy:tenant": "node ops/check-tenant-policy.mjs",
     "test:security": "node ops/security-regression.mjs",
     "security:appsec": "node ops/appsec-scan.mjs",
     "security:db": "node ops/db-security-scan.mjs",
@@ -48,8 +49,8 @@
     "agent:translation:down": "docker compose --profile agent stop translation-guardian"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
-    "axe-core": "^4.11.1"
+    "@playwright/test": "^1.59.1",
+    "axe-core": "^4.11.3"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["argon2"],

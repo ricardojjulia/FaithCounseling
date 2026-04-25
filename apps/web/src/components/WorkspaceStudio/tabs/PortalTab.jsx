@@ -924,11 +924,11 @@ export default function PortalTab({ onSchedulePortalRequest, onViewClient }) {
   const [dataRightsLoading, setDataRightsLoading] = useState(true);
   const [dataRightsRequests, setDataRightsRequests] = useState([]);
   const [settingsDraft, setSettingsDraft] = useState({
-    practiceName: 'FaithCounseling',
+    practiceName: 'ChurchCore Care',
     logoUrl: '',
     brandColor: '#1f7a8c',
     accentColor: '#f0f7f8',
-    welcomeHeadline: 'FaithCounseling Client Portal',
+    welcomeHeadline: 'ChurchCore Care Client Portal',
     welcomeMessage: '',
     helpMessage: '',
     supportEmail: '',

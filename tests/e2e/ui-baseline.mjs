@@ -1,6 +1,6 @@
 /**
  * UI Baseline Script — Baseline Mode
- * Traverses the FaithCounseling application systematically and captures:
+ * Traverses the ChurchCore Care application systematically and captures:
  *   test-results/ui-map.json
  *   test-results/screen-baseline.json
  *   test-results/screenshots/
@@ -183,7 +183,7 @@ async function waitForListItems(page, timeout = 8000) {
 
 const ACCOUNTS = {
   practice_admin: {
-    email: process.env.TEST_ADMIN_EMAIL || 'admin@faithcounseling.local',
+    email: process.env.TEST_ADMIN_EMAIL || 'admin@churchcorecare.local',
     password: process.env.TEST_ADMIN_PASSWORD || 'ChangeMe!Dev2024#',
   },
   client: {
@@ -729,7 +729,7 @@ function buildSummaryMarkdown(uiMap) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('FaithCounseling UI Baseline – Starting');
+  console.log('ChurchCore Care UI Baseline – Starting');
   console.log(`Base URL: ${BASE_URL}`);
   console.log(`Output:   ${OUTPUT_DIR}`);
 

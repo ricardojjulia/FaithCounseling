@@ -6,8 +6,8 @@
  * guardian_address_enc and court_contact_enc store JSON objects and use
  * encryptJson/decryptJson.
  *
- * The upsert function uses INSERT ... ON DUPLICATE KEY UPDATE to maintain
- * a single row per client enforced by the UNIQUE KEY uq_clegal_client.
+ * The upsert function uses INSERT ... ON CONFLICT DO UPDATE to maintain
+ * a single row per client enforced by the UNIQUE constraint uq_clegal_client.
  *
  * All queries are tenant-scoped and parameterised — no string interpolation.
  */
@@ -55,7 +55,7 @@ export async function getClientLegal(clientId, tenantId) {
 
 /**
  * Inserts or updates the legal singleton for a client.
- * Uses INSERT ... ON DUPLICATE KEY UPDATE keyed on the UNIQUE (client_id) constraint.
+ * Uses INSERT ... ON CONFLICT DO UPDATE keyed on the UNIQUE (client_id) constraint.
  * @param {{
  *   id: string, tenantId: string, clientId: string,
  *   guardianName?: string, guardianRelationship?: string,
@@ -95,18 +95,18 @@ export async function upsertClientLegal({
         court_ordered, court_case_number_enc, court_contact_enc,
         court_order_expires, custody_notes_enc)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       tenant_id = VALUES(tenant_id),
-       guardian_name_enc = VALUES(guardian_name_enc),
-       guardian_relationship = VALUES(guardian_relationship),
-       guardian_phone_enc = VALUES(guardian_phone_enc),
-       guardian_email_enc = VALUES(guardian_email_enc),
-       guardian_address_enc = VALUES(guardian_address_enc),
-       court_ordered = VALUES(court_ordered),
-       court_case_number_enc = VALUES(court_case_number_enc),
-       court_contact_enc = VALUES(court_contact_enc),
-       court_order_expires = VALUES(court_order_expires),
-       custody_notes_enc = VALUES(custody_notes_enc)`,
+     ON CONFLICT ON CONSTRAINT uq_clegal_client DO UPDATE SET
+       tenant_id = EXCLUDED.tenant_id,
+       guardian_name_enc = EXCLUDED.guardian_name_enc,
+       guardian_relationship = EXCLUDED.guardian_relationship,
+       guardian_phone_enc = EXCLUDED.guardian_phone_enc,
+       guardian_email_enc = EXCLUDED.guardian_email_enc,
+       guardian_address_enc = EXCLUDED.guardian_address_enc,
+       court_ordered = EXCLUDED.court_ordered,
+       court_case_number_enc = EXCLUDED.court_case_number_enc,
+       court_contact_enc = EXCLUDED.court_contact_enc,
+       court_order_expires = EXCLUDED.court_order_expires,
+       custody_notes_enc = EXCLUDED.custody_notes_enc`,
     [
       id,
       tenantId,

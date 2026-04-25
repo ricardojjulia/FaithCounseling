@@ -14,7 +14,7 @@
 - Confidence: High
 - Category: AuthN, API Security, Secrets, Privacy
 - Status: Fixed
-- Affected files: `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/index.js`
+- Affected files: `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/index.js`
 - Evidence: `activatePortalSignupRequest()` returns `temporaryPassword` in its result (`apps/api/src/index.js:4815-4874`); `handlePortalPublicRequests()` returns the `activation` object on the unauthenticated public request path when `registrationMode === 'instant_activation'` (`apps/api/src/index.js:5231-5369`); `handlePortalAccounts()` also returns `temporaryPassword` in the admin API response (`apps/api/src/index.js:7689-7800`).
 - Risk: Authentication secrets are exposed to browsers, client-side tooling, reverse proxies, observability layers, and any middleware that captures response bodies.
 - Impact: A public account-signup request can receive a working portal password immediately, and privileged staff APIs also emit reusable credentials into normal application traffic. Either path can enable account takeover and downstream PHI exposure.
@@ -27,7 +27,7 @@
 - Confidence: High
 - Category: AuthN, API Security, Secrets
 - Status: Fixed
-- Affected files: `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/lib/auth.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/index.js`
+- Affected files: `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/lib/auth.js`, `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/index.js`
 - Evidence: `requestPortalPasswordReset()` returns `resetToken` whenever `NODE_ENV !== 'production'` (`apps/api/src/lib/auth.js:495-535`); `handlePortalPasswordResetRequest()` serializes `result.resetToken` directly in the HTTP response body (`apps/api/src/index.js:2107-2118`).
 - Risk: Any shared dev, demo, or staging environment that is not explicitly marked production can expose live reset secrets to the requester.
 - Impact: An attacker who can reach a non-production deployment can request a reset and immediately complete it without access to the victim's mailbox, resulting in portal account takeover.
@@ -40,7 +40,7 @@
 - Confidence: High
 - Category: AuthN, Compliance Risk
 - Status: Mitigated (partial — full TOTP/WebAuthn implementation deferred)
-- Affected files: `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/lib/auth.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/queries/portal.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/schema.sql`
+- Affected files: `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/lib/auth.js`, `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/db/queries/portal.js`, `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/db/schema.sql`
 - Evidence: Staff and portal account records persist `mfa_enabled` (`apps/api/src/db/schema.sql:84`, `apps/api/src/db/queries/portal.js:21-31`), and portal account APIs allow toggling `mfaEnabled` (`apps/api/src/index.js:7729-7793`), but `login()` creates staff or portal sessions immediately after password verification with no OTP/WebAuthn/TOTP challenge branch (`apps/api/src/lib/auth.js:171-325`).
 - Risk: Operators can believe MFA is active when the codebase still authenticates with passwords alone.
 - Impact: Password compromise, credential stuffing, or reused credentials remain sufficient to reach PHI-bearing sessions even when `mfa_enabled` is true.
@@ -53,7 +53,7 @@
 - Confidence: High
 - Category: Logging, Privacy, Compliance Risk
 - Status: Fixed
-- Affected files: `/home/runner/work/FaithCounseling/FaithCounseling/apps/worker/src/index.js`
+- Affected files: `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/worker/src/index.js`
 - Evidence: The worker prints reminder processing messages containing `appointment_id` and `client_id` (`apps/worker/src/index.js:73-109`) and emits raw JSON audit events with `tenantId`, `action`, and `targetId` via `console.log(JSON.stringify(...))` (`apps/worker/src/index.js:28-39`, `apps/worker/src/index.js:102-109`).
 - Risk: User-linked identifiers and raw audit payloads can leak into centralized log systems, shell history, or third-party log processors without the redaction controls used by `apps/api/src/lib/log.js`.
 - Impact: Log readers can correlate reminder activity to specific tenants and client records, and audit/event separation requirements from the security baseline are weakened.
@@ -66,7 +66,7 @@
 - Confidence: Medium
 - Category: API Security, File Upload, Privacy
 - Status: Mitigated (type allowlist and magic-byte validation added; malware scanning not yet implemented)
-- Affected files: `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/index.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/queries/portal.js`
+- Affected files: `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/index.js`, `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/db/queries/portal.js`
 - Evidence: `handlePortalUploads()` only checks base64 validity, non-empty content, and a 2 MB limit while trusting caller-supplied `mimeType` (`apps/api/src/index.js:8381-8471`); `createPortalUpload()` stores the file body as encrypted base64 with no signature sniffing, extension policy, or quarantine stage (`apps/api/src/db/queries/portal.js:476-507`); the client export bundle includes uploads with `includeContent: true` (`apps/api/src/index.js:8201-8245`).
 - Risk: The platform can persist and later redistribute arbitrary active content or malicious documents under attacker-chosen MIME labels.
 - Impact: Staff or client devices may receive unsafe files, and harmful content can travel through exports even though the application never validated it.
@@ -79,7 +79,7 @@
 - Confidence: High
 - Category: Crypto, Secrets, Configuration
 - Status: Fixed
-- Affected files: `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/lib/encrypt.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/README.md`
+- Affected files: `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/lib/encrypt.js`, `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/README.md`
 - Evidence: `deriveLookupHash()` uses the same `key()` loaded from `DB_ENCRYPTION_KEY` that also backs AES-256-GCM encryption (`apps/api/src/lib/encrypt.js:21-39`, `apps/api/src/lib/encrypt.js:113-121`); `apps/api/README.md` documents `DB_ENCRYPTION_HMAC_KEY` and `SESSION_SECRET` as required inputs even though the inspected auth and crypto code paths do not consume them (`apps/api/README.md:16-30`).
 - Risk: Key-separation assumptions are weaker than documentation suggests, and operators may believe extra secrets are active controls when they are not.
 - Impact: Secret rotation and blast-radius planning become harder, and configuration reviews can miss the fact that one key currently serves both confidentiality and deterministic lookup purposes.
@@ -92,7 +92,7 @@
 - Confidence: Medium
 - Category: AuthZ, Tenant Isolation, Configuration
 - Status: Mitigated (stronger runtime guard added)
-- Affected files: `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/pools.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/pool.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/middleware/tenant.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/index.js`
+- Affected files: `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/db/pools.js`, `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/db/pool.js`, `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/middleware/tenant.js`, `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/index.js`
 - Evidence: Request handling resolves tenant context from host and runs inside tenant-scoped DB context (`apps/api/src/index.js` server wrapper and `runWithTenantContext`). Known tenant slugs are now loaded from `tenant_provisioning` with env fallback (`apps/api/src/db/pools.js`). Unknown tenant rejection is enforced against that canonical set when `TENANT_STRICT_HOST_ROUTING=true` (`apps/api/src/middleware/tenant.js`). Startup now fails fast in non-local runtime when `ENABLE_TENANT_HOST_ROUTING=true` without strict mode (`apps/api/src/index.js`).
 - Risk: If teams route real SaaS host traffic without enabling tenant-host mode and strict mode as intended, tenant host isolation guarantees can still be weakened by configuration drift.
 - Impact: Weak host-routing configuration can undermine expected tenant boundary guarantees in production SaaS mode.
@@ -105,7 +105,7 @@
 - Confidence: High
 - Category: Tenant Isolation, Change Control, API Integrity
 - Status: Fixed
-- Affected files: `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/lib/tenant-provisioning.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/index.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/queries/platform.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/pools.js`
+- Affected files: `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/lib/tenant-provisioning.js`, `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/index.js`, `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/db/queries/platform.js`, `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/db/pools.js`
 - Evidence: Platform tenant provisioning previously accepted create-time statuses only and lacked a guarded update path for lifecycle progression. This slice introduces canonical status normalization plus transition validation and adds a `PATCH` update path that rejects invalid jumps (`409`) and audit-logs updates.
 - Risk: Without transition control, manual or script-driven status mutations can incorrectly mark tenant provisioning states and affect host-routing activation decisions.
 - Impact: Incorrect tenant activation posture can weaken isolation controls and operational safety during provisioning.
@@ -113,8 +113,21 @@
 - Remediation applied: Added canonical status lifecycle helper (`queued`, `in_progress`, `completed`, `failed`), enforced transition rules in `PATCH /v1/platform/tenant-provisioning`, added request-by-id lookup for transition validation, aligned provisioned tenant detection to canonical `completed` status, added endpoint-level API tests, and wired smoke/validation/security regression scripts to the canonical PATCH transition flow.
 - Manual verification needed: Validate staging/production provisioning orchestration uses API transitions exclusively (no direct DB status writes).
 
+### F-009 - Deployment-policy drift could weaken tenant host-routing isolation if configuration checks are skipped
+- Severity: Medium
+- Confidence: High
+- Category: Tenant Isolation, Configuration, DevSecOps
+- Status: Mitigated
+- Affected files: `/home/runner/work/ChurchCore Care/ChurchCore Care/ops/check-tenant-policy.mjs`, `/home/runner/work/ChurchCore Care/ChurchCore Care/.github/workflows/tenant-policy-guard.yml`, `/home/runner/work/ChurchCore Care/ChurchCore Care/ops/runbooks/tenant-host-routing-policy.txt`
+- Evidence: Prior slices introduced runtime fail-closed startup behavior for non-local tenant-host mode, but there was no dedicated CI/deployment policy gate validating required host-routing/provisioning flag posture pre-merge. This left a path for configuration drift between intended and deployed isolation controls.
+- Risk: Teams can merge or deploy configuration changes that omit or mis-set strict tenant routing flags, potentially weakening host-based tenant isolation guarantees.
+- Impact: Misconfigured SaaS routing posture can increase cross-tenant exposure risk through unknown host acceptance or inconsistent tenant-source policy.
+- PHI/PII relevance: Tenant isolation protects practice-scoped client records, portal data, and operational metadata.
+- Remediation applied: Added CI-enforced tenant policy guard (`tenant-policy-guard.yml`) and policy script (`ops/check-tenant-policy.mjs`) that validates required env keys, enforces non-local fail-closed host-routing policy, and requires a canonical tenant source (`TENANT_ALLOWED_SLUGS` or DB-backed provisioning). Added rollout/remediation runbook in `ops/runbooks/tenant-host-routing-policy.txt`.
+- Manual verification needed: Confirm deployment pipelines that inject runtime env values execute equivalent policy checks before release and that production secrets/variables match the guarded combinations.
+
 ## Sensitive Data Inventory
-- PHI: client demographics, DOB, SSN fragments, treatment plans, progress notes, diagnoses, medications, allergies, clinical history, legal/guardianship data, portal messages, uploads, intake answers — primarily in `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/schema.sql` and related query modules; several flows correctly encrypt these fields. The credential-disclosure and log-leakage paths from the original review have been remediated.
+- PHI: client demographics, DOB, SSN fragments, treatment plans, progress notes, diagnoses, medications, allergies, clinical history, legal/guardianship data, portal messages, uploads, intake answers — primarily in `/home/runner/work/ChurchCore Care/ChurchCore Care/apps/api/src/db/schema.sql` and related query modules; several flows correctly encrypt these fields. The credential-disclosure and log-leakage paths from the original review have been remediated.
 - PII: names, emails, phone numbers, addresses, contact details, employment/licensure identifiers, portal registration details — found across `clients`, `staff_members`, `portal_*`, `client_*`, and `tenant_provisioning` tables plus route handlers in `apps/api/src/index.js`.
 - Secrets: session cookies, password reset tokens, temporary passwords, DB credentials, encryption key material — managed in `apps/api/src/lib/auth.js`, `apps/api/src/lib/encrypt.js`, `apps/api/src/db/pool.js`, `apps/web/server.js`, and `apps/api/README.md`; no secrets are returned in API responses after this remediation pass.
 - Sensitive operational metadata: tenant IDs, client IDs, appointment IDs, audit target IDs, export job IDs — previously leaked via worker logs; worker now logs only operational summaries without user-linked identifiers.

@@ -1,6 +1,6 @@
 # AGENTS
 
-You are working in the FaithCounseling repository — a faith-based Christian counseling practice platform. Follow these rules exactly before making changes.
+You are working in the ChurchCore Care repository — a faith-based Christian counseling practice platform. Follow these rules exactly before making changes.
 
 This repository uses `main` as the monitoring and runtime-health baseline.
 

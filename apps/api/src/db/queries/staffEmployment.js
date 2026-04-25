@@ -7,7 +7,7 @@
  * PHI columns: npi_number_enc, malpractice_policy_enc, direct_phone_enc
  * (AES-256-GCM encrypted).
  *
- * Uses INSERT ... ON DUPLICATE KEY UPDATE keyed on uq_employment_staff to
+ * Uses INSERT ... ON CONFLICT DO UPDATE keyed on uq_employment_staff to
  * maintain exactly one row per staff member.
  *
  * All queries are tenant-scoped and parameterised — no string interpolation.
@@ -58,7 +58,7 @@ export async function getStaffEmployment(staffId, tenantId) {
 
 /**
  * Inserts or updates the employment singleton for a staff member.
- * Uses INSERT ... ON DUPLICATE KEY UPDATE keyed on uq_employment_staff.
+ * Uses INSERT ... ON CONFLICT DO UPDATE keyed on uq_employment_staff.
  */
 export async function upsertStaffEmployment({
   id,
@@ -81,18 +81,18 @@ export async function upsertStaffEmployment({
         hire_date, termination_date, npi_number_enc, malpractice_insurer,
         malpractice_policy_enc, malpractice_expiry, direct_phone_enc, location_ids)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       tenant_id              = VALUES(tenant_id),
-       employment_type        = VALUES(employment_type),
-       employment_status      = VALUES(employment_status),
-       hire_date              = VALUES(hire_date),
-       termination_date       = VALUES(termination_date),
-       npi_number_enc         = VALUES(npi_number_enc),
-       malpractice_insurer    = VALUES(malpractice_insurer),
-       malpractice_policy_enc = VALUES(malpractice_policy_enc),
-       malpractice_expiry     = VALUES(malpractice_expiry),
-       direct_phone_enc       = VALUES(direct_phone_enc),
-       location_ids           = VALUES(location_ids)`,
+     ON CONFLICT ON CONSTRAINT uq_employment_staff DO UPDATE SET
+       tenant_id              = EXCLUDED.tenant_id,
+       employment_type        = EXCLUDED.employment_type,
+       employment_status      = EXCLUDED.employment_status,
+       hire_date              = EXCLUDED.hire_date,
+       termination_date       = EXCLUDED.termination_date,
+       npi_number_enc         = EXCLUDED.npi_number_enc,
+       malpractice_insurer    = EXCLUDED.malpractice_insurer,
+       malpractice_policy_enc = EXCLUDED.malpractice_policy_enc,
+       malpractice_expiry     = EXCLUDED.malpractice_expiry,
+       direct_phone_enc       = EXCLUDED.direct_phone_enc,
+       location_ids           = EXCLUDED.location_ids`,
     [
       id, staffId, tenantId, employmentType, employmentStatus,
       hireDate ?? null,

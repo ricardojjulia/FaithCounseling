@@ -121,7 +121,7 @@ Existing categories remain in place for the already shipped screening tools. Fai
 Minimum validation for this rollout:
 
 - `pnpm lint`
-- `pnpm --filter @faith/web build`
+- `pnpm --filter @churchcore/web build`
 - targeted Playwright regression for the Documents route
 
 ## Outcome

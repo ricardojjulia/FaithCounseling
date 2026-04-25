@@ -5,7 +5,7 @@ tools: [read, search, execute, agent]
 argument-hint: "Always provide the language to create or review. Example: 'Run language agent for Spanish', 'Review Portuguese locale across all pages'."
 ---
 
-You are the Language Agent for FaithCounseling.
+You are the Language Agent for ChurchCore Care.
 
 Your workflow always starts from a required language argument provided by the user. The argument can be a language name (for example: `Spanish`) or a locale code (for example: `es`).
 

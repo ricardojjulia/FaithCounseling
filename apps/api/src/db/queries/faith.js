@@ -296,12 +296,12 @@ export async function upsertFaithLanguagePreferences(tenantId, prefs) {
     `INSERT INTO faith_language_preferences
        (id, tenant_id, practice_id, integration_level, explicit_faith_language, include_prayer_language, include_scripture_refs, preferred_terminology)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       integration_level = VALUES(integration_level),
-       explicit_faith_language = VALUES(explicit_faith_language),
-       include_prayer_language = VALUES(include_prayer_language),
-       include_scripture_refs = VALUES(include_scripture_refs),
-       preferred_terminology = VALUES(preferred_terminology)`,
+     ON CONFLICT (id) DO UPDATE SET
+       integration_level = EXCLUDED.integration_level,
+       explicit_faith_language = EXCLUDED.explicit_faith_language,
+       include_prayer_language = EXCLUDED.include_prayer_language,
+       include_scripture_refs = EXCLUDED.include_scripture_refs,
+       preferred_terminology = EXCLUDED.preferred_terminology`,
     [
       `flp-${tenantId}`, tenantId, practiceId ?? null,
       integrationLevel ?? 'moderate',

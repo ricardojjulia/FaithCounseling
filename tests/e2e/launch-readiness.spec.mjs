@@ -13,7 +13,7 @@ test.describe('launch readiness audits', () => {
 
   test('public portal page passes structural accessibility checks', async ({ page }) => {
     await page.goto('/portal');
-    await expect(page.getByRole('heading', { name: 'FaithCounseling Client Portal' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'ChurchCore Care Client Portal' })).toBeVisible();
     await injectAxe(page);
 
     const results = await runStructuralAxe(page);

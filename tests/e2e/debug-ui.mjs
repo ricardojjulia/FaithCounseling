@@ -6,7 +6,7 @@ const page = await context.newPage();
 
 await page.goto('http://127.0.0.1:3002/', { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('#loginEmail', { timeout: 10000 });
-await page.fill('#loginEmail', 'admin@faithcounseling.local');
+await page.fill('#loginEmail', 'admin@churchcorecare.local');
 await page.fill('#loginPassword', 'ChangeMe!Dev2024#');
 await page.click('button[type="submit"]');
 await page.waitForSelector('#authGate', { state: 'hidden', timeout: 15000 });
@@ -58,7 +58,7 @@ await browser.close();
 
 await page.goto('http://127.0.0.1:3002/', { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('#loginEmail', { timeout: 10000 });
-await page.fill('#loginEmail', 'admin@faithcounseling.local');
+await page.fill('#loginEmail', 'admin@churchcorecare.local');
 await page.fill('#loginPassword', 'ChangeMe!Dev2024#');
 await page.click('button[type="submit"]');
 await page.waitForSelector('#authGate', { state: 'hidden', timeout: 15000 });
@@ -119,7 +119,7 @@ await browser.close();
 
 await page.goto('http://127.0.0.1:3002/', { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('#loginEmail', { timeout: 10000 });
-await page.fill('#loginEmail', 'admin@faithcounseling.local');
+await page.fill('#loginEmail', 'admin@churchcorecare.local');
 await page.fill('#loginPassword', 'ChangeMe!Dev2024#');
 await page.click('button[type="submit"]');
 await page.waitForSelector('#authGate', { state: 'hidden', timeout: 15000 });

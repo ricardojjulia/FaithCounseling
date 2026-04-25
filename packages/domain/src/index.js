@@ -202,7 +202,7 @@ export function createAuditEvent(event) {
     reasonCode: event.reasonCode ?? 'ok',
     sourceSurface: event.sourceSurface ?? 'api',
     sourceWorkflow: event.sourceWorkflow ?? 'request',
-    systemComponent: event.systemComponent ?? 'faith-api',
+    systemComponent: event.systemComponent ?? 'churchcore-api',
     ...event,
   });
 }

@@ -1,18 +1,18 @@
 /**
- * Database migration script — run once to create all tables.
+ * Database migration script — applies incremental column/index migrations.
+ *
+ * The initial schema is managed by Supabase (supabase/migrations/).
+ * This script handles subsequent column additions and data backfills that
+ * are applied at API startup.
  *
  * Usage:
  *   node apps/api/src/db/migrate.js
  *
  * Requires DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD env vars (or .env).
- *
- * Safe to re-run — all statements use CREATE TABLE IF NOT EXISTS.
  */
 
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import mysql from 'mysql2/promise';
+import pg from 'pg';
 
 // Load .env if present (for local dev convenience)
 try {
@@ -22,38 +22,29 @@ try {
   // dotenv is optional — ignore if not installed
 }
 
-const currentDir = path.dirname(fileURLToPath(import.meta.url));
-const schemaPath = path.join(currentDir, 'schema.sql');
-
-// Create a one-off connection (not the pool) since we need multipleStatements.
-const connection = await mysql.createConnection({
-  host:               process.env.DB_HOST     || '127.0.0.1',
-  port:               Number(process.env.DB_PORT || 3306),
-  database:           process.env.DB_NAME,
-  user:               process.env.DB_USER,
-  password:           process.env.DB_PASSWORD,
-  ssl:                process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false,
-  multipleStatements: true,   // required to execute the full schema file at once
-  timezone:           'Z',
+// Create a one-off connection (not the pool) for running migrations.
+const connection = new pg.Client({
+  host:     process.env.DB_HOST     || '127.0.0.1',
+  port:     Number(process.env.DB_PORT || 57322),
+  database: process.env.DB_NAME     || 'postgres',
+  user:     process.env.DB_USER     || 'postgres',
+  password: process.env.DB_PASSWORD || 'postgres',
+  ssl:      process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false,
 });
+await connection.connect();
 
 try {
-  console.log('Running schema migration…');
-  const sql = await readFile(schemaPath, 'utf8');
-
-  // Strip comment-only lines to avoid mysql2 choking on them when batched
-  const cleaned = sql
-    .split('\n')
-    .filter((line) => !line.trimStart().startsWith('--'))
-    .join('\n');
-
-  await connection.query(cleaned);
-  console.log('Migration complete — all core tables created.');
+  console.log('Running incremental migrations…');
 
   // Column migrations — add new columns to existing tables when the schema
   // has already been created. Each check is idempotent via INFORMATION_SCHEMA.
   await applyColumnMigrations(connection);
   await backfillAppointmentCounselorLinks(connection);
+
+  // Record all migrations that have run so ops/migrate-all-tenants.mjs can
+  // report schema version across tenant DBs.
+  await recordMigration(connection, 'core_schema_initial');
+  await recordMigration(connection, 'column_migrations_batch_1');
 
   // Seed a default tenant + system practice for local dev
   await seedDevData(connection);
@@ -70,34 +61,46 @@ function shouldSeedDevPortalData() {
   return process.env.NODE_ENV !== 'production' && process.env.SEED_DEV_PORTAL_DATA !== 'false';
 }
 
+async function hasMigration(conn, name) {
+  const result = await conn.query(
+    'SELECT 1 FROM schema_migrations WHERE name = $1 LIMIT 1',
+    [name],
+  );
+  return result.rows.length > 0;
+}
+
+async function recordMigration(conn, name) {
+  // PostgreSQL equivalent of INSERT IGNORE — insert, skip silently on conflict
+  await conn.query('INSERT INTO schema_migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [name]);
+}
+
 async function applyColumnMigrations(conn) {
-  const dbName = process.env.DB_NAME;
   const { encrypt, decrypt, deriveLookupHash } = await import('../lib/encrypt.js');
 
-  // Helper: add a column if it doesn't already exist
+  // Helper: add a column if it doesn't already exist (PostgreSQL catalog)
   async function addColumnIfMissing(table, column, definition) {
-    const [[{ cnt }]] = await conn.query(
+    const result = await conn.query(
       `SELECT COUNT(*) AS cnt FROM information_schema.columns
-       WHERE table_schema = ? AND table_name = ? AND column_name = ?`,
-      [dbName, table, column],
+       WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
+      [table, column],
     );
-    if (cnt === 0) {
-      await conn.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${definition}`);
+    if (Number(result.rows[0].cnt) === 0) {
+      await conn.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} ${definition}`);
       console.log(`  + ${table}.${column} added`);
       return true;
     }
     return false;
   }
 
-  // Helper: add an index if it doesn't already exist
+  // Helper: add an index if it doesn't already exist (PostgreSQL catalog)
   async function addIndexIfMissing(table, indexName, definition) {
-    const [[{ cnt }]] = await conn.query(
-      `SELECT COUNT(*) AS cnt FROM information_schema.statistics
-      WHERE table_schema = ? AND table_name = ? AND index_name = ?`,
-      [dbName, table, indexName],
+    const result = await conn.query(
+      `SELECT COUNT(*) AS cnt FROM pg_indexes
+       WHERE schemaname = 'public' AND tablename = $1 AND indexname = $2`,
+      [table, indexName],
     );
-    if (cnt === 0) {
-      await conn.query(`ALTER TABLE \`${table}\` ADD INDEX \`${indexName}\` ${definition}`);
+    if (Number(result.rows[0].cnt) === 0) {
+      await conn.query(`CREATE INDEX IF NOT EXISTS ${indexName} ON ${table} ${definition}`);
       console.log(`  + index ${indexName} on ${table} added`);
       return true;
     }
@@ -105,13 +108,13 @@ async function applyColumnMigrations(conn) {
   }
 
   async function addUniqueIndexIfMissing(table, indexName, definition) {
-    const [[{ cnt }]] = await conn.query(
-      `SELECT COUNT(*) AS cnt FROM information_schema.statistics
-       WHERE table_schema = ? AND table_name = ? AND index_name = ?`,
-      [dbName, table, indexName],
+    const result = await conn.query(
+      `SELECT COUNT(*) AS cnt FROM pg_indexes
+       WHERE schemaname = 'public' AND tablename = $1 AND indexname = $2`,
+      [table, indexName],
     );
-    if (cnt === 0) {
-      await conn.query(`ALTER TABLE \`${table}\` ADD UNIQUE INDEX \`${indexName}\` ${definition}`);
+    if (Number(result.rows[0].cnt) === 0) {
+      await conn.query(`CREATE UNIQUE INDEX IF NOT EXISTS ${indexName} ON ${table} ${definition}`);
       console.log(`  + unique index ${indexName} on ${table} added`);
       return true;
     }
@@ -119,61 +122,69 @@ async function applyColumnMigrations(conn) {
   }
 
   async function alterColumn(table, column, definition) {
-    const [[{ cnt }]] = await conn.query(
+    const result = await conn.query(
       `SELECT COUNT(*) AS cnt FROM information_schema.columns
-       WHERE table_schema = ? AND table_name = ? AND column_name = ?`,
-      [dbName, table, column],
+       WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
+      [table, column],
     );
-    if (cnt === 0) return false;
-    await conn.query(`ALTER TABLE \`${table}\` MODIFY COLUMN \`${column}\` ${definition}`);
+    if (Number(result.rows[0].cnt) === 0) return false;
+    // Strip nullability keywords — ALTER COLUMN TYPE only accepts the data type
+    const nullable = /\bNULL\b/i.test(definition) && !/NOT\s+NULL/i.test(definition);
+    const dataType = definition.replace(/\s+(NOT\s+)?NULL\b/gi, '').trim();
+    await conn.query(`ALTER TABLE ${table} ALTER COLUMN ${column} TYPE ${dataType} USING ${column}::TEXT::${dataType}`);
+    if (nullable) {
+      await conn.query(`ALTER TABLE ${table} ALTER COLUMN ${column} DROP NOT NULL`);
+    }
     console.log(`  ~ ${table}.${column} altered`);
     return true;
   }
 
   console.log('Applying column migrations…');
-  await addColumnIfMissing('staff_accounts', 'email_enc', 'TEXT NULL AFTER email');
-  await addColumnIfMissing('staff_accounts', 'email_lookup_hash', 'CHAR(64) NULL AFTER email_enc');
+  await addColumnIfMissing('staff_accounts', 'email_enc', 'TEXT NULL');
+  await addColumnIfMissing('staff_accounts', 'email_lookup_hash', 'CHAR(64) NULL');
   await addUniqueIndexIfMissing('staff_accounts', 'uq_staff_accounts_email_lookup_hash', '(email_lookup_hash)');
   await alterColumn('staff_accounts', 'email', 'VARCHAR(320) NULL');
-  await addColumnIfMissing('portal_accounts', 'email_lookup_hash', 'CHAR(64) NULL AFTER email_enc');
-  await addColumnIfMissing('portal_accounts', 'password_hash', 'VARCHAR(255) NULL AFTER email_lookup_hash');
-  await addColumnIfMissing('portal_accounts', 'failed_attempts', 'INT NOT NULL DEFAULT 0 AFTER password_hash');
-  await addColumnIfMissing('portal_accounts', 'locked_until', 'TIMESTAMP NULL AFTER failed_attempts');
+  await addColumnIfMissing('portal_accounts', 'email_lookup_hash', 'CHAR(64) NULL');
+  await addColumnIfMissing('portal_accounts', 'password_hash', 'VARCHAR(255) NULL');
+  await addColumnIfMissing('portal_accounts', 'failed_attempts', 'INT NOT NULL DEFAULT 0');
+  await addColumnIfMissing('portal_accounts', 'locked_until', 'TIMESTAMPTZ NULL');
   await addUniqueIndexIfMissing('portal_accounts', 'uq_portal_email_lookup_hash', '(tenant_id, email_lookup_hash)');
 
-  await addColumnIfMissing('tenant_provisioning', 'owner_email_enc', 'TEXT NULL AFTER requested_practice_name');
+  await addColumnIfMissing('tenant_provisioning', 'owner_email_enc', 'TEXT NULL');
   await alterColumn('tenant_provisioning', 'owner_email', 'VARCHAR(320) NULL');
 
-  const auditActorTypeAdded = await addColumnIfMissing('audit_events', 'actor_type', "VARCHAR(32) NOT NULL DEFAULT 'anonymous' AFTER actor_role");
-  const auditResultAdded = await addColumnIfMissing('audit_events', 'result', "VARCHAR(16) NOT NULL DEFAULT 'success' AFTER target_id");
-  const auditReasonAdded = await addColumnIfMissing('audit_events', 'reason_code', "VARCHAR(64) NOT NULL DEFAULT 'ok' AFTER result");
-  const auditSourceSurfaceAdded = await addColumnIfMissing('audit_events', 'source_surface', "VARCHAR(128) NOT NULL DEFAULT 'api' AFTER request_id");
-  const auditSourceWorkflowAdded = await addColumnIfMissing('audit_events', 'source_workflow', "VARCHAR(128) NOT NULL DEFAULT 'request' AFTER source_surface");
-  const auditSystemComponentAdded = await addColumnIfMissing('audit_events', 'system_component', "VARCHAR(128) NOT NULL DEFAULT 'faith-api' AFTER source_workflow");
+  const auditActorTypeAdded = await addColumnIfMissing('audit_events', 'actor_type', "VARCHAR(32) NOT NULL DEFAULT 'anonymous'");
+  const auditResultAdded = await addColumnIfMissing('audit_events', 'result', "VARCHAR(16) NOT NULL DEFAULT 'success'");
+  const auditReasonAdded = await addColumnIfMissing('audit_events', 'reason_code', "VARCHAR(64) NOT NULL DEFAULT 'ok'");
+  const auditSourceSurfaceAdded = await addColumnIfMissing('audit_events', 'source_surface', "VARCHAR(128) NOT NULL DEFAULT 'api'");
+  const auditSourceWorkflowAdded = await addColumnIfMissing('audit_events', 'source_workflow', "VARCHAR(128) NOT NULL DEFAULT 'request'");
+  const auditSystemComponentAdded = await addColumnIfMissing('audit_events', 'system_component', "VARCHAR(128) NOT NULL DEFAULT 'churchcore-api'");
   await addIndexIfMissing('audit_events', 'idx_audit_result', '(tenant_id, result)');
 
-  const [staffAccountRows] = await conn.query(
+  const staffAccountResult = await conn.query(
     'SELECT id, email, email_enc, email_lookup_hash FROM staff_accounts',
   );
+  const staffAccountRows = staffAccountResult.rows;
   for (const row of staffAccountRows) {
     const legacyEmail = typeof row.email === 'string' ? row.email.trim().toLowerCase() : '';
     if (!legacyEmail && row.email_enc && row.email_lookup_hash) continue;
     if (!legacyEmail) continue;
     await conn.query(
-      'UPDATE staff_accounts SET email_enc = ?, email_lookup_hash = ?, email = NULL WHERE id = ?',
+      'UPDATE staff_accounts SET email_enc = $1, email_lookup_hash = $2, email = NULL WHERE id = $3',
       [encrypt(legacyEmail), deriveLookupHash(legacyEmail, { lowercase: true }), row.id],
     );
   }
 
-  const [tenantRows] = await conn.query(
+  const tenantResult = await conn.query(
     'SELECT id, owner_email, owner_email_enc FROM tenant_provisioning',
   );
+  const tenantRows = tenantResult.rows;
   for (const row of tenantRows) {
     const legacyOwnerEmail = typeof row.owner_email === 'string' ? row.owner_email.trim() : '';
     if (!legacyOwnerEmail && row.owner_email_enc) continue;
     if (!legacyOwnerEmail) continue;
     await conn.query(
-      'UPDATE tenant_provisioning SET owner_email_enc = ?, owner_email = NULL WHERE id = ?',
+      'UPDATE tenant_provisioning SET owner_email_enc = $1, owner_email = NULL WHERE id = $2',
       [encrypt(legacyOwnerEmail), row.id],
     );
   }
@@ -200,13 +211,13 @@ async function applyColumnMigrations(conn) {
            END,
            source_surface = CASE WHEN source_surface = 'api' THEN 'api' ELSE source_surface END,
            source_workflow = CASE WHEN source_workflow = 'request' THEN 'request' ELSE source_workflow END,
-           system_component = CASE WHEN system_component = 'faith-api' THEN 'faith-api' ELSE system_component END`,
+           system_component = CASE WHEN system_component = 'churchcore-api' THEN 'churchcore-api' ELSE system_component END`,
     );
   }
 
   await addColumnIfMissing('clients', 'primary_counselor_id', 'VARCHAR(64) NULL');
-  await addColumnIfMissing('clients', 'high_touchpoint', 'TINYINT(1) NOT NULL DEFAULT 0');
-  await addColumnIfMissing('clients', 'middle_name_enc', 'TEXT NULL AFTER first_name_enc');
+  await addColumnIfMissing('clients', 'high_touchpoint', 'BOOLEAN NOT NULL DEFAULT FALSE');
+  await addColumnIfMissing('clients', 'middle_name_enc', 'TEXT NULL');
   await addColumnIfMissing('clients', 'preferred_name_enc', 'TEXT NULL');
   await addColumnIfMissing('clients', 'gender_identity', 'VARCHAR(128) NULL');
   await addColumnIfMissing('clients', 'pronouns', 'VARCHAR(64) NULL');
@@ -223,30 +234,31 @@ async function applyColumnMigrations(conn) {
 
   await addColumnIfMissing('portal_client_profiles', 'preferred_name_enc', 'TEXT NULL');
 
-  await addColumnIfMissing('portal_registration_requests', 'request_type', "VARCHAR(64) NOT NULL DEFAULT 'care_request' AFTER tenant_id");
-  await addColumnIfMissing('portal_registration_requests', 'preferred_contact_method', 'VARCHAR(64) NULL AFTER phone_enc');
-  await addColumnIfMissing('portal_registration_requests', 'preferred_contact_window', 'VARCHAR(128) NULL AFTER preferred_contact_method');
-  await addColumnIfMissing('portal_registration_requests', 'onboarding_details_enc', 'MEDIUMTEXT NULL AFTER requested_services');
-  await addColumnIfMissing('portal_registration_requests', 'converted_client_id', 'VARCHAR(64) NULL AFTER status');
-  await addColumnIfMissing('portal_settings', 'financial_mode', "VARCHAR(64) NOT NULL DEFAULT 'offerings' AFTER show_public_counselor_directory");
-  await addColumnIfMissing('portal_settings', 'suggested_offering_cents', 'INT NOT NULL DEFAULT 0 AFTER financial_mode');
-  await addColumnIfMissing('portal_settings', 'offering_ministry_note', 'TEXT NULL AFTER suggested_offering_cents');
+  await addColumnIfMissing('portal_registration_requests', 'request_type', "VARCHAR(64) NOT NULL DEFAULT 'care_request'");
+  await addColumnIfMissing('portal_registration_requests', 'preferred_contact_method', 'VARCHAR(64) NULL');
+  await addColumnIfMissing('portal_registration_requests', 'preferred_contact_window', 'VARCHAR(128) NULL');
+  await addColumnIfMissing('portal_registration_requests', 'onboarding_details_enc', 'MEDIUMTEXT NULL');
+  await addColumnIfMissing('portal_registration_requests', 'converted_client_id', 'VARCHAR(64) NULL');
+  await addColumnIfMissing('portal_settings', 'financial_mode', "VARCHAR(64) NOT NULL DEFAULT 'offerings'");
+  await addColumnIfMissing('portal_settings', 'suggested_offering_cents', 'INT NOT NULL DEFAULT 0');
+  await addColumnIfMissing('portal_settings', 'offering_ministry_note', 'TEXT NULL');
 
   // Appointments: rename scheduled_at → starts_at, add ends_at / location_name / timezone
-  await addColumnIfMissing('appointments', 'counselor_id', 'VARCHAR(64) NULL AFTER client_id');
-  await addColumnIfMissing('appointments', 'starts_at',     'TIMESTAMP NULL AFTER status');
-  await addColumnIfMissing('appointments', 'ends_at',       'TIMESTAMP NULL AFTER starts_at');
-  await addColumnIfMissing('appointments', 'location_name', 'VARCHAR(200) NULL AFTER ends_at');
-  await addColumnIfMissing('appointments', 'timezone',      'VARCHAR(64) NULL AFTER location_name');
+  await addColumnIfMissing('appointments', 'counselor_id', 'VARCHAR(64) NULL');
+  await addColumnIfMissing('appointments', 'starts_at',     'TIMESTAMPTZ NULL');
+  await addColumnIfMissing('appointments', 'ends_at',       'TIMESTAMPTZ NULL');
+  await addColumnIfMissing('appointments', 'location_name', 'VARCHAR(200) NULL');
+  await addColumnIfMissing('appointments', 'timezone',      'VARCHAR(64) NULL');
   await addColumnIfMissing('appointments', 'series_id',     'VARCHAR(64) NULL');
   await addIndexIfMissing('appointments', 'idx_appointments_counselor', '(tenant_id, counselor_id)');
   await addIndexIfMissing('appointments', 'idx_appointments_starts_at', '(tenant_id, starts_at)');
   await addIndexIfMissing('appointments', 'idx_appointments_series',    '(tenant_id, series_id)');
   await addColumnIfMissing('appointment_series', 'start_time', "VARCHAR(8) NOT NULL DEFAULT '09:00'");
 
-  const [portalAccountRows] = await conn.query(
+  const portalAccountResult = await conn.query(
     'SELECT id, tenant_id, client_id, email_enc, email_lookup_hash, password_hash FROM portal_accounts',
   );
+  const portalAccountRows = portalAccountResult.rows;
   const { default: argon2 } = await import('argon2');
   const defaultPortalPasswordHash = await argon2.hash('ChangeMe!Client2026#', {
     type: argon2.argon2id,
@@ -264,25 +276,26 @@ async function applyColumnMigrations(conn) {
     );
     if (!nextLookupHash && !nextPasswordHash) continue;
     await conn.query(
-      'UPDATE portal_accounts SET email_lookup_hash = COALESCE(email_lookup_hash, ?), password_hash = COALESCE(password_hash, ?) WHERE id = ?',
+      'UPDATE portal_accounts SET email_lookup_hash = COALESCE(email_lookup_hash, $1), password_hash = COALESCE(password_hash, $2) WHERE id = $3',
       [nextLookupHash, nextPasswordHash, row.id],
     );
   }
 
   // Progress notes: link to appointment
-  await addColumnIfMissing('progress_notes', 'appointment_id', 'VARCHAR(64) NULL AFTER client_id');
+  await addColumnIfMissing('progress_notes', 'appointment_id', 'VARCHAR(64) NULL');
   await addIndexIfMissing('progress_notes', 'idx_note_appointment', '(appointment_id)');
 
   // Superbills: encrypt PHI diagnosis codes
-  await addColumnIfMissing('superbills', 'diagnosis_codes_enc', 'MEDIUMTEXT NULL AFTER diagnosis_codes');
-  const [superbillRows] = await conn.query(
+  await addColumnIfMissing('superbills', 'diagnosis_codes_enc', 'MEDIUMTEXT NULL');
+  const superbillResult = await conn.query(
     'SELECT id, tenant_id, diagnosis_codes FROM superbills WHERE diagnosis_codes IS NOT NULL AND diagnosis_codes_enc IS NULL',
   );
+  const superbillRows = superbillResult.rows;
   for (const row of superbillRows) {
     const raw = typeof row.diagnosis_codes === 'string' ? row.diagnosis_codes : JSON.stringify(row.diagnosis_codes);
     if (!raw) continue;
     await conn.query(
-      'UPDATE superbills SET diagnosis_codes_enc = ?, diagnosis_codes = NULL WHERE id = ? AND tenant_id = ?',
+      'UPDATE superbills SET diagnosis_codes_enc = $1, diagnosis_codes = NULL WHERE id = $2 AND tenant_id = $3',
       [encrypt(raw), row.id, row.tenant_id],
     );
   }
@@ -305,7 +318,7 @@ async function applyColumnMigrations(conn) {
   // Persists the unique Jitsi room name for each appointment. Stored in plain
   // text — it is a random opaque token, not PHI. The JWT is generated on-demand
   // and never persisted.
-  await addColumnIfMissing('appointments', 'video_room_id', 'VARCHAR(255) NULL AFTER remote_session');
+  await addColumnIfMissing('appointments', 'video_room_id', 'VARCHAR(255) NULL');
 
   // Per-practice JaaS video config — each counseling practice brings its own
   // free or paid JaaS account. The private key is AES-256-GCM encrypted at
@@ -319,77 +332,71 @@ async function applyColumnMigrations(conn) {
 
   // ── Time Tracking (Phase 1) ───────────────────────────────────────────────
   await conn.query(`
-    CREATE TABLE IF NOT EXISTS \`time_entries\` (
-      \`id\`               CHAR(36)      NOT NULL,
-      \`tenant_id\`        VARCHAR(64)   NOT NULL,
-      \`user_id\`          VARCHAR(64)   NOT NULL,
-      \`appointment_id\`   VARCHAR(64)   NULL,
-      \`category\`         ENUM(
-                             'direct_clinical',
-                             'indirect_admin',
-                             'supervision_individual',
-                             'supervision_group',
-                             'ce_spiritual',
-                             'ministry_coordination'
-                           )             NOT NULL,
-      \`start_time\`       DATETIME      NOT NULL,
-      \`end_time\`         DATETIME      NOT NULL,
-      \`duration_minutes\` INT           NOT NULL,
-      \`is_locked\`        TINYINT(1)    NOT NULL DEFAULT 0,
-      \`verified_by\`      VARCHAR(64)   NULL,
-      \`verified_at\`      DATETIME      NULL,
-      \`description_enc\`  TEXT          NULL,
-      \`created_at\`       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      \`updated_at\`       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (\`id\`),
-      INDEX \`idx_te_user_category\` (\`tenant_id\`, \`user_id\`, \`category\`),
-      INDEX \`idx_te_user_start\`    (\`tenant_id\`, \`user_id\`, \`start_time\`),
-      INDEX \`idx_te_appointment\`   (\`appointment_id\`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    CREATE TABLE IF NOT EXISTS time_entries (
+      id               CHAR(36)      NOT NULL,
+      tenant_id        VARCHAR(64)   NOT NULL,
+      user_id          VARCHAR(64)   NOT NULL,
+      appointment_id   VARCHAR(64)   NULL,
+      category         VARCHAR(64)   NOT NULL,
+      start_time       TIMESTAMP     NOT NULL,
+      end_time         TIMESTAMP     NOT NULL,
+      duration_minutes INT           NOT NULL,
+      is_locked        BOOLEAN       NOT NULL DEFAULT FALSE,
+      verified_by      VARCHAR(64)   NULL,
+      verified_at      TIMESTAMP     NULL,
+      description_enc  TEXT          NULL,
+      created_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id)
+    )
   `);
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_te_user_category ON time_entries (tenant_id, user_id, category)`);
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_te_user_start    ON time_entries (tenant_id, user_id, start_time)`);
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_te_appointment   ON time_entries (appointment_id)`);
 
   await conn.query(`
-    CREATE TABLE IF NOT EXISTS \`licensure_goals\` (
-      \`id\`              CHAR(36)      NOT NULL,
-      \`tenant_id\`       VARCHAR(64)   NOT NULL,
-      \`user_id\`         VARCHAR(64)   NOT NULL,
-      \`label\`           VARCHAR(255)  NOT NULL,
-      \`category_filter\` VARCHAR(255)  NULL,
-      \`target_minutes\`  INT           NOT NULL,
-      \`effective_from\`  DATE          NOT NULL,
-      \`effective_to\`    DATE          NULL,
-      \`created_at\`      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (\`id\`),
-      INDEX \`idx_lg_user\` (\`tenant_id\`, \`user_id\`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    CREATE TABLE IF NOT EXISTS licensure_goals (
+      id              CHAR(36)      NOT NULL,
+      tenant_id       VARCHAR(64)   NOT NULL,
+      user_id         VARCHAR(64)   NOT NULL,
+      label           VARCHAR(255)  NOT NULL,
+      category_filter VARCHAR(255)  NULL,
+      target_minutes  INT           NOT NULL,
+      effective_from  DATE          NOT NULL,
+      effective_to    DATE          NULL,
+      created_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id)
+    )
   `);
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_lg_user ON licensure_goals (tenant_id, user_id)`);
 
   // Create faith_pastoral_registers as the rename of faith_language_preferences
   await conn.query(`
-    CREATE TABLE IF NOT EXISTS \`faith_pastoral_registers\` (
-      \`id\`                      VARCHAR(64)   NOT NULL,
-      \`tenant_id\`               VARCHAR(64)   NOT NULL,
-      \`practice_id\`             VARCHAR(64)   NULL,
-      \`integration_level\`       VARCHAR(64)   NOT NULL DEFAULT 'moderate',
-      \`explicit_faith_language\`  TINYINT(1)   NOT NULL DEFAULT 1,
-      \`include_prayer_language\`  TINYINT(1)   NOT NULL DEFAULT 1,
-      \`include_scripture_refs\`   TINYINT(1)   NOT NULL DEFAULT 1,
-      \`preferred_terminology\`    VARCHAR(255)  NULL,
-      \`updated_at\`               TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (\`id\`),
-      INDEX \`idx_faith_pastoral_register_tenant\` (\`tenant_id\`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    CREATE TABLE IF NOT EXISTS faith_pastoral_registers (
+      id                      VARCHAR(64)   NOT NULL,
+      tenant_id               VARCHAR(64)   NOT NULL,
+      practice_id             VARCHAR(64)   NULL,
+      integration_level       VARCHAR(64)   NOT NULL DEFAULT 'moderate',
+      explicit_faith_language  BOOLEAN      NOT NULL DEFAULT TRUE,
+      include_prayer_language  BOOLEAN      NOT NULL DEFAULT TRUE,
+      include_scripture_refs   BOOLEAN      NOT NULL DEFAULT TRUE,
+      preferred_terminology    VARCHAR(255)  NULL,
+      updated_at               TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id)
+    )
   `);
-  // Copy existing rows from the old table (idempotent via INSERT IGNORE)
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_faith_pastoral_register_tenant ON faith_pastoral_registers (tenant_id)`);
+  // Copy existing rows from the old table (idempotent via ON CONFLICT DO NOTHING)
   await conn.query(`
-    INSERT IGNORE INTO \`faith_pastoral_registers\`
-      (\`id\`, \`tenant_id\`, \`practice_id\`, \`integration_level\`,
-       \`explicit_faith_language\`, \`include_prayer_language\`, \`include_scripture_refs\`,
-       \`preferred_terminology\`, \`updated_at\`)
-    SELECT \`id\`, \`tenant_id\`, \`practice_id\`, \`integration_level\`,
-           \`explicit_faith_language\`, \`include_prayer_language\`, \`include_scripture_refs\`,
-           \`preferred_terminology\`, \`updated_at\`
-    FROM \`faith_language_preferences\`
+    INSERT INTO faith_pastoral_registers
+      (id, tenant_id, practice_id, integration_level,
+       explicit_faith_language, include_prayer_language, include_scripture_refs,
+       preferred_terminology, updated_at)
+    SELECT id, tenant_id, practice_id, integration_level,
+           explicit_faith_language, include_prayer_language, include_scripture_refs,
+           preferred_terminology, updated_at
+    FROM faith_language_preferences
+    ON CONFLICT DO NOTHING
   `).catch(() => { /* old table may not exist in fresh installs — ignore */ });
 
   // ── Phase 2: Faith-integrated clinical fields on progress notes ──────────
@@ -397,28 +404,28 @@ async function applyColumnMigrations(conn) {
   await addColumnIfMissing('progress_notes', 'spiritual_practices', 'JSON NULL');
 
   // ── Phase 3: Cosign workflow columns on progress notes ────────────────────
-  await addColumnIfMissing('progress_notes', 'cosign_status', "VARCHAR(32) NULL DEFAULT NULL COMMENT 'pending_review|reviewed|rejected'");
+  await addColumnIfMissing('progress_notes', 'cosign_status', "VARCHAR(32) NULL DEFAULT NULL");
   await addColumnIfMissing('progress_notes', 'cosign_requested_by', 'VARCHAR(64) NULL');
-  await addColumnIfMissing('progress_notes', 'cosign_requested_at', 'DATETIME NULL');
+  await addColumnIfMissing('progress_notes', 'cosign_requested_at', 'TIMESTAMPTZ NULL');
   await addColumnIfMissing('progress_notes', 'cosigned_by', 'VARCHAR(64) NULL');
-  await addColumnIfMissing('progress_notes', 'cosigned_at', 'DATETIME NULL');
+  await addColumnIfMissing('progress_notes', 'cosigned_at', 'TIMESTAMPTZ NULL');
   await addColumnIfMissing('progress_notes', 'cosign_comments_enc', 'TEXT NULL');
 
   // ── Phase 3: Supervisor assignments table ────────────────────────────────
   await conn.query(`
-    CREATE TABLE IF NOT EXISTS \`supervisor_assignments\` (
-      \`id\`            CHAR(36)     NOT NULL,
-      \`tenant_id\`     VARCHAR(64)  NOT NULL,
-      \`supervisor_id\` VARCHAR(64)  NOT NULL,
-      \`intern_id\`     VARCHAR(64)  NOT NULL,
-      \`practice_id\`   VARCHAR(64)  NOT NULL,
-      \`assigned_at\`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (\`id\`),
-      UNIQUE KEY \`uq_sup_intern\` (\`supervisor_id\`, \`intern_id\`, \`practice_id\`),
-      INDEX \`idx_sa_tenant_intern\` (\`tenant_id\`, \`intern_id\`),
-      INDEX \`idx_sa_supervisor\` (\`tenant_id\`, \`supervisor_id\`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    CREATE TABLE IF NOT EXISTS supervisor_assignments (
+      id            CHAR(36)     NOT NULL,
+      tenant_id     VARCHAR(64)  NOT NULL,
+      supervisor_id VARCHAR(64)  NOT NULL,
+      intern_id     VARCHAR(64)  NOT NULL,
+      practice_id   VARCHAR(64)  NOT NULL,
+      assigned_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE (supervisor_id, intern_id, practice_id)
+    )
   `);
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_sa_tenant_intern ON supervisor_assignments (tenant_id, intern_id)`);
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_sa_supervisor ON supervisor_assignments (tenant_id, supervisor_id)`);
 
   console.log('Column migrations done.');
 }
@@ -433,9 +440,10 @@ async function backfillAppointmentCounselorLinks(conn) {
     return;
   }
 
-  const [staffRows] = await conn.query(
+  const staffResult = await conn.query(
     'SELECT id, tenant_id, first_name_enc, last_name_enc FROM staff_members',
   );
+  const staffRows = staffResult.rows;
   if (!staffRows.length) return;
 
   const staffNameIndex = new Map();
@@ -448,12 +456,13 @@ async function backfillAppointmentCounselorLinks(conn) {
     staffNameIndex.set(key, matches);
   }
 
-  const [appointmentRows] = await conn.query(
+  const appointmentResult = await conn.query(
     `SELECT id, tenant_id, counselor_name_enc
        FROM appointments
       WHERE counselor_id IS NULL
         AND counselor_name_enc IS NOT NULL`,
   );
+  const appointmentRows = appointmentResult.rows;
 
   let updated = 0;
   for (const row of appointmentRows) {
@@ -462,7 +471,7 @@ async function backfillAppointmentCounselorLinks(conn) {
     const matches = staffNameIndex.get(`${row.tenant_id}:${counselorName}`) ?? [];
     if (matches.length !== 1) continue;
     await conn.query(
-      'UPDATE appointments SET counselor_id = ? WHERE id = ? AND tenant_id = ?',
+      'UPDATE appointments SET counselor_id = $1 WHERE id = $2 AND tenant_id = $3',
       [matches[0], row.id, row.tenant_id],
     );
     updated += 1;
@@ -475,8 +484,8 @@ async function backfillAppointmentCounselorLinks(conn) {
 
 async function seedDevData(conn) {
   // Only seed if tenants table is empty
-  const [[{ count }]] = await conn.query('SELECT COUNT(*) AS count FROM tenants');
-  if (count > 0) {
+  const tenantCountResult = await conn.query('SELECT COUNT(*) AS count FROM tenants');
+  if (Number(tenantCountResult.rows[0].count) > 0) {
     console.log('Seed data already present — skipping.');
     return;
   }
@@ -485,13 +494,13 @@ async function seedDevData(conn) {
 
   // Default tenant
   await conn.query(
-    `INSERT INTO tenants (id, name, plan_type) VALUES (?, ?, ?)`,
+    `INSERT INTO tenants (id, name, plan_type) VALUES ($1, $2, $3)`,
     ['system', 'Grace Counseling Center', 'standard'],
   );
 
   // Default practice
   await conn.query(
-    `INSERT INTO practices (id, tenant_id, name, practice_type, timezone) VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO practices (id, tenant_id, name, practice_type, timezone) VALUES ($1, $2, $3, $4, $5)`,
     ['prac-001', 'system', 'Grace Counseling Center', 'solo', 'America/New_York'],
   );
 
@@ -511,7 +520,7 @@ async function seedDevData(conn) {
   await conn.query(
     `INSERT INTO staff_members
        (id, tenant_id, role, first_name_enc, last_name_enc, license_type, supervision_status)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [
       'staff-001', 'system', 'practice_admin',
       encrypt('Admin'), encrypt('User'),
@@ -528,18 +537,18 @@ async function seedDevData(conn) {
     parallelism: 1,
   });
 
-  // Default staff account: admin@faithcounseling.local / ChangeMe!Dev2024#
+  // Default staff account: admin@churchcorecare.local / ChangeMe!Dev2024#
   await conn.query(
     `INSERT INTO staff_accounts
        (id, staff_member_id, tenant_id, email, email_enc, email_lookup_hash, password_hash)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [
       'acct-001',
       'staff-001',
       'system',
       null,
-      encrypt('admin@faithcounseling.local'),
-      deriveLookupHash('admin@faithcounseling.local', { lowercase: true }),
+      encrypt('admin@churchcorecare.local'),
+      deriveLookupHash('admin@churchcorecare.local', { lowercase: true }),
       passwordHash,
     ],
   );
@@ -554,7 +563,7 @@ async function seedDevData(conn) {
   await conn.query(
     `INSERT INTO clients
        (id, tenant_id, first_name_enc, last_name_enc, status, faith_background, high_touchpoint, primary_counselor_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
     [
       'c-001',
       'system',
@@ -577,7 +586,7 @@ async function seedDevData(conn) {
   await conn.query(
     `INSERT INTO portal_accounts
        (id, tenant_id, client_id, email_enc, email_lookup_hash, password_hash, status, mfa_enabled)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
     [
       'pa-001',
       'system',
@@ -595,11 +604,11 @@ async function seedDevData(conn) {
 async function ensureDevPortalClient(conn) {
   if (!shouldSeedDevPortalData()) return;
 
-  const [[tenant]] = await conn.query(
-    'SELECT id FROM tenants WHERE id = ? LIMIT 1',
+  const tenantRes = await conn.query(
+    'SELECT id FROM tenants WHERE id = $1 LIMIT 1',
     ['system'],
   );
-  if (!tenant) return;
+  if (!tenantRes.rows[0]) return;
 
   let encrypt;
   let deriveLookupHash;
@@ -619,33 +628,35 @@ async function ensureDevPortalClient(conn) {
     parallelism: 1,
   });
 
-  const [[client]] = await conn.query(
-    'SELECT id FROM clients WHERE id = ? AND tenant_id = ? LIMIT 1',
+  const clientRes = await conn.query(
+    'SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1',
     ['c-001', 'system'],
   );
+  const client = clientRes.rows[0];
   if (!client) {
     await conn.query(
       `INSERT INTO clients
          (id, tenant_id, first_name_enc, last_name_enc, status, faith_background, high_touchpoint, primary_counselor_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       ['c-001', 'system', encrypt('Sarah'), encrypt('Kim'), 'active', 'Evangelical', 1, 'staff-counselor-mercy'],
     );
   } else {
     await conn.query(
-      'UPDATE clients SET high_touchpoint = 1, primary_counselor_id = COALESCE(primary_counselor_id, ?) WHERE id = ? AND tenant_id = ?',
+      'UPDATE clients SET high_touchpoint = 1, primary_counselor_id = COALESCE(primary_counselor_id, $1) WHERE id = $2 AND tenant_id = $3',
       ['staff-counselor-mercy', 'c-001', 'system'],
     );
   }
 
-  const [[portalAccount]] = await conn.query(
-    'SELECT id FROM portal_accounts WHERE client_id = ? AND tenant_id = ? LIMIT 1',
+  const portalAccountRes = await conn.query(
+    'SELECT id FROM portal_accounts WHERE client_id = $1 AND tenant_id = $2 LIMIT 1',
     ['c-001', 'system'],
   );
+  const portalAccount = portalAccountRes.rows[0];
   if (!portalAccount) {
     await conn.query(
       `INSERT INTO portal_accounts
          (id, tenant_id, client_id, email_enc, email_lookup_hash, password_hash, status, mfa_enabled)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         'pa-001',
         'system',
@@ -661,12 +672,12 @@ async function ensureDevPortalClient(conn) {
   } else {
     await conn.query(
       `UPDATE portal_accounts
-       SET email_lookup_hash = ?,
-           password_hash = ?,
+       SET email_lookup_hash = $1,
+           password_hash = $2,
            failed_attempts = 0,
            locked_until = NULL,
            status = 'active'
-       WHERE id = ?`,
+       WHERE id = $3`,
       [
         deriveLookupHash('sarah.kim@example.test', { lowercase: true }),
         portalPasswordHash,
@@ -675,15 +686,16 @@ async function ensureDevPortalClient(conn) {
     );
   }
 
-  const [[portalResource]] = await conn.query(
-    'SELECT id FROM portal_resources WHERE id = ? AND tenant_id = ? LIMIT 1',
+  const portalResourceRes = await conn.query(
+    'SELECT id FROM portal_resources WHERE id = $1 AND tenant_id = $2 LIMIT 1',
     ['pr-001', 'system'],
   );
+  const portalResource = portalResourceRes.rows[0];
   if (!portalResource) {
     await conn.query(
       `INSERT INTO portal_resources
          (id, tenant_id, title, content, resource_type, audience, published_at)
-       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
       [
         'pr-001',
         'system',

@@ -45,7 +45,7 @@ import { logError, logInfo, logWarn, serializeError } from './lib/log.js';
 import { translateMessages } from './lib/translate.js';
 import { handleCors, checkRateLimit, enforceRbac, enforceTenantScope, callerIdentity } from './lib/security.js';
 import { searchDsm5TrDiagnoses } from './lib/dsm5-tr-reference.js';
-import pool, { verifyConnection, runWithTenantContext } from './db/pool.js';
+import pool, { verifyConnection, runWithTenantContext, closeAllPools } from './db/pool.js';
 import { getKnownTenantSlugs } from './db/pools.js';
 import {
   resolveTenantContext,
@@ -230,12 +230,12 @@ if (process.env.DB_NAME) {
     await verifyConnection();
     logInfo('startup.db_connection_verified', {
       dbConfigured: true,
-      mode: 'mysql',
+      mode: 'postgresql',
     });
   } catch (error) {
     logError('startup.db_connection_failed', {
       dbConfigured: true,
-      mode: 'mysql',
+      mode: 'postgresql',
       error,
     });
     throw error;
@@ -678,7 +678,7 @@ const practices = [
     type: 'group',
     timezone: 'America/Chicago',
     faithTradition: 'Christian',
-    contactEmail: 'admin@faithcounseling.local',
+    contactEmail: 'admin@churchcorecare.local',
     contactPhone: '555-0100',
   }) },
 ];
@@ -1105,11 +1105,11 @@ const portalSettingsRecords = [
   {
     id: 'ps-001',
     tenantId: 'system',
-    practiceName: 'FaithCounseling',
+    practiceName: 'ChurchCore Care',
     logoUrl: '',
     brandColor: '#1f7a8c',
     accentColor: '#f0f7f8',
-    welcomeHeadline: 'FaithCounseling Client Portal',
+    welcomeHeadline: 'ChurchCore Care Client Portal',
     welcomeMessage: 'Current clients can sign in to their account. New or possible clients can request care, request scheduling, or start an account request for intake onboarding.',
     helpMessage: 'If you need help accessing the portal, contact your counselor or the practice front desk.',
     supportEmail: '',
@@ -2115,6 +2115,13 @@ if (process.env.FAITH_API_DISABLE_LISTEN !== '1') {
     });
   });
 }
+
+process.on('SIGTERM', () => {
+  server.close(async () => {
+    await closeAllPools();
+    process.exit(0);
+  });
+});
 
 // ─── Auth handlers ────────────────────────────────────────────────────────────
 
@@ -10749,7 +10756,7 @@ async function handleAuditIntelligence(request, response, requestUrl, session) {
       actorType: entry.actorType ?? inferAuditActorType(entry.actorRole, entry.actorId),
       sourceSurface: entry.sourceSurface ?? 'api',
       sourceWorkflow: entry.sourceWorkflow ?? inferAuditWorkflowFromAction(entry.action),
-      systemComponent: entry.systemComponent ?? 'faith-api',
+      systemComponent: entry.systemComponent ?? 'churchcore-api',
     }));
   }
 
@@ -13203,7 +13210,7 @@ function deriveAuditMetadata(request, action, session = null) {
     reasonCode: inferAuditReasonCodeFromAction(action),
     sourceSurface: request.route ?? 'api',
     sourceWorkflow: inferAuditWorkflowFromAction(action),
-    systemComponent: 'faith-api',
+    systemComponent: 'churchcore-api',
   };
 }
 
@@ -13332,11 +13339,11 @@ function buildDefaultPortalSettings(tenantId = 'system') {
   return {
     id: `ps-${tenantId}`,
     tenantId,
-    practiceName: 'FaithCounseling',
+    practiceName: 'ChurchCore Care',
     logoUrl: '',
     brandColor: '#1f7a8c',
     accentColor: '#f0f7f8',
-    welcomeHeadline: 'FaithCounseling Client Portal',
+    welcomeHeadline: 'ChurchCore Care Client Portal',
     welcomeMessage: 'Current clients can sign in to their account. New or possible clients can request care, request scheduling, or start an account request for intake onboarding.',
     helpMessage: 'If you need help accessing the portal, contact your counselor or the practice front desk.',
     supportEmail: '',

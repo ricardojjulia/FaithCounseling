@@ -272,7 +272,7 @@ Governance plans define the permanent engineering standards that all feature wor
 **Prepared:** March 28, 2026
 **Initiative:** AegisTrail Security & Audit Fabric
 
-This is the canonical security and auditing implementation standard for FaithCounseling. All sessions touching security, auditing, PHI handling, RBAC, auth/session behavior, tenant isolation, exports, retention, impersonation, background jobs, or system automation must read this file first.
+This is the canonical security and auditing implementation standard for ChurchCore Care. All sessions touching security, auditing, PHI handling, RBAC, auth/session behavior, tenant isolation, exports, retention, impersonation, background jobs, or system automation must read this file first.
 
 Defines:
 
@@ -294,7 +294,7 @@ The audit ledger and monitoring flows are separate systems. Raw audit rows are n
 **Status:** Canonical baseline — treat as source of truth for all monitoring changes
 **Prepared:** March 28, 2026
 
-This is the canonical monitoring standard for FaithCounseling. All sessions touching UI, monitoring, health, screens, tabs, workflows, dashboards, or summaries must read this file first.
+This is the canonical monitoring standard for ChurchCore Care. All sessions touching UI, monitoring, health, screens, tabs, workflows, dashboards, or summaries must read this file first.
 
 Defines:
 

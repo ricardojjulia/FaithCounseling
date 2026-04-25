@@ -88,6 +88,8 @@ The platform has moved quickly over the last few iterations, and the most recent
 
 - **Phase 4 provisioning transition endpoint tests + automation wiring shipped:** API tests now cover provisioning lifecycle endpoint behavior (`apps/api/test/tenant-provisioning-api.test.mjs`) for valid transitions, invalid transition rejection (`409`), and RBAC denial (`403`). Operational scripts now exercise the canonical transition path: `ops/step11-smoke.mjs` and `ops/step12-validate.mjs` progress provisioning requests via `PATCH`, and `ops/security-regression.mjs` verifies non-platform-admin updates are blocked.
 
+- **Phase 4 CI/deployment policy guard shipped:** Tenant host-routing policy is now enforced in CI via `.github/workflows/tenant-policy-guard.yml` and `ops/check-tenant-policy.mjs`. The guard fails closed when non-local tenant-host routing is enabled without strict routing (`ENABLE_TENANT_HOST_ROUTING=true` requires `TENANT_STRICT_HOST_ROUTING=true`) and verifies a canonical tenant source (`TENANT_ALLOWED_SLUGS` or provisioning-backed DB mode). Operational rollout/remediation guidance is documented in `ops/runbooks/tenant-host-routing-policy.txt`.
+
 - **Full API documentation is live (v6.0.0):** The OpenAPI spec has been fully regenerated from the actual implementation — growing from 12 documented endpoints to 150+, fixing the security scheme from Bearer JWT to the correct HttpOnly session cookie, removing phantom paths, and adding every active surface: auth, clients and all sub-resources, scheduling, billing, portal, faith features, audit intelligence, platform admin, i18n, and monitoring. Browsable at `http://localhost:3002/api/docs`.
 - **Deterministic Audit Intelligence observations (v6.1.0):** The Audit Intelligence tab in Practice Operations now generates instant, rule-based callouts after every query — no AI dependency required. A 75-rule engine evaluates volume patterns, denial and error rates, authentication anomalies, PHI access concentration, admin actions, actor behavior, action distribution, and data quality gaps. Results are severity-tiered (critical → warning → info) and always available without an `ANTHROPIC_API_KEY`.
 - **3-minute browser idle session timeout:** Any open browser tab now automatically invalidates the session after 3 minutes of inactivity. A dismissible warning appears at 30 seconds remaining. The server-side idle timeout has been tightened to match, providing defense in depth for PHI protection.
@@ -107,8 +109,11 @@ The repository runs automated nightly AppSec and DB Security scans at **23:00 UT
 | ------ | ------- | ----------- |
 | AppSec scan | `node ops/appsec-scan.mjs` | 9-category application security review |
 | DB Security scan | `node ops/db-security-scan.mjs` | PHI/PII encryption coverage and DB config review |
+| Tenant policy guard | `node ops/check-tenant-policy.mjs` | Fail-closed tenant host-routing + provisioning flag policy validation |
 | Nightly runner | `node ops/nightly-security-runner.mjs` | Orchestrator — generates dated reports in `docs/SecurityChecks/` |
 | Dry run | `node ops/nightly-security-runner.mjs --dry-run` | Run scans without writing files or opening PRs |
+
+GitHub Actions uses the root `packageManager` declaration (`pnpm@10.33.2`) as the single pnpm version source for CI, deploy, tenant-policy, and nightly security workflows.
 
 Reports are stored in [`docs/SecurityChecks/`](./docs/SecurityChecks/) as timestamped Markdown summaries and JSON raw data.
 
@@ -218,7 +223,7 @@ The checked-in public web bundle includes this shortcut so environments serving 
 
 The `apps/web/public/assets` bundle files may be refreshed and committed when shipping UI workflow updates so the checked-in public web surface stays aligned with the latest source behavior.
 
-**Note:** After UI or workflow changes (such as the SchedulingPage recurring series modal fix in v4.7.0), always rebuild the public assets with `pnpm --filter @faith/web build` and commit the updated bundle. This ensures that all users receive the latest code and prevents stale JavaScript errors from cached or outdated bundles.
+**Note:** After UI or workflow changes (such as the SchedulingPage recurring series modal fix in v4.7.0), always rebuild the public assets with `pnpm --filter @churchcore/web build` and commit the updated bundle. This ensures that all users receive the latest code and prevents stale JavaScript errors from cached or outdated bundles.
 
 ## Standalone Product Pages
 
@@ -269,9 +274,9 @@ flowchart TB
     end
 
     subgraph packages[" 📦  Shared Packages "]
-        DOM["@faith/domain\nContracts · Enums · Types"]
-        I18N["@faith/i18n\nLocale Catalogs · Runtime Translations"]
-        TEL["@faith/telemetry\nReserved Monitoring Utilities"]
+        DOM["@churchcore/domain\nContracts · Enums · Types"]
+        I18N["@churchcore/i18n\nLocale Catalogs · Runtime Translations"]
+        TEL["@churchcore/telemetry\nReserved Monitoring Utilities"]
     end
 
     subgraph ops[" 🚀  Local Startup & Demo Ops "]
@@ -323,7 +328,7 @@ pnpm start
 
 - loads `.env` via `node --env-file=.env`
 - ensures Docker is running (launches Docker Desktop when needed)
-- ensures `faith-mysql` is running
+- ensures `churchcore-postgres` is running
 - waits for MySQL readiness
 - runs API migration when DB is configured
 - starts API, web, and worker services
@@ -408,9 +413,9 @@ This repository is deployment-ready, but it does not currently include opinionat
 
 ### Service start commands (container or VM)
 
-- API service: `pnpm --filter @faith/api start`
-- Web service: `pnpm --filter @faith/web start`
-- Worker service: `pnpm --filter @faith/worker start`
+- API service: `pnpm --filter @churchcore/api start`
+- Web service: `pnpm --filter @churchcore/web start`
+- Worker service: `pnpm --filter @churchcore/worker start`
 
 ## Technology How-Tos
 

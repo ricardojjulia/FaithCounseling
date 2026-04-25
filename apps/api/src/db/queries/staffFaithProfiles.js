@@ -8,7 +8,7 @@
  * PHI columns: theological_approach_enc, other_faith_credentials_enc,
  * spiritual_gifts_enc (AES-256-GCM encrypted).
  *
- * Uses INSERT ... ON DUPLICATE KEY UPDATE keyed on uq_staff_faith to maintain
+ * Uses INSERT ... ON CONFLICT DO UPDATE keyed on uq_staff_faith to maintain
  * exactly one row per staff member.
  *
  * All queries are tenant-scoped and parameterised — no string interpolation.
@@ -54,7 +54,7 @@ export async function getStaffFaithProfile(staffId, tenantId) {
 
 /**
  * Inserts or updates the faith profile singleton for a staff member.
- * Uses INSERT ... ON DUPLICATE KEY UPDATE keyed on uq_staff_faith.
+ * Uses INSERT ... ON CONFLICT DO UPDATE keyed on uq_staff_faith.
  */
 export async function upsertStaffFaithProfile({
   id,
@@ -79,19 +79,19 @@ export async function upsertStaffFaithProfile({
         other_faith_credentials_enc, prayer_integration, scripture_integration,
         spiritual_gifts_enc)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       tenant_id                   = VALUES(tenant_id),
-       faith_tradition             = VALUES(faith_tradition),
-       theological_approach_enc    = VALUES(theological_approach_enc),
-       ordained                    = VALUES(ordained),
-       ordaining_body              = VALUES(ordaining_body),
-       aacc_member                 = VALUES(aacc_member),
-       acbc_certified              = VALUES(acbc_certified),
-       ccca_member                 = VALUES(ccca_member),
-       other_faith_credentials_enc = VALUES(other_faith_credentials_enc),
-       prayer_integration          = VALUES(prayer_integration),
-       scripture_integration       = VALUES(scripture_integration),
-       spiritual_gifts_enc         = VALUES(spiritual_gifts_enc)`,
+     ON CONFLICT ON CONSTRAINT uq_staff_faith DO UPDATE SET
+       tenant_id                   = EXCLUDED.tenant_id,
+       faith_tradition             = EXCLUDED.faith_tradition,
+       theological_approach_enc    = EXCLUDED.theological_approach_enc,
+       ordained                    = EXCLUDED.ordained,
+       ordaining_body              = EXCLUDED.ordaining_body,
+       aacc_member                 = EXCLUDED.aacc_member,
+       acbc_certified              = EXCLUDED.acbc_certified,
+       ccca_member                 = EXCLUDED.ccca_member,
+       other_faith_credentials_enc = EXCLUDED.other_faith_credentials_enc,
+       prayer_integration          = EXCLUDED.prayer_integration,
+       scripture_integration       = EXCLUDED.scripture_integration,
+       spiritual_gifts_enc         = EXCLUDED.spiritual_gifts_enc`,
     [
       id, staffId, tenantId,
       faithTradition ?? null,

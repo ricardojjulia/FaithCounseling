@@ -133,7 +133,7 @@ function initColorSchemeToggle() {
   button.addEventListener('click', () => {
     const isDark = document.documentElement.getAttribute('data-color-scheme') === 'dark';
     document.documentElement.setAttribute('data-color-scheme', isDark ? 'light' : 'dark');
-    localStorage.setItem('faith.colorScheme', isDark ? 'light' : 'dark');
+    localStorage.setItem('churchcore.colorScheme', isDark ? 'light' : 'dark');
     syncLabel();
   });
 

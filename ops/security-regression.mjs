@@ -8,7 +8,7 @@
  * obtain a cookie and pass it in `headers.cookie` instead.
  *
  * Example for production testing:
- *   const cookie = await loginAs('admin@faithcounseling.local', 'ChangeMe!Dev2024#');
+ *   const cookie = await loginAs('admin@churchcorecare.local', 'ChangeMe!Dev2024#');
  *   await req('/v1/clients', { headers: { cookie, 'content-type': 'application/json' } });
  */
 

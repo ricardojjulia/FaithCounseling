@@ -7,7 +7,7 @@
 
 ## Purpose
 
-This document is the canonical security and auditing implementation standard for FaithCounseling.
+This document is the canonical security and auditing implementation standard for ChurchCore Care.
 
 It defines:
 

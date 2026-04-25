@@ -1,6 +1,6 @@
 # Database Implementation Guide
 
-MySQL persistence layer for the FaithCounseling API — covering schema, encryption, authentication, and how to activate DB mode.
+MySQL persistence layer for the ChurchCore Care API — covering schema, encryption, authentication, and how to activate DB mode.
 
 ## Overview
 
@@ -20,8 +20,8 @@ Add these to your `.env` file (see `.env.example` for a template):
 ```env
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_NAME=faith_counseling
-DB_USER=faith_app
+DB_NAME=churchcore_care
+DB_USER=churchcore_app
 DB_PASSWORD=changeme-strong-password
 DB_SSL=false
 DB_ENCRYPTION_KEY=<generate with: openssl rand -hex 32>
@@ -44,14 +44,14 @@ The repo ships with a `docker-compose.yml` at the root that starts a MySQL 8 con
 docker compose up -d
 ```
 
-The container is named `faith-mysql` and exposes MySQL on `127.0.0.1:3306`. Data is persisted in the `faith_mysql_data` Docker volume and survives container restarts.
+The container is named `churchcore-postgres` and exposes MySQL on `127.0.0.1:3306`. Data is persisted in the `churchcore_db_data` Docker volume and survives container restarts.
 
 ### 2. Copy and configure `.env`
 
 ```bash
 cp .env.example .env
 # Edit .env and fill in:
-#   DB_PASSWORD=<your faith_app password>
+#   DB_PASSWORD=<your churchcore_app password>
 #   DB_ENCRYPTION_KEY=$(openssl rand -hex 32)
 #   SESSION_SECRET=$(openssl rand -base64 32)
 #   SEED_DEV_PORTAL_DATA=false   # optional; keeps local DB staff-only
@@ -66,14 +66,14 @@ node --env-file=.env apps/api/src/db/migrate.js
 This executes `apps/api/src/db/schema.sql` against the configured database and creates all 43 tables. It is safe to run multiple times (`CREATE TABLE IF NOT EXISTS`). On first run it seeds a dev admin account, and optionally seeds the local portal client/resource when `SEED_DEV_PORTAL_DATA` is not `false`:
 
 ```text
-Email:    admin@faithcounseling.local
+Email:    admin@churchcorecare.local
 Password: ChangeMe!Dev2024#   ← change immediately
 ```
 
 ### 4. Start the API
 
 ```bash
-npx pnpm@10.7.0 --filter @faith/api start
+npx pnpm@10.7.0 --filter @churchcore/api start
 ```
 
 The `start` script in `apps/api/package.json` includes `--env-file=../../.env`, so `.env` is loaded automatically. With `DB_NAME` set the API connects to MySQL on startup and logs `Database connection verified.`
@@ -83,7 +83,7 @@ The `start` script in `apps/api/package.json` includes `--env-file=../../.env`, 
 ```bash
 curl -s -X POST http://localhost:3001/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@faithcounseling.local","password":"ChangeMe!Dev2024#"}'
+  -d '{"email":"admin@churchcorecare.local","password":"ChangeMe!Dev2024#"}'
 ```
 
 Expected response:
@@ -133,9 +133,9 @@ pnpm demo:sql:refresh
 ### 1. Create the database and user
 
 ```sql
-CREATE DATABASE faith_counseling CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'faith_app'@'localhost' IDENTIFIED BY 'your-password';
-GRANT ALL PRIVILEGES ON faith_counseling.* TO 'faith_app'@'localhost';
+CREATE DATABASE churchcore_care CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'churchcore_app'@'localhost' IDENTIFIED BY 'your-password';
+GRANT ALL PRIVILEGES ON churchcore_care.* TO 'churchcore_app'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
@@ -148,7 +148,7 @@ node --env-file=.env apps/api/src/db/migrate.js
 ### 3. Start the API
 
 ```bash
-npx pnpm@10.7.0 --filter @faith/api start
+npx pnpm@10.7.0 --filter @churchcore/api start
 ```
 
 ---

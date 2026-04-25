@@ -8,7 +8,7 @@
 
 ## Purpose
 
-This plan defines the canonical monitoring standard for FaithCounseling after OTEL removal. The goal is to keep every visible surface reviewable through consistent local monitoring, health visibility, and surface-level validation so operators can answer four questions quickly:
+This plan defines the canonical monitoring standard for ChurchCore Care after OTEL removal. The goal is to keep every visible surface reviewable through consistent local monitoring, health visibility, and surface-level validation so operators can answer four questions quickly:
 
 - Is the system healthy?
 - Which screen or workflow is failing?

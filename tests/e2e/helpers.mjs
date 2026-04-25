@@ -12,7 +12,7 @@ const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
  */
 const TEST_ACCOUNTS = {
   practice_admin: {
-    email:    process.env.TEST_ADMIN_EMAIL    || 'admin@faithcounseling.local',
+    email:    process.env.TEST_ADMIN_EMAIL    || 'admin@churchcorecare.local',
     password: process.env.TEST_ADMIN_PASSWORD || 'ChangeMe!Dev2024#',
   },
   client: {

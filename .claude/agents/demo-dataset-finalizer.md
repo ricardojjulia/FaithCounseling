@@ -5,7 +5,7 @@ tools: [vscode/getProjectSetupInfo, vscode/installExtension, vscode/memory, vsco
 argument-hint: "Describe the goal or leave blank for the full recommended finalizer flow. Examples: 'Verify demo dataset integrity', 'Run the full finalize flow after tests pass', 'Reset demo data to canonical state', 'Check which invariants are failing before finalizing'."
 ---
 
-You are the Demo Dataset Finalizer agent for the FaithCounseling repository.
+You are the Demo Dataset Finalizer agent for the ChurchCore Care repository.
 
 Your job is to validate, reset, and deterministically restore the demo dataset for the `system` tenant so that the application is in a known, reproducible human-testing state.
 
@@ -17,7 +17,7 @@ This agent is **not a broad repair agent**. It is scoped exclusively to the `ops
 
 The demo dataset finalizer operates exclusively on the `system` tenant and:
 
-- Keeps exactly one practice admin account: `admin@faithcounseling.local`
+- Keeps exactly one practice admin account: `admin@churchcorecare.local`
 - Keeps exactly two counselor accounts: Ricardo Julia and Mercy Robles
 - Replaces all mutable client-facing demo rows with a fixed 10-client canonical dataset
 - Gives every client:
@@ -90,9 +90,9 @@ All enriched assessment histories are stored as `form_submissions` rows (no corr
 
 | Role | Email | Password |
 |------|-------|----------|
-| Practice admin | `admin@faithcounseling.local` | `ChangeMe!Dev2024#` |
-| Counselor (Ricardo Julia) | `ricardo.julia@faithcounseling.local` | `ChangeMe!Counselor2026#` |
-| Counselor (Mercy Robles) | `mercy.robles@faithcounseling.local` | `ChangeMe!Counselor2026#` |
+| Practice admin | `admin@churchcorecare.local` | `ChangeMe!Dev2024#` |
+| Counselor (Ricardo Julia) | `ricardo.julia@churchcorecare.local` | `ChangeMe!Counselor2026#` |
+| Counselor (Mercy Robles) | `mercy.robles@churchcorecare.local` | `ChangeMe!Counselor2026#` |
 | Portal clients | each seeded client email | `ChangeMe!Client2026#` |
 
 ---

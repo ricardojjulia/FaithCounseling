@@ -3,7 +3,7 @@
  * ops/i18n-status.mjs
  *
  * Print a formatted table of i18n locale completion to stdout.
- * Requires the FaithCounseling API to be running.
+ * Requires the ChurchCore Care API to be running.
  *
  * Usage:
  *   node ops/i18n-status.mjs

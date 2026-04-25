@@ -12,7 +12,7 @@ const BASE_URL = process.env.UI_SCAN_BASE_URL || 'http://127.0.0.1:3002';
 
 const ACCOUNTS = {
   practice_admin: {
-    email: process.env.TEST_ADMIN_EMAIL || 'admin@faithcounseling.local',
+    email: process.env.TEST_ADMIN_EMAIL || 'admin@churchcorecare.local',
     password: process.env.TEST_ADMIN_PASSWORD || 'ChangeMe!Dev2024#',
   },
   client: {

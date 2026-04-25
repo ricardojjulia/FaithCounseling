@@ -67,7 +67,7 @@ const COUNSELOR_SPECS = Object.freeze([
   {
     id: 'staff-counselor-ricardo',
     accountId: 'acct-counselor-ricardo',
-    email: 'ricardo.julia@faithcounseling.local',
+    email: 'ricardo.julia@churchcorecare.local',
     firstName: 'Ricardo',
     lastName: 'Julia',
     licenseType: 'lpc',
@@ -88,7 +88,7 @@ const COUNSELOR_SPECS = Object.freeze([
   {
     id: 'staff-counselor-mercy',
     accountId: 'acct-counselor-mercy',
-    email: 'mercy.robles@faithcounseling.local',
+    email: 'mercy.robles@churchcorecare.local',
     firstName: 'Mercy',
     lastName: 'Robles',
     licenseType: 'lmft',
@@ -1002,7 +1002,7 @@ export function buildDemoDataset(referenceDate = new Date()) {
       role: 'practice_admin',
       firstName: 'Admin',
       lastName: 'User',
-      email: 'admin@faithcounseling.local',
+      email: 'admin@churchcorecare.local',
       licenseType: 'lpc',
       licenseNumber: 'ADMIN-001',
       supervisionStatus: 'not_required',

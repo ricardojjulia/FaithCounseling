@@ -100,9 +100,9 @@ test('createAuditEvent: defaults sourceSurface to api', () => {
   assert.equal(ev.sourceSurface, 'api');
 });
 
-test('createAuditEvent: defaults systemComponent to faith-api', () => {
+test('createAuditEvent: defaults systemComponent to churchcore-api', () => {
   const ev = createAuditEvent(baseEvent());
-  assert.equal(ev.systemComponent, 'faith-api');
+  assert.equal(ev.systemComponent, 'churchcore-api');
 });
 
 // ─── Auto-generated ID ────────────────────────────────────────────────────────

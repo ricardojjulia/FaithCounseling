@@ -1,4 +1,4 @@
-# FaithCounseling — AI Coder Rules & Controls
+# ChurchCore Care — AI Coder Rules & Controls
 
 **Version:** 1.1  
 **Date:** April 17, 2026  
@@ -70,7 +70,7 @@ No lint errors are permitted. Warnings must be reviewed; do not suppress them wi
 ### 3.2 Build
 
 ```sh
-pnpm --filter @faith/web build     # Vite production build
+pnpm --filter @churchcore/web build     # Vite production build
 ```
 
 The build must be clean with no errors. Warnings in the build output must be investigated.
@@ -291,7 +291,7 @@ If a session changes the security/auditing standard, update `PLANS/FULL-SECURITY
 [ ] 2. Confirm task scope — identify whether monitoring or security plans apply
 [ ] 3. Make changes on a new feature branch
 [ ] 4. pnpm lint                     — zero errors
-[ ] 5. pnpm --filter @faith/web build — clean build
+[ ] 5. pnpm --filter @churchcore/web build — clean build
 [ ] 6. pnpm test                     — all tests pass
 [ ] 7. pnpm security:appsec          — no critical/high findings
 [ ] 8. pnpm security:db              — no critical/high findings

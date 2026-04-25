@@ -1,15 +1,15 @@
 {
-  "name": "@faith/worker",
+  "name": "@churchcore/worker",
   "version": "5.7.0",
   "private": true,
   "type": "module",
   "main": "src/index.js",
-  "dependencies": {
-    "mysql2": "^3.9.7"
-  },
   "scripts": {
     "start": "node src/index.js",
-    "lint": "node -e \"console.log('No lint rules configured for @faith/worker yet')\"",
-    "test": "node -e \"console.log('No tests configured for @faith/worker yet')\""
+    "lint": "node -e \"console.log('No lint rules configured for @churchcore/worker yet')\"",
+    "test": "node -e \"console.log('No tests configured for @churchcore/worker yet')\""
+  },
+  "dependencies": {
+    "pg": "^8.20.0"
   }
 }

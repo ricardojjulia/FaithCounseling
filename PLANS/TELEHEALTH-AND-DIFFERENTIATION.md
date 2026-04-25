@@ -3,15 +3,15 @@
 **Status:** Planning
 **Prepared:** April 17, 2026
 **Target start:** April 18, 2026
-**Initiative:** FaithCounseling-meet integration + competitive differentiation feature set
+**Initiative:** ChurchCore Care-meet integration + competitive differentiation feature set
 
 ---
 
 ## Purpose
 
-This plan captures the next major product iteration for FaithCounseling: integrating the
-pre-built FaithCounseling-meet (Jitsi fork) telehealth layer and shipping the product
-differentiation features that make FaithCounseling the only purpose-built platform for
+This plan captures the next major product iteration for ChurchCore Care: integrating the
+pre-built ChurchCore Care-meet (Jitsi fork) telehealth layer and shipping the product
+differentiation features that make ChurchCore Care the only purpose-built platform for
 Christian counseling practices.
 
 Billing and medical payment processing are explicitly out of scope. This platform is
@@ -31,12 +31,12 @@ A competitive market analysis (see `docs/market-analysis-faithcounseling.md`) co
   penetration of the AACC's 50,000 member base. Break-even is 5–6 practices.
 - The single largest feature gap vs. SimplePractice is **built-in telehealth**.
 
-The FaithCounseling-meet fork (`ricardojjulia/FaithCounseling-meet`) is already 80%
+The ChurchCore Care-meet fork (`ricardojjulia/ChurchCore Care-meet`) is already 80%
 integrated — the hard work is done. This plan executes the remaining steps.
 
 ---
 
-## Phase 1 — FaithCounseling-meet Integration
+## Phase 1 — ChurchCore Care-meet Integration
 
 **Goal:** Counselors and clients can launch a HIPAA-appropriate video session directly
 from the scheduling page, without leaving the platform.
@@ -63,8 +63,8 @@ sessions/month, the cost is ~$16K/month; at that point, migrate to self-hosted.
 Run the migration from the fork:
 
 ```bash
-mysql -u faith_app -p faith_counseling < \
-  /path/to/FaithCounseling-meet/integration/db-migration.sql
+mysql -u churchcore_app -p churchcore_care < \
+  /path/to/ChurchCore Care-meet/integration/db-migration.sql
 ```
 
 This adds `video_room_id VARCHAR(255)` to the `appointments` table. The room ID is
@@ -137,7 +137,7 @@ Add to all locale files in `packages/i18n/`:
 Add to root `.env` and document in `.env.example`:
 
 ```
-JITSI_DOMAIN=8x8.vc             # or meet.faithcounseling.app for self-hosted
+JITSI_DOMAIN=8x8.vc             # or meet.churchcorecare.app for self-hosted
 JITSI_APP_ID=<jaas-app-id>
 JITSI_APP_SECRET=<jaas-api-key>
 VITE_JITSI_DOMAIN=8x8.vc
@@ -162,7 +162,7 @@ and timestamp only.
 ### Phase 1 Acceptance Criteria
 
 - [ ] A counselor can click "Join Video Session" on a scheduled appointment
-- [ ] A new browser tab or in-page modal opens the FaithCounseling-meet Jitsi room
+- [ ] A new browser tab or in-page modal opens the ChurchCore Care-meet Jitsi room
 - [ ] The client receives a session link (email or portal) and can join as a non-moderator
 - [ ] No one without a valid JWT can enter the room (enforced by JaaS or self-hosted Prosody)
 - [ ] Session start/end events appear in the audit log
@@ -286,7 +286,7 @@ renewal tracking.
 
 ## Phase 4 — SaaS Multi-Tenant Infrastructure
 
-**Goal:** Enable FaithCounseling to be deployed as a SaaS with per-practice isolated
+**Goal:** Enable ChurchCore Care to be deployed as a SaaS with per-practice isolated
 databases, tenant provisioning, and the Platform Admin app.
 
 > This phase is a pre-requisite for commercial launch. It is separate from the product
@@ -298,7 +298,7 @@ Replace the single-DB singleton in `apps/api/src/db/pool.js` with a per-tenant p
 registry (`apps/api/src/db/pools.js`).
 
 Architecture:
-- Tenant is identified by subdomain (`{slug}.faithcounseling.com`) parsed from the
+- Tenant is identified by subdomain (`{slug}.churchcorecare.com`) parsed from the
   `Host` header.
 - Each tenant maps to an isolated Cloud SQL instance.
 - Pool registry is a `Map<tenantSlug, mysql2Pool>` lazily initialized on first request.
@@ -316,7 +316,7 @@ An internal provisioning endpoint (Platform Admin only, not customer-facing) tha
 
 ### 4.3 — Platform Admin app
 
-A minimal internal React app at `tenantadmin.faithcounseling.com` used by the FaithCounseling
+A minimal internal React app at `tenantadmin.churchcorecare.com` used by the ChurchCore Care
 team to manage tenant lifecycle:
 
 - Create / suspend / delete practices
@@ -334,7 +334,7 @@ advanced reporting). No payment processing integration.
 
 ### Phase 4 Acceptance Criteria
 
-- [ ] A request to `{slug}.faithcounseling.com` routes to the correct isolated DB
+- [ ] A request to `{slug}.churchcorecare.com` routes to the correct isolated DB
 - [ ] An unknown slug returns 404, not a DB error
 - [ ] Provisioning API creates a working tenant with admin user in < 5 minutes
 - [ ] Platform Admin app can list, create, and suspend tenants

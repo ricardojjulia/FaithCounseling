@@ -1,31 +1,31 @@
 {
-  "name": "@faith/web",
+  "name": "@churchcore/web",
   "version": "5.8.0",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@faith/i18n": "workspace:*",
-    "@mantine/core": "^8.3.18",
-    "@mantine/dates": "^8.3.18",
-    "@mantine/form": "^8.3.18",
-    "@mantine/hooks": "^8.3.18",
-    "@mantine/notifications": "^8.3.18",
+    "@churchcore/i18n": "workspace:*",
+    "@mantine/core": "^9.1.0",
+    "@mantine/dates": "^9.1.0",
+    "@mantine/form": "^9.1.0",
+    "@mantine/hooks": "^9.1.0",
+    "@mantine/notifications": "^9.1.0",
     "@tabler/icons-react": "^3.41.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
-    "postcss": "^8.5.8",
+    "@vitejs/plugin-react": "^6.0.1",
+    "postcss": "^8.5.10",
     "postcss-preset-mantine": "^1.18.0",
     "postcss-simple-vars": "^7.0.1",
-    "vite": "^6.4.2"
+    "vite": "^8.0.10"
   },
   "scripts": {
     "build": "vite build",
     "dev": "vite --host",
     "start": "pnpm run build && node server.js",
-    "lint": "node -e \"console.log('No lint rules configured for @faith/web yet')\"",
-    "test": "node -e \"console.log('No tests configured for @faith/web yet')\""
+    "lint": "node -e \"console.log('No lint rules configured for @churchcore/web yet')\"",
+    "test": "node -e \"console.log('No tests configured for @churchcore/web yet')\""
   }
 }

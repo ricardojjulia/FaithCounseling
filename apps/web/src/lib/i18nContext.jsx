@@ -9,8 +9,8 @@ import {
   formatCurrency,
   localeLabels,
   resolveLocaleCode,
-} from '@faith/i18n';
-const LOCALE_STORAGE_KEY = 'faith.locale';
+} from '@churchcore/i18n';
+const LOCALE_STORAGE_KEY = 'churchcore.locale';
 
 // ---------------------------------------------------------------------------
 // Helpers

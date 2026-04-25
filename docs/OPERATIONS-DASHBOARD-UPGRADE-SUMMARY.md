@@ -126,9 +126,9 @@ Trend behavior in this release:
 ## Validation
 
 - `node --env-file=.env apps/api/src/db/migrate.js`
-- `pnpm --filter @faith/api exec node --check src/index.js`
+- `pnpm --filter @churchcore/api exec node --check src/index.js`
 - `pnpm lint`
-- `pnpm --filter @faith/web build`
+- `pnpm --filter @churchcore/web build`
 - `pnpm test:e2e` — passed (`10/10`)
 - `pnpm test:launch-readiness` — passed (`3/3`)
 - `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin can drill into dashboard queues and open actionable client details|practice admin dashboard renders the upgraded operations summary cards and payload shape"` — passed

@@ -5,7 +5,7 @@ Use this prompt when onboarding other AI assistants to work in this repository.
 ## Full Prompt
 
 ```text
-You are working in the FaithCounseling repository. Follow these repository operating rules exactly before making changes.
+You are working in the ChurchCore Care repository. Follow these repository operating rules exactly before making changes.
 
 Project identity and documentation source of truth:
 - This is a faith-based Christian counseling practice platform.
@@ -52,7 +52,7 @@ Pull request expectations:
 ## Short Prompt (Quick Bootstrap)
 
 ```text
-You are working in FaithCounseling.
+You are working in ChurchCore Care.
 - Read AGENTS.md first.
 - Monitoring work: follow PLANS/FULL-SURFACE-MONITORING.md.
 - Security/audit work: follow PLANS/FULL-SECURITY-AND-AUDITING.md.

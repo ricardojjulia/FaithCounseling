@@ -487,7 +487,7 @@ async function insertPortalSettingsAndResources(connection, dataset) {
       'Welcome back to Grace Counseling',
       'This human-testing dataset is reset after every verified fix so the practice stays predictable for walkthroughs.',
       'Use the portal to review forms, upcoming care tasks, and offerings history.',
-      encrypt('support@faithcounseling.local'),
+      encrypt('support@churchcorecare.local'),
       'review_required',
       1,
       1,
@@ -1444,7 +1444,7 @@ export async function applyDemoDataset({ referenceDate = new Date() } = {}) {
       applied: buildExpectedCounts(dataset),
       verification,
       credentials: {
-        practiceAdminEmail: 'admin@faithcounseling.local',
+        practiceAdminEmail: 'admin@churchcorecare.local',
         practiceAdminPassword: dataset.staffPasswords.admin,
         counselorPassword: dataset.staffPasswords.counselor,
         portalPassword: dataset.portalPassword,
@@ -1485,7 +1485,7 @@ export async function generateDemoDatasetSql({ referenceDate = new Date() } = {}
 
   const seedStatements = recorder.statements;
   const applySql = [
-    '-- Generated demo dataset SQL for FaithCounseling',
+    '-- Generated demo dataset SQL for ChurchCore Care',
     `-- Reference date: ${dataset.referenceDate}`,
     'START TRANSACTION;',
     ...resetStatements,
@@ -1494,13 +1494,13 @@ export async function generateDemoDatasetSql({ referenceDate = new Date() } = {}
   ].join('\n\n') + '\n';
 
   const resetSql = [
-    '-- Generated demo dataset reset SQL for FaithCounseling',
+    '-- Generated demo dataset reset SQL for ChurchCore Care',
     `-- Reference date: ${dataset.referenceDate}`,
     ...resetStatements,
   ].join('\n\n') + '\n';
 
   const seedSql = [
-    '-- Generated demo dataset seed SQL for FaithCounseling',
+    '-- Generated demo dataset seed SQL for ChurchCore Care',
     `-- Reference date: ${dataset.referenceDate}`,
     ...seedStatements,
   ].join('\n\n') + '\n';

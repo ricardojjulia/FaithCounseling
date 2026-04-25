@@ -4,7 +4,7 @@
 
 ## Purpose
 
-This plan defines the implementation scope for a comprehensive counselor profiling system for FaithCounseling. Christian counseling practices require detailed records of their counseling personnel beyond basic account information — state licenses, certifications and continuing education, clinical specialties and therapeutic modalities, faith integration profiles, and employment and HR details.
+This plan defines the implementation scope for a comprehensive counselor profiling system for ChurchCore Care. Christian counseling practices require detailed records of their counseling personnel beyond basic account information — state licenses, certifications and continuing education, clinical specialties and therapeutic modalities, faith integration profiles, and employment and HR details.
 
 This plan adds that data layer end-to-end: new database tables, query modules, API routes, and a full `CounselorDetailPage` with tabs mirroring the existing `ClientDetailPage` pattern.
 

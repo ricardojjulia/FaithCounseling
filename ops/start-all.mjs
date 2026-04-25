@@ -163,14 +163,14 @@ async function ensureDatabase() {
   }
 
   // Ensure MySQL container is up
-  const isUp = dockerExec('docker compose ps --status running mysql 2>/dev/null | grep -q faith-mysql');
+  const isUp = dockerExec('docker compose ps --status running mysql 2>/dev/null | grep -q churchcore-postgres');
   if (!isUp) {
     console.log('[start-all] Starting MySQL container...');
     dockerExec('docker compose up -d mysql');
   }
 
   // Wait until MySQL is accepting connections
-  const user = process.env.DB_USER || 'faith_app';
+  const user = process.env.DB_USER || 'churchcore_app';
   const pass = process.env.DB_PASSWORD || '';
   process.stdout.write('[start-all] Waiting for MySQL');
   for (let i = 0; i < 30; i++) {

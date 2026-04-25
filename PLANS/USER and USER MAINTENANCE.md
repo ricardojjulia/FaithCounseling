@@ -4,7 +4,7 @@
 
 ## Purpose
 
-This plan defines the implementation scope for a professional login experience and a secure user maintenance module for FaithCounseling.
+This plan defines the implementation scope for a professional login experience and a secure user maintenance module for ChurchCore Care.
 
 This version explicitly defers MFA. The application will still enforce strong password policy, secure session handling, account lockout, role-based access, tenant scoping, audit logging, and administrator-controlled account lifecycle actions.
 

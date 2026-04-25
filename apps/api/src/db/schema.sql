@@ -6,6 +6,14 @@
 -- Character set and collation chosen for full Unicode support.
 -- All timestamps stored as UTC (pool configured with timezone: 'Z').
 
+-- ─── Schema migration tracking ───────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  name       VARCHAR(255) NOT NULL,
+  applied_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ─── Tenants ─────────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS tenants (

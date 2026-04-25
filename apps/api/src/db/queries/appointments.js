@@ -497,7 +497,7 @@ export async function upsertAvailabilityTemplate(staffId, tenantId, slots) {
   await pool.query(
     `INSERT INTO availability_templates (id, staff_id, tenant_id, slots)
      VALUES (?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE slots = VALUES(slots)`,
+     ON CONFLICT (staff_id, tenant_id) DO UPDATE SET slots = EXCLUDED.slots`,
     [randomUUID(), staffId, tenantId, JSON.stringify(slots)]
   );
 }

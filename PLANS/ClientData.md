@@ -1,5 +1,5 @@
 
-# ClientData.md — FaithCounseling Enterprise Client Information System
+# ClientData.md — ChurchCore Care Enterprise Client Information System
 
 **Status:** ✅ COMPLETE (verified April 2, 2026 — full client record schema implemented: addresses, phones, insurance, diagnoses, medications, faith profiles, legal/guardian, clinical history, lifecycle; PHI-encrypted throughout)
 
@@ -959,8 +959,8 @@ Implement tabs in this priority order (most clinically critical first):
 
 ### Critical Files for Implementation
 
-- `/Users/rjulia/FaithCounseling/apps/api/src/db/schema.sql` — All new `CREATE TABLE` and `ALTER TABLE` migration SQL goes here as additions; existing table definitions are the reference pattern for column naming, index naming, FK naming, and charset declarations.
-- `/Users/rjulia/FaithCounseling/apps/api/src/db/queries/clients.js` — The canonical pattern for all 12 new query files: row mapper structure, encrypt/decrypt call sites, partial-update `setClauses` builder, and export naming conventions.
-- `/Users/rjulia/FaithCounseling/apps/api/src/index.js` — The routing hub where all new sub-resource endpoint handlers must be registered; the `handleClientById` function (starting at line 1371) is the direct extension point for `PATCH /v1/clients/:id` demographic expansion.
-- `/Users/rjulia/FaithCounseling/apps/api/src/lib/encrypt.js` — The four encryption functions (`encrypt`, `decrypt`, `encryptJson`, `decryptJson`) are the complete PHI boundary; every new query file imports from here and uses these exclusively.
-- `/Users/rjulia/FaithCounseling/apps/web/src/components/ClientForm.jsx` — The existing simple form is the baseline React pattern (useState per field, `csrfHeaders()`, fetch with error handling) that all new tab section components should follow and extend.
+- `/Users/rjulia/ChurchCore Care/apps/api/src/db/schema.sql` — All new `CREATE TABLE` and `ALTER TABLE` migration SQL goes here as additions; existing table definitions are the reference pattern for column naming, index naming, FK naming, and charset declarations.
+- `/Users/rjulia/ChurchCore Care/apps/api/src/db/queries/clients.js` — The canonical pattern for all 12 new query files: row mapper structure, encrypt/decrypt call sites, partial-update `setClauses` builder, and export naming conventions.
+- `/Users/rjulia/ChurchCore Care/apps/api/src/index.js` — The routing hub where all new sub-resource endpoint handlers must be registered; the `handleClientById` function (starting at line 1371) is the direct extension point for `PATCH /v1/clients/:id` demographic expansion.
+- `/Users/rjulia/ChurchCore Care/apps/api/src/lib/encrypt.js` — The four encryption functions (`encrypt`, `decrypt`, `encryptJson`, `decryptJson`) are the complete PHI boundary; every new query file imports from here and uses these exclusively.
+- `/Users/rjulia/ChurchCore Care/apps/web/src/components/ClientForm.jsx` — The existing simple form is the baseline React pattern (useState per field, `csrfHeaders()`, fetch with error handling) that all new tab section components should follow and extend.

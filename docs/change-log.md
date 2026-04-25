@@ -2,6 +2,39 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 25, 2026 — GitHub Actions pnpm version source alignment
+
+### fix: remove duplicate pnpm version declarations from workflows
+
+**Date:** April 25, 2026
+**Affected area:** `.github/workflows/tenant-policy-guard.yml`, `.github/workflows/deploy.yml`, `.github/workflows/nightly-security-check.yml`, `README.md`
+
+Aligned GitHub Actions pnpm setup with the root `packageManager` declaration so `pnpm/action-setup@v4` no longer fails when both a workflow `version` and `package.json` package manager version are present.
+
+Validation notes:
+
+- local `pnpm policy:tenant` passed before the CI fix
+- GitHub tenant policy guard failure was traced to duplicate pnpm version sources, not the policy script
+
+## April 22, 2026 — Phase 4 CI/deployment tenant policy guard and runbook enforcement
+
+### feat: add tenant-host routing policy guard workflow, env baseline keys, and operational runbook
+
+**Date:** April 22, 2026
+**Affected area:** `ops/check-tenant-policy.mjs`, `.github/workflows/tenant-policy-guard.yml`, `ops/runbooks/tenant-host-routing-policy.txt`, `package.json`, `README.md`, `docs/SecurityChecks/findings.md`, `docs/SecurityChecks/recommendations.md`
+
+Implemented Phase 4 slice 5 with explicit CI/deployment policy enforcement for tenant routing and provisioning flags:
+
+- added `ops/check-tenant-policy.mjs` to validate required tenant-host/provisioning env keys and fail-closed routing policy (`ENABLE_TENANT_HOST_ROUTING=true` in non-local runtime requires `TENANT_STRICT_HOST_ROUTING=true`)
+- added `pnpm policy:tenant` script and a new GitHub Actions workflow (`.github/workflows/tenant-policy-guard.yml`) to enforce policy checks on PRs and pushes to `main`
+- enforced required Phase 4 guardrail variable presence via policy script input validation (`ENABLE_TENANT_HOST_ROUTING`, `TENANT_STRICT_HOST_ROUTING`, `TENANT_ALLOWED_SLUGS`, `TENANT_DB_MAP`, `TENANT_SLUG_CACHE_TTL_MS`)
+- added operations runbook guidance at `ops/runbooks/tenant-host-routing-policy.txt` for rollout sequence, failure modes, remediation, and validation checklist
+
+Validation notes:
+
+- `pnpm policy:tenant` passes with baseline `.env.example`
+- production-mode guard simulation passes with explicit strict routing enabled
+
 ## April 22, 2026 — Phase 4 provisioning API transition tests and automation wiring
 
 ### feat: add endpoint tests for provisioning transitions and wire smoke/security scripts to PATCH lifecycle updates
@@ -90,7 +123,7 @@ Security posture notes:
 **Date:** April 22, 2026
 **Affected area:** `PLANS/PLAN-TRACKER.md`, `README.md`
 
-FaithCounseling Telehealth Phases 1-3 are now complete and delivered:
+ChurchCore Care Telehealth Phases 1-3 are now complete and delivered:
 
 - **Phase 1:** JaaS video sessions wired into the scheduling page with "Join Video Session" button for counselors.
 - **Phase 2:** Client video join links, public token exchange, and faith-integrated clinical notes with scripture reference and spiritual practices fields.
@@ -100,7 +133,7 @@ Phase 4 (SaaS Multi-Tenant Infrastructure) is now in active scaffolding on branc
 
 - Per-tenant DB pool registry for isolated customer databases
 - Tenant provisioning API (internal, Platform Admin only)
-- Platform Admin app for FaithCounseling staff to manage tenant lifecycle
+- Platform Admin app for ChurchCore Care staff to manage tenant lifecycle
 - Billing model scaffolding (feature gates by plan tier; no payment processing)
 
 Phase 4 is a prerequisite for commercial SaaS launch but can be worked in parallel with other product features.
@@ -549,7 +582,7 @@ Added full production-grade observability infrastructure across all three servic
 
 **Jaeger distributed tracing:**
 
-- All three services (`faith-api`, `faith-web`, `reminder-worker`) export traces to Jaeger 2.17 via OTLP HTTP on port 4318
+- All three services (`churchcore-api`, `faith-web`, `reminder-worker`) export traces to Jaeger 2.17 via OTLP HTTP on port 4318
 - W3C `traceparent`/`tracestate` headers forwarded through the web proxy so browser → web → API spans link in one trace
 - `docker compose --profile observability up -d` starts Jaeger all-in-one; UI at [localhost:16686](http://localhost:16686)
 - Configured via `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:4318/v1/traces`
@@ -557,7 +590,7 @@ Added full production-grade observability infrastructure across all three servic
 **Prometheus metrics scraping:**
 
 - Added `@opentelemetry/exporter-prometheus` as an additional MetricReader in the telemetry package
-- `GET /metrics` exposed on `faith-api` (port 3001) and `faith-web` (port 3002) — unauthenticated, pre-rate-limit
+- `GET /metrics` exposed on `churchcore-api` (port 3001) and `faith-web` (port 3002) — unauthenticated, pre-rate-limit
 - `reminder-worker` runs a dedicated metrics HTTP server on `WORKER_METRICS_PORT` (default 9465)
 - Prometheus container in Docker under `observability` profile scrapes all three; UI at [localhost:9090](http://localhost:9090)
 - `ops/observability/prometheus.yml` defines the scrape configuration
@@ -573,7 +606,7 @@ Added full production-grade observability infrastructure across all three servic
 
 - New "Observability Stack" card at the top of the Observability section
 - Live status banner: 🟢 Active / 🟡 Partially Active / ⭕ Inactive
-- Per-service badges for Jaeger, Prometheus, faith-api, faith-web, reminder-worker
+- Per-service badges for Jaeger, Prometheus, churchcore-api, faith-web, reminder-worker
 - "Open Jaeger UI" and "Open Prometheus" action links
 - "📋 Copy start command" / "Copy stop command" clipboard buttons
 - `.env` snippet showing required variables
@@ -1051,7 +1084,7 @@ Closes the approval dead-end in the public portal request workflow. Previously, 
 
 ### chore: database reset and backup tooling
 
-- Full DB backup workflow validated: `docker exec faith-mysql mysqldump` → `backups/`
+- Full DB backup workflow validated: `docker exec churchcore-postgres mysqldump` → `backups/`
 - Database wiped to clean state: all client, clinical, portal, financial, and session data removed; staff accounts and form catalog preserved
 
 ### fix: disable Faithful Workflows demo fallback by default
@@ -1621,9 +1654,9 @@ Enforces that every clinical session note is attached to a calendar appointment.
 
 ```bash
 node --env-file=.env apps/api/src/db/migrate.js
-pnpm --filter @faith/api exec node --check src/index.js
+pnpm --filter @churchcore/api exec node --check src/index.js
 pnpm lint
-pnpm --filter @faith/web build
+pnpm --filter @churchcore/web build
 ```
 
 ---
@@ -1672,9 +1705,9 @@ Ships the Clinical Chart — the primary clinical documentation surface. Wires t
 > ⚠️ Not yet validated. See [v5.3.0-RELEASE-SUMMARY.md](v5.3.0-RELEASE-SUMMARY.md) for the full checklist.
 
 ```bash
-pnpm --filter @faith/api exec node --check src/index.js
+pnpm --filter @churchcore/api exec node --check src/index.js
 pnpm lint
-pnpm --filter @faith/web build
+pnpm --filter @churchcore/web build
 ```
 
 ---
@@ -1714,9 +1747,9 @@ Completes the first stabilization pass for the new Offerings model. This patch f
 
 ```bash
 node --env-file=.env apps/api/src/db/migrate.js
-pnpm --filter @faith/api exec node --check src/index.js
+pnpm --filter @churchcore/api exec node --check src/index.js
 pnpm lint
-pnpm --filter @faith/web build
+pnpm --filter @churchcore/web build
 ```
 
 Additional live-stack verification:
@@ -1763,9 +1796,9 @@ Fixes the first-release regressions on the new Offerings screens. The frontend a
 
 ```bash
 node --env-file=.env apps/api/src/db/migrate.js
-pnpm --filter @faith/api exec node --check src/index.js
+pnpm --filter @churchcore/api exec node --check src/index.js
 pnpm lint
-pnpm --filter @faith/web build
+pnpm --filter @churchcore/web build
 npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin can remove an incorrectly recorded offering"
 ```
 
@@ -1809,7 +1842,7 @@ Replaces the billing model with a faith-based voluntary offering system througho
 node --check apps/api/src/index.js
 node --check apps/api/src/db/queries/portal.js
 pnpm lint
-pnpm --filter @faith/web build
+pnpm --filter @churchcore/web build
 ```
 
 ---
@@ -1825,7 +1858,7 @@ Introduces the UI Baseline & Regression Verification agent — a reusable Playwr
 
 ### Added
 
-- `.github/agents/ui-baseline-regression.agent.md` — custom agent definition for UI baseline capture and regression verification, covering all FaithCounseling surfaces, personas, and telemetry rules
+- `.github/agents/ui-baseline-regression.agent.md` — custom agent definition for UI baseline capture and regression verification, covering all ChurchCore Care surfaces, personas, and telemetry rules
 - `.github/skills/ui-baseline-regression/SKILL.md` — companion skill specifying traversal logic, per-screen metadata schema, comparison classification table, selector strategy priority, console/network monitoring, screenshot naming, and output conventions
 - `docs/UI-BASELINE-AGENT-RUN-2026-03-30.md` — first run report documenting agent creation, defects found, fixes applied, validation commands, and post-fix clean run confirmation
 
@@ -1901,8 +1934,8 @@ Promotes the Operations Dashboard upgrade and the restored client-maintenance wo
 - `pnpm lint` — passed
 - `node --check packages/telemetry/src/node.js` — passed
 - `node --check apps/web/public/monitor.js` — passed
-- `pnpm --filter @faith/api exec node --check src/index.js` — passed
-- `pnpm --filter @faith/web build` — passed
+- `pnpm --filter @churchcore/api exec node --check src/index.js` — passed
+- `pnpm --filter @churchcore/web build` — passed
 - `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin top bar titles track the active workspace|practice admin can open workspace studio, monitoring, and operations surfaces used in daily operations"` — passed
 - `npx playwright test tests/e2e/inclusive-smoke.spec.mjs --grep "public monitoring page loads with key landmarks"` — passed
 - `pnpm test:e2e` — passed (`13/13`)
@@ -1994,9 +2027,9 @@ Upgrades the Operations Dashboard from placeholder cards to a real staff-facing 
 ### Validation
 
 - `node --env-file=.env apps/api/src/db/migrate.js` — passed
-- `pnpm --filter @faith/api exec node --check src/index.js` — passed
+- `pnpm --filter @churchcore/api exec node --check src/index.js` — passed
 - `pnpm lint` — passed
-- `pnpm --filter @faith/web build` — passed
+- `pnpm --filter @churchcore/web build` — passed
 - `pnpm test:e2e` — passed (`10/10`)
 - `pnpm test:launch-readiness` — passed (`3/3`)
 - `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin can drill into dashboard queues and open actionable client details|practice admin dashboard renders the upgraded operations summary cards and payload shape"` — passed
@@ -2018,7 +2051,7 @@ Expands the Documents module into a fuller counseling library. The shared `FormR
   - `ClinicalFoundationForms.js`
   - `TreatmentPlanningForms.js`
   - `TherapeuticWorksheets.js`
-  - `FaithCounselingForms.js`
+  - `ChurchCore CareForms.js`
 - four new catalog categories in the shared form registry:
   - `administrative`
   - `assessment`
@@ -2051,7 +2084,7 @@ Expands the Documents module into a fuller counseling library. The shared `FormR
 ### Validation
 
 - `pnpm lint` — passed
-- `pnpm --filter @faith/web build` — passed
+- `pnpm --filter @churchcore/web build` — passed
 - `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin can access the expanded documents library and open a new consent form"` — passed
 
 ### Version bump
@@ -2083,7 +2116,7 @@ Fixes a ReferenceError (`seriesApptsLoading is not defined`) in the SchedulingPa
 
 ### Validation
 
-- `pnpm --filter @faith/web build` — passed
+- `pnpm --filter @churchcore/web build` — passed
 - `pnpm lint` — passed
 - `pnpm test:e2e` — passed
 
@@ -2129,7 +2162,7 @@ Records the final security, triage, and repair sweeps for the completed portal r
 
 - `pnpm lint` — passed
 - `node --env-file=.env apps/api/src/db/migrate.js` — passed
-- `pnpm --filter @faith/web build` — passed
+- `pnpm --filter @churchcore/web build` — passed
 - `pnpm test:e2e` — passed (`5/5`)
 - `pnpm test:launch-readiness` — passed (`3/3`)
 - `npx playwright test tests/e2e/localization.spec.mjs` — passed (`4 passed, 2 skipped`)
@@ -2169,7 +2202,7 @@ Completes the planned client-portal foundation with structured public onboarding
 
 - `pnpm lint` — passed
 - `node --env-file=.env apps/api/src/db/migrate.js` — passed
-- `pnpm --filter @faith/web build` — passed
+- `pnpm --filter @churchcore/web build` — passed
 - `pnpm test:e2e` — passed (`5/5`)
 - `pnpm test:launch-readiness` — passed (`3/3`)
 - `npx playwright test tests/e2e/localization.spec.mjs` — passed (`4 passed, 2 skipped`)
@@ -2257,7 +2290,7 @@ Updated package versions from `3.0.7` to `3.5.0`:
 
 - `node --env-file=.env apps/api/src/db/migrate.js` — passed
 - `pnpm lint` — passed
-- `pnpm --filter @faith/web build` — passed
+- `pnpm --filter @churchcore/web build` — passed
 - `pnpm test:e2e` — passed (`5/5`)
 - `pnpm test:launch-readiness` — passed (`3/3`)
 
@@ -2334,7 +2367,7 @@ Updated package versions from `3.0.6` to `3.0.7`:
 
 ### Validation
 
-- `pnpm --filter @faith/web build` — passed, no compile errors (1263 modules transformed)
+- `pnpm --filter @churchcore/web build` — passed, no compile errors (1263 modules transformed)
 - `npx playwright test tests/e2e/localization.spec.mjs` — 3 passed, 2 skipped (client/counselor detail tests skip when no seeded records; no failures)
 - `npx playwright test tests/e2e/high-value-journeys.spec.mjs` — 3 passed
 
@@ -2373,7 +2406,7 @@ Updates the root documentation to reflect the recent Workspace Studio repair wor
 
 ### Build artifact sync
 
-- Rebuilt the web app with `pnpm --filter @faith/web build`.
+- Rebuilt the web app with `pnpm --filter @churchcore/web build`.
 - Updated tracked bundle references in `apps/web/public/index.html`.
 - Removed stale hashed assets from `apps/web/public/assets` and replaced them with the current bundle set.
 
@@ -2392,7 +2425,7 @@ Updated package versions from `3.0.5` to `3.0.6`:
 ### Validation
 
 - `pnpm lint` completed successfully.
-- `pnpm --filter @faith/web build` completed successfully.
+- `pnpm --filter @churchcore/web build` completed successfully.
 - `npx playwright test tests/e2e/inclusive-smoke.spec.mjs` completed successfully (4/4).
 
 ### Breaking changes
@@ -2496,8 +2529,8 @@ Updated package versions from `3.0.0` to `3.0.5`:
 
 ### Validation
 
-- `pnpm --filter @faith/web build` completed successfully.
-- `pnpm --filter @faith/api exec node --check src/index.js` completed successfully.
+- `pnpm --filter @churchcore/web build` completed successfully.
+- `pnpm --filter @churchcore/api exec node --check src/index.js` completed successfully.
 
 ---
 
@@ -2664,7 +2697,7 @@ None. FormRunner, FormDefinition schema, App.jsx routing, and all existing form 
 
 ### Overview
 
-Introduces the **Documents** area as a first-class, fully operational feature of the FaithCounseling platform. Prior to this release, the Documents navigation item was a registered placeholder that rendered a generic workspace grid with no document-specific content. This release replaces that placeholder with a complete electronic forms system purpose-built for Christian counseling practices.
+Introduces the **Documents** area as a first-class, fully operational feature of the ChurchCore Care platform. Prior to this release, the Documents navigation item was a registered placeholder that rendered a generic workspace grid with no document-specific content. This release replaces that placeholder with a complete electronic forms system purpose-built for Christian counseling practices.
 
 The Documents module provides counselors with a library of reusable, session-ready clinical forms rendered directly in the browser. Forms are multi-section, paginated, and support conditional question logic, auto-scoring, and print/PDF export. Every form in the library includes a dedicated **Faith & Spiritual Profile** or **Faith Dimension** section that invites clients to share how their Christian faith shapes their healing journey. Scripture references are embedded contextually throughout each form.
 
@@ -3382,7 +3415,7 @@ Phase 4 of the scheduling roadmap — availability overrides, recurring appointm
 ### Runtime
 
 - Added graceful startup handling for `EADDRINUSE` in the API server so port collisions now fail with a direct remediation message instead of an unhandled Node error event
-- Added `pnpm start:api:standalone` and `@faith/api start:standalone` to run the API on port `3104` for isolated local development
+- Added `pnpm start:api:standalone` and `@churchcore/api start:standalone` to run the API on port `3104` for isolated local development
 - Updated `start-api.sh` to load `.env` and respect an existing `PORT` override while defaulting to `3104`
 
 ### v2.1.0 Breaking Changes

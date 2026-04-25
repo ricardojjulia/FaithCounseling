@@ -1,0 +1,51 @@
+FaithCounseling Runbook: Tenant Host Routing Policy Guard
+
+Scope
+- Applies to Phase 4 SaaS host-based tenant routing.
+- Applies to CI and deployment promotion paths.
+
+Policy requirements
+1) Non-local fail-closed coupling
+- If ENABLE_TENANT_HOST_ROUTING=true and NODE_ENV is not development/test,
+  TENANT_STRICT_HOST_ROUTING must be true.
+
+2) Canonical tenant source required when strict host routing is enabled
+- At least one of the following must be configured:
+  - TENANT_ALLOWED_SLUGS (explicit allowlist), or
+  - DB_NAME (provisioning-backed tenant lookup via tenant_provisioning).
+
+3) Required env keys must exist in baseline env templates
+- ENABLE_TENANT_HOST_ROUTING
+- TENANT_STRICT_HOST_ROUTING
+- TENANT_ALLOWED_SLUGS
+- TENANT_DB_MAP
+- TENANT_SLUG_CACHE_TTL_MS
+
+Standard rollout sequence
+1) Update tenant provisioning data and verify target tenant statuses are canonical.
+2) Set NODE_ENV to production (or staging equivalent).
+3) Set ENABLE_TENANT_HOST_ROUTING=true.
+4) Set TENANT_STRICT_HOST_ROUTING=true.
+5) Ensure canonical tenant source is present (TENANT_ALLOWED_SLUGS or DB-backed provisioning).
+6) Run policy guard: pnpm policy:tenant.
+7) Deploy only after policy guard passes.
+
+Expected guard failures and remediation
+A) Failure: Non-local tenant host routing requires TENANT_STRICT_HOST_ROUTING=true.
+- Cause: ENABLE_TENANT_HOST_ROUTING=true but strict mode disabled.
+- Remediation: Set TENANT_STRICT_HOST_ROUTING=true and rerun pnpm policy:tenant.
+
+B) Failure: Strict tenant routing requires TENANT_ALLOWED_SLUGS or DB_NAME.
+- Cause: strict mode enabled with no tenant allowlist and no provisioning-backed DB source.
+- Remediation: Configure TENANT_ALLOWED_SLUGS or DB_NAME, then rerun pnpm policy:tenant.
+
+C) Failure: Missing required keys in .env.example.
+- Cause: Baseline env template does not declare required policy keys.
+- Remediation: Add missing keys to .env.example and rerun pnpm policy:tenant.
+
+Verification checklist
+- CI workflow Tenant Policy Guard passed on pull request.
+- Production-mode policy check passed in workflow summary.
+- Runtime API startup guard remains enabled for non-local tenant routing.
+- Unknown tenant hosts return 404 under strict routing.
+- No direct DB status writes are used for provisioning lifecycle changes.

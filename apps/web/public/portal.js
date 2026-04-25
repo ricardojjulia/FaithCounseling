@@ -13,11 +13,11 @@ const REQUEST_INTENTS = {
   },
 };
 const DEFAULT_CONFIG = {
-  practiceName: 'FaithCounseling',
+  practiceName: 'ChurchCore Care',
   logoUrl: '',
   brandColor: '#1f7a8c',
   accentColor: '#f0f7f8',
-  welcomeHeadline: 'FaithCounseling Client Portal',
+  welcomeHeadline: 'ChurchCore Care Client Portal',
   welcomeMessage: 'Current clients can sign in to their account. New or possible clients can request care, request scheduling, or start an account request for intake onboarding.',
   helpMessage: 'If your account is locked or not yet invited, contact your counselor.',
   supportEmail: '',
